@@ -1,0 +1,109 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Nicht autorisiert" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: "Benutzer nicht gefunden" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: adminProfile, error: adminError } = await supabaseAdmin
+      .from("profiles")
+      .select("role")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (adminError || adminProfile?.role !== "ADMIN") {
+      return new Response(JSON.stringify({ error: "Nicht autorisiert" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const body = await req.json().catch(() => null);
+    const targetUserId = body?.userId as string | undefined;
+    if (!targetUserId) {
+      return new Response(JSON.stringify({ error: "userId fehlt" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const tables = [
+      "document_versions",
+      "publications",
+      "certifications",
+      "practical_experiences",
+      "education_entries",
+      "work_experiences",
+      "profiles",
+    ];
+
+    for (const table of tables) {
+      const { error } = await supabaseAdmin
+        .from(table)
+        .delete()
+        .eq("user_id", targetUserId);
+
+      if (error) {
+        console.error(`Error deleting from ${table}:`, error);
+      }
+    }
+
+    const { data: files } = await supabaseAdmin.storage
+      .from("user-files")
+      .list(targetUserId);
+
+    if (files && files.length > 0) {
+      const filePaths = files.map((file) => `${targetUserId}/${file.name}`);
+      await supabaseAdmin.storage.from("user-files").remove(filePaths);
+    }
+
+    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(targetUserId);
+    if (deleteError) {
+      throw new Error("Benutzerkonto konnte nicht gelöscht werden");
+    }
+
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    const message = error instanceof Error ? error.message : "Unbekannter Fehler";
+    return new Response(JSON.stringify({ success: false, error: message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});

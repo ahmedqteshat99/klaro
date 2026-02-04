@@ -1,0 +1,13 @@
+project_id = "hrsfelmpgwezuoszaili"
+
+[functions.generate-cv]
+verify_jwt = false
+
+[functions.generate-anschreiben]
+verify_jwt = false
+
+[functions.extract-job]
+verify_jwt = false
+
+[functions.delete-account]
+verify_jwt = false

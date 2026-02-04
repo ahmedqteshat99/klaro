@@ -1,0 +1,779 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══════════════════════════════════════════════════════════════════
+   SELF-HOSTED SPECTRAL FONT via @font-face
+   Using Google Fonts URLs for reliable cross-origin loading
+   ═══════════════════════════════════════════════════════════════════ */
+
+@font-face {
+  font-family: 'Spectral';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('https://fonts.gstatic.com/s/spectral/v13/rnCr-xNNww_2s0amA9M5knjsS_ul.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Spectral';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://fonts.gstatic.com/s/spectral/v13/rnCt-xNNww_2s0amA9uSsHnQ.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Spectral';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('https://fonts.gstatic.com/s/spectral/v13/rnCr-xNNww_2s0amA9M5kijsSPul.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Spectral';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('https://fonts.gstatic.com/s/spectral/v13/rnCr-xNNww_2s0amA9M5khDtS_ul.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Spectral';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('https://fonts.gstatic.com/s/spectral/v13/rnCr-xNNww_2s0amA9M5knTuS_ul.woff2') format('woff2');
+}
+
+/* Apple-inspired Design System */
+
+@layer base {
+  :root {
+    --background: 0 0% 98%;
+    --foreground: 0 0% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 11%;
+    --primary: 211 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 11%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 142 71% 45%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 211 100% 50%;
+    --radius: 1rem;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 0 0% 25%;
+    --sidebar-primary: 211 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 94%;
+    --sidebar-accent-foreground: 0 0% 11%;
+    --sidebar-border: 0 0% 92%;
+    --sidebar-ring: 211 100% 50%;
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --info: 211 100% 50%;
+    --info-foreground: 0 0% 100%;
+  }
+
+  .dark {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 211 100% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 64%;
+    --accent: 142 71% 55%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 211 100% 60%;
+    --sidebar-background: 0 0% 5%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 211 100% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 12%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 0 0% 18%;
+    --sidebar-ring: 211 100% 60%;
+    --success: 142 71% 55%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 0 0% 100%;
+    --info: 211 100% 60%;
+    --info-foreground: 0 0% 100%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.025em;
+    font-weight: 600;
+  }
+
+  h1 {
+    font-weight: 700;
+    letter-spacing: -0.03em;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CV PAPER - Fixed A4 container for both preview and print
+   Width: 210mm, Content area with 15mm margins = 180mm
+   ═══════════════════════════════════════════════════════════════════ */
+
+.cv-paper,
+.anschreiben-paper {
+  width: 210mm;
+  padding: 15mm;
+  margin: 0 auto;
+  background: #ffffff;
+  box-sizing: border-box;
+  font-family: 'Spectral', Georgia, serif;
+  font-weight: 300;
+  font-size: 10.5pt;
+  line-height: 1.35;
+  color: #1a1a1a;
+  position: relative;
+}
+
+.cv-paper {
+  min-height: 297mm;
+}
+
+.anschreiben-paper {
+  min-height: auto;
+  height: auto;
+  width: 100%;
+  max-width: 210mm;
+}
+
+/* For screen preview - scale down to fit viewport while maintaining A4 proportions */
+@media screen {
+  .cv-paper {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transform-origin: top left;
+    /* Scale to 70% for better fit in preview panels */
+    transform: scale(0.7);
+    margin-bottom: calc(-297mm * 0.3);
+    margin-right: calc(-210mm * 0.3);
+  }
+
+  .anschreiben-paper {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transform: none;
+    margin: 0;
+  }
+
+  .cv-paper-wrapper {
+    overflow: visible;
+    display: inline-block;
+    min-width: max-content;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CV CONTENT AREA - Main content wrapper inside paper
+   ═══════════════════════════════════════════════════════════════════ */
+
+.cv-content-area {
+  width: 100%;
+  position: relative;
+}
+
+.cv-content-area::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CV PHOTO CONTAINER - German standard portrait (35mm x 45mm)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.cv-photo-container {
+  width: 35mm;
+  height: 45mm;
+  float: right;
+  margin-left: 5mm;
+  margin-bottom: 3mm;
+  border-radius: 1mm;
+  border: 0.3mm solid #e5e5e5;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.cv-photo-container img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SECTION HEADERS - Bold, uppercase with underline
+   ═══════════════════════════════════════════════════════════════════ */
+
+.cv-paper h2,
+.cv-template h2,
+.document-preview h2 {
+  font-family: 'Spectral', Georgia, serif;
+  font-weight: 600;
+  font-size: 11pt;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 5mm;
+  margin-bottom: 2.5mm;
+  color: #1a1a1a;
+  border-bottom: 0.3mm solid #333333;
+  padding-bottom: 1mm;
+  page-break-after: avoid;
+  break-after: avoid;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SUBSECTION HEADERS - Position/Job title
+   ═══════════════════════════════════════════════════════════════════ */
+
+.cv-paper h3,
+.cv-template h3,
+.document-preview h3 {
+  font-family: 'Spectral', Georgia, serif;
+  font-weight: 600;
+  font-size: 10.5pt;
+  margin-top: 0;
+  margin-bottom: 0.5mm;
+  color: #262626;
+  page-break-after: avoid;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   PARAGRAPHS AND TEXT
+   ═══════════════════════════════════════════════════════════════════ */
+
+.cv-paper p,
+.cv-template p,
+.document-preview p {
+  margin-bottom: 1.5mm;
+  orphans: 3;
+  widows: 3;
+}
+
+.cv-paper strong,
+.cv-template strong,
+.document-preview strong {
+  font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LISTS - With disc bullets
+   ═══════════════════════════════════════════════════════════════════ */
+
+.cv-paper ul,
+.cv-template ul,
+.document-preview ul {
+  list-style-type: disc;
+  padding-left: 5mm;
+  margin: 1mm 0 2mm 0;
+}
+
+.cv-paper li,
+.cv-template li,
+.document-preview li {
+  margin-bottom: 0.5mm;
+  line-height: 1.3;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TWO-COLUMN ENTRY LAYOUT - Using CSS Grid with mm-based columns
+   Date column: 30mm, Content column: remaining space
+   ═══════════════════════════════════════════════════════════════════ */
+
+.cv-entry {
+  display: grid;
+  grid-template-columns: 30mm 1fr;
+  gap: 3mm;
+  margin-bottom: 3mm;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.cv-entry .cv-date {
+  font-size: 9.5pt;
+  color: #666666;
+  padding-top: 0.3mm;
+}
+
+.cv-entry .cv-content {
+  min-width: 0;
+}
+
+.cv-entry .cv-content h3 {
+  font-weight: 600;
+  margin: 0 0 0.5mm 0;
+}
+
+.cv-entry .cv-content p {
+  margin: 0 0 1mm 0;
+}
+
+.cv-entry .cv-content ul {
+  margin-top: 0.5mm;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LANGUAGE TABLE - Grid-based layout
+   ═══════════════════════════════════════════════════════════════════ */
+
+.cv-languages {
+  display: grid;
+  grid-template-columns: 40mm 20mm 1fr;
+  gap: 1mm 3mm;
+  margin: 1mm 0;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.cv-languages-row {
+  display: contents;
+}
+
+.cv-languages-row > span:first-child {
+  font-weight: 500;
+}
+
+.cv-languages-row > span:nth-child(2) {
+  color: #666666;
+}
+
+.cv-languages-row > span:nth-child(3) {
+  color: #666666;
+}
+
+/* Table-based fallback for generated HTML */
+table.cv-languages {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1mm 0;
+}
+
+table.cv-languages td {
+  padding: 0.5mm 3mm 0.5mm 0;
+  vertical-align: top;
+}
+
+table.cv-languages td:first-child {
+  font-weight: 500;
+  width: 40mm;
+}
+
+table.cv-languages td:nth-child(2) {
+  width: 20mm;
+  color: #666666;
+}
+
+table.cv-languages td:nth-child(3) {
+  color: #666666;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   PUBLICATIONS & CERTIFICATES LISTS
+   ═══════════════════════════════════════════════════════════════════ */
+
+.cv-publications,
+.cv-certs {
+  list-style-type: disc;
+  padding-left: 5mm;
+  margin: 1mm 0;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.cv-publications li,
+.cv-certs li {
+  margin-bottom: 1.5mm;
+  line-height: 1.35;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SIGNATURE BLOCK - Fixed mm-based dimensions
+   ═══════════════════════════════════════════════════════════════════ */
+
+.cv-signature-block {
+  margin-top: 8mm;
+  text-align: right;
+  clear: both;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.cv-signature-block img {
+  height: 12mm;
+  width: auto;
+  max-width: 50mm;
+  margin-left: auto;
+  display: block;
+  object-fit: contain;
+}
+
+.cv-signature-block p {
+  font-size: 9pt;
+  color: #666666;
+  margin-top: 1mm;
+  margin-bottom: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LEGACY SUPPORT - .cv-template and .document-preview classes
+   ═══════════════════════════════════════════════════════════════════ */
+
+.cv-template,
+.document-preview {
+  font-family: 'Spectral', Georgia, serif;
+  font-weight: 300;
+  font-size: 10.5pt;
+  line-height: 1.35;
+  color: #1a1a1a;
+  background: #ffffff;
+  position: relative;
+}
+
+.cv-template::after,
+.document-preview::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+.cv-template .cv-entry,
+.document-preview .cv-entry {
+  display: grid;
+  grid-template-columns: 30mm 1fr;
+  gap: 3mm;
+  margin-bottom: 3mm;
+}
+
+.cv-template .cv-entry .cv-date,
+.document-preview .cv-entry .cv-date {
+  font-size: 9.5pt;
+  color: #666666;
+  padding-top: 0.3mm;
+}
+
+.cv-template .cv-entry .cv-content,
+.document-preview .cv-entry .cv-content {
+  min-width: 0;
+}
+
+.cv-template .cv-entry .cv-content h3,
+.document-preview .cv-entry .cv-content h3 {
+  font-weight: 600;
+  margin: 0 0 0.5mm 0;
+}
+
+.cv-template .cv-entry .cv-content p,
+.document-preview .cv-entry .cv-content p {
+  margin: 0 0 1mm 0;
+}
+
+.cv-template .cv-entry .cv-content ul,
+.document-preview .cv-entry .cv-content ul {
+  margin-top: 0.5mm;
+}
+
+.cv-template .cv-languages,
+.document-preview .cv-languages {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1mm 0;
+}
+
+.cv-template .cv-languages td,
+.document-preview .cv-languages td {
+  padding: 0.5mm 3mm 0.5mm 0;
+  vertical-align: top;
+}
+
+.cv-template .cv-languages td:first-child,
+.document-preview .cv-languages td:first-child {
+  font-weight: 500;
+  width: 40mm;
+}
+
+.cv-template .cv-languages td:nth-child(2),
+.document-preview .cv-languages td:nth-child(2) {
+  width: 20mm;
+  color: #666666;
+}
+
+.cv-template .cv-languages td:nth-child(3),
+.document-preview .cv-languages td:nth-child(3) {
+  color: #666666;
+}
+
+.cv-template .cv-publications,
+.cv-template .cv-certs,
+.document-preview .cv-publications,
+.document-preview .cv-certs {
+  list-style-type: disc;
+  padding-left: 5mm;
+  margin: 1mm 0;
+}
+
+.cv-template .cv-publications li,
+.cv-template .cv-certs li,
+.document-preview .cv-publications li,
+.document-preview .cv-certs li {
+  margin-bottom: 1.5mm;
+  line-height: 1.35;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   PRINT STYLES - Exact A4 layout for PDF export
+   ═══════════════════════════════════════════════════════════════════ */
+
+@page {
+  size: A4;
+  margin: 0;
+}
+
+@media print {
+  /* Reset everything */
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    width: 210mm;
+    height: 297mm;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    font-family: 'Spectral', Georgia, serif !important;
+  }
+
+  /* Hide all non-print elements */
+  .no-print,
+  nav,
+  header:not(.cv-header),
+  footer:not(.cv-footer),
+  aside,
+  button,
+  .sidebar,
+  .toast {
+    display: none !important;
+  }
+
+  /* Reset wrapper styles for print */
+  .cv-paper-wrapper {
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    overflow: visible !important;
+  }
+
+  /* CV Paper - fills the page, reset all screen transforms */
+  .cv-paper {
+    width: 210mm !important;
+    min-height: 297mm !important;
+    padding: 15mm !important;
+    margin: 0 !important;
+    margin-bottom: 0 !important;
+    margin-right: 0 !important;
+    box-shadow: none !important;
+    transform: none !important;
+    transform-origin: top left !important;
+    page-break-after: always;
+    break-after: page;
+  }
+
+  /* CV Template/Preview - same dimensions */
+  .cv-template,
+  .document-preview {
+    width: 180mm !important;
+    min-height: auto !important;
+    max-height: none !important;
+    height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  /* Prevent page breaks inside */
+  h2, h3 {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .cv-entry,
+  .cv-languages,
+  .cv-signature-block,
+  .cv-photo-container,
+  table,
+  tr,
+  .cv-publications,
+  .cv-certs {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Text flow */
+  p, li {
+    orphans: 3 !important;
+    widows: 3 !important;
+  }
+
+  /* Images */
+  img {
+    max-width: 100% !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Photo - exact mm dimensions */
+  .cv-photo-container {
+    width: 35mm !important;
+    height: 45mm !important;
+    float: right !important;
+    margin-left: 5mm !important;
+    margin-bottom: 3mm !important;
+    border: 0.3mm solid #e5e5e5 !important;
+    overflow: hidden !important;
+  }
+
+  .cv-photo-container img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+  }
+
+  /* Signature - exact mm dimensions */
+  .cv-signature-block {
+    margin-top: 8mm !important;
+    text-align: right !important;
+    clear: both !important;
+  }
+
+  .cv-signature-block img {
+    height: 12mm !important;
+    width: auto !important;
+    max-width: 50mm !important;
+  }
+
+  /* Grid layouts - maintain in print */
+  .cv-entry {
+    display: grid !important;
+    grid-template-columns: 30mm 1fr !important;
+    gap: 3mm !important;
+  }
+
+  /* Links */
+  a[href]:after {
+    content: none !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   UTILITIES
+   ═══════════════════════════════════════════════════════════════════ */
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fade-in 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-xl border border-border/30;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05);
+  }
+
+  .glass-nav {
+    @apply bg-background/80 backdrop-blur-xl border-b border-border/50;
+  }
+
+  .gradient-primary {
+    background: linear-gradient(135deg, hsl(211 100% 50%) 0%, hsl(211 100% 60%) 100%);
+  }
+
+  .gradient-success {
+    background: linear-gradient(135deg, hsl(142 71% 45%) 0%, hsl(142 71% 55%) 100%);
+  }
+
+  .shadow-apple {
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05),
+                0 2px 4px -2px rgb(0 0 0 / 0.05),
+                0 0 0 1px rgb(0 0 0 / 0.03);
+  }
+
+  .shadow-apple-lg {
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.08),
+                0 4px 6px -4px rgb(0 0 0 / 0.05),
+                0 0 0 1px rgb(0 0 0 / 0.03);
+  }
+
+  .hover-lift {
+    @apply transition-all duration-300;
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 20px -5px rgb(0 0 0 / 0.1);
+  }
+}
