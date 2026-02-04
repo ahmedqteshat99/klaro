@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { supabase } from "@/integrations/supabase/client";
 import AppFooter from "@/components/AppFooter";
 import DisclaimerBanner from "@/components/DisclaimerBanner";
 import BrandLogo from "@/components/BrandLogo";
@@ -10,6 +11,7 @@ import { FileText, Download, Shield, CheckCircle, ArrowRight, PenTool } from "lu
 
 const LandingPage = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [showDeletedNotice, setShowDeletedNotice] = useState(false);
 
   useEffect(() => {
@@ -18,6 +20,22 @@ const LandingPage = () => {
       setShowDeletedNotice(true);
     }
   }, [location.state]);
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        navigate("/dashboard");
+      }
+    });
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        navigate("/dashboard");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
 
   const features = [
     {
