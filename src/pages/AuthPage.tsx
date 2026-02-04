@@ -30,6 +30,12 @@ const AuthPage = () => {
   
   const navigate = useNavigate();
   const { toast } = useToast();
+  const envSiteUrl = import.meta.env.VITE_PUBLIC_SITE_URL;
+  const appBaseUrl =
+    envSiteUrl && envSiteUrl.trim().length > 0
+      ? envSiteUrl.trim().replace(/\/+$/, "")
+      : window.location.origin;
+  const dashboardRedirectUrl = `${appBaseUrl}/dashboard`;
 
   // Check if user is already logged in
   useEffect(() => {
@@ -141,7 +147,7 @@ const AuthPage = () => {
           }
         }
       } else {
-        const redirectUrl = `${window.location.origin}/`;
+        const redirectUrl = dashboardRedirectUrl;
         
         const { error } = await supabase.auth.signUp({
           email,
@@ -196,7 +202,7 @@ const AuthPage = () => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth`,
+          redirectTo: dashboardRedirectUrl,
         },
       });
 
@@ -224,7 +230,7 @@ const AuthPage = () => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "apple",
         options: {
-          redirectTo: `${window.location.origin}/auth`,
+          redirectTo: dashboardRedirectUrl,
         },
       });
 
