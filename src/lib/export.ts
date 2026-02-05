@@ -408,6 +408,16 @@ export const exportToPDF = async (
   stadt?: string | null
 ): Promise<void> => {
   const sanitizedHtml = sanitizeHtml(htmlContent);
+  const MM_TO_PX = 96 / 25.4;
+  const A4_WIDTH_PX = Math.round(210 * MM_TO_PX);
+  const A4_HEIGHT_PX = Math.round(297 * MM_TO_PX);
+  const PAD_PX = Math.round(15 * MM_TO_PX);
+  const PHOTO_W_PX = Math.round(35 * MM_TO_PX);
+  const PHOTO_H_PX = Math.round(45 * MM_TO_PX);
+  const PHOTO_MARGIN_LEFT_PX = Math.round(5 * MM_TO_PX);
+  const PHOTO_MARGIN_BOTTOM_PX = Math.round(3 * MM_TO_PX);
+  const PHOTO_RADIUS_PX = Math.max(1, Math.round(1 * MM_TO_PX));
+  const PHOTO_BORDER_PX = Math.max(1, Math.round(0.3 * MM_TO_PX));
   // Preload Spectral font to prevent race conditions
   try {
     await document.fonts.load('300 12pt Spectral');
@@ -445,9 +455,9 @@ export const exportToPDF = async (
         }
 
         .cv-paper {
-          width: 210mm !important;
-          min-height: 297mm !important;
-          padding: 15mm !important;
+          width: ${A4_WIDTH_PX}px !important;
+          min-height: ${A4_HEIGHT_PX}px !important;
+          padding: ${PAD_PX}px !important;
           margin: 0 !important;
           background: #ffffff !important;
           box-sizing: border-box !important;
@@ -467,13 +477,13 @@ export const exportToPDF = async (
 
         /* Photo container - German CV standard portrait size (35mm x 45mm) */
         .cv-photo-container {
-          width: 35mm !important;
-          height: 45mm !important;
+          width: ${PHOTO_W_PX}px !important;
+          height: ${PHOTO_H_PX}px !important;
           float: right !important;
-          margin-left: 5mm !important;
-          margin-bottom: 3mm !important;
-          border-radius: 1mm !important;
-          border: 0.3mm solid #e5e5e5 !important;
+          margin-left: ${PHOTO_MARGIN_LEFT_PX}px !important;
+          margin-bottom: ${PHOTO_MARGIN_BOTTOM_PX}px !important;
+          border-radius: ${PHOTO_RADIUS_PX}px !important;
+          border: ${PHOTO_BORDER_PX}px solid #e5e5e5 !important;
           box-sizing: border-box !important;
           overflow: hidden !important;
         }
@@ -665,7 +675,8 @@ export const exportToPDF = async (
 
   const element = document.createElement("div");
   element.innerHTML = fullHtml;
-  element.style.width = "210mm"; // A4 width
+  element.style.width = `${A4_WIDTH_PX}px`;
+  element.style.minHeight = `${A4_HEIGHT_PX}px`;
   element.style.backgroundColor = "#ffffff";
   element.style.padding = "0";
   element.style.margin = "0";
@@ -695,8 +706,10 @@ export const exportToPDF = async (
   // Additional wait for layout to stabilize (increased for image rendering)
   await new Promise(resolve => setTimeout(resolve, 500));
 
-  const renderWidth = element.scrollWidth || element.clientWidth;
-  const renderHeight = element.scrollHeight || element.clientHeight;
+  const renderWidth = element.scrollWidth || element.clientWidth || A4_WIDTH_PX;
+  const renderHeight = element.scrollHeight || element.clientHeight || A4_HEIGHT_PX;
+  const canvasWidth = Math.max(renderWidth, A4_WIDTH_PX);
+  const canvasHeight = Math.max(renderHeight, A4_HEIGHT_PX);
 
   const opt = {
     margin: [0, 0, 0, 0] as [number, number, number, number],
@@ -709,10 +722,10 @@ export const exportToPDF = async (
       allowTaint: true,
       logging: false,
       imageTimeout: 15000,
-      windowWidth: renderWidth,
-      windowHeight: renderHeight,
-      width: renderWidth,
-      height: renderHeight,
+      windowWidth: canvasWidth,
+      windowHeight: canvasHeight,
+      width: canvasWidth,
+      height: canvasHeight,
       scrollX: 0,
       scrollY: 0
     },
