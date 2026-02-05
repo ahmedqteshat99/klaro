@@ -1,5 +1,5 @@
 import { generateCVHtml } from "@/components/cv/CVTemplate";
-import { exportToPDF as exportToPDFHtml2 } from "@/lib/export";
+import { exportToPDF as exportToPDFHtml2, type PdfDownloadMode } from "@/lib/export";
 
 interface ExportToPDFParams {
   htmlContent: string;
@@ -9,14 +9,16 @@ interface ExportToPDFParams {
   showSignatur?: boolean;
   signaturUrl?: string | null;
   stadt?: string | null;
+  printWindow?: Window | null;
 }
 
-export type PdfExportMode = "print" | "download";
+export type PdfExportMode = "print" | PdfDownloadMode;
 
 const isMobileDevice = (): boolean => {
   if (typeof window === "undefined" || typeof navigator === "undefined") return false;
   const ua = navigator.userAgent || "";
-  const uaMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(ua);
+  const isIpad = /iPad/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const uaMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(ua) || isIpad;
   const coarsePointer = typeof window.matchMedia === "function"
     ? window.matchMedia("(pointer: coarse)").matches
     : false;
@@ -65,6 +67,73 @@ async function waitForFonts(): Promise<void> {
   }
 }
 
+function createHtmlBlobUrl(html: string): string {
+  const blob = new Blob([html], { type: "text/html" });
+  return URL.createObjectURL(blob);
+}
+
+function createPrintFrame(html: string): HTMLIFrameElement {
+  const frame = document.createElement("iframe");
+  frame.style.position = "fixed";
+  frame.style.right = "0";
+  frame.style.bottom = "0";
+  frame.style.width = "0";
+  frame.style.height = "0";
+  frame.style.border = "0";
+  frame.style.visibility = "hidden";
+  frame.setAttribute("aria-hidden", "true");
+  frame.srcdoc = html;
+  document.body.appendChild(frame);
+  return frame;
+}
+
+function createPrintWindow(): Window | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const win = window.open("about:blank", "_blank");
+    if (win) {
+      try {
+        win.opener = null;
+      } catch {
+        // Ignore opener assignment errors
+      }
+      try {
+        win.document.title = "PDF Vorschau";
+        win.document.body.innerHTML = "<p style=\"font-family: sans-serif; padding: 1rem;\">PDF wird vorbereitet…</p>";
+      } catch {
+        // Ignore document access errors
+      }
+    }
+    return win;
+  } catch (error) {
+    console.warn("Could not open print window:", error);
+    return null;
+  }
+}
+
+async function waitForFrameLoad(frame: HTMLIFrameElement): Promise<void> {
+  await new Promise<void>((resolve) => {
+    if (frame.contentDocument?.readyState === "complete") {
+      resolve();
+      return;
+    }
+    frame.addEventListener("load", () => resolve(), { once: true });
+    setTimeout(resolve, 3000);
+  });
+}
+
+async function waitForWindowLoad(printWindow: Window): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const doc = printWindow.document;
+    if (doc.readyState === "complete") {
+      resolve();
+      return;
+    }
+    printWindow.addEventListener("load", () => resolve(), { once: true });
+    setTimeout(resolve, 3000);
+  });
+}
+
 /**
  * Export CV to PDF using browser's native print functionality
  * This ensures the PDF matches the preview exactly
@@ -76,8 +145,14 @@ export const exportToPDFNative = async ({
   fotoUrl,
   showSignatur = false,
   signaturUrl,
-  stadt
+  stadt,
+  printWindow: providedPrintWindow
 }: ExportToPDFParams): Promise<void> => {
+  // Try to open a print window immediately to preserve user activation
+  const popupWindow = providedPrintWindow && !providedPrintWindow.closed
+    ? providedPrintWindow
+    : createPrintWindow();
+
   // Convert images to data URLs for reliable embedding
   let fotoDataUrl = fotoUrl;
   let signaturDataUrl = signaturUrl;
@@ -102,32 +177,71 @@ export const exportToPDFNative = async ({
     stadt
   });
 
-  // Open in new window for printing
-  const printWindow = window.open('', '_blank', 'width=800,height=600');
-  if (!printWindow) {
-    throw new Error('Could not open print window. Please allow popups.');
+  const printBlobUrl = createHtmlBlobUrl(fullHtml);
+  let blobUrlInUse = false;
+
+  let printFrame: HTMLIFrameElement | null = null;
+  let printWindow: Window | null = null;
+  let printDocument: Document | null = null;
+
+  if (popupWindow && !popupWindow.closed) {
+    printWindow = popupWindow;
+    try {
+      printWindow.location.href = printBlobUrl;
+      blobUrlInUse = true;
+      await waitForWindowLoad(printWindow);
+      printDocument = printWindow.document;
+    } catch (error) {
+      console.warn("Failed to navigate print window to blob, trying document.write:", error);
+      blobUrlInUse = false;
+      try {
+        printWindow.document.open();
+        printWindow.document.write(fullHtml);
+        printWindow.document.close();
+        await waitForWindowLoad(printWindow);
+        printDocument = printWindow.document;
+      } catch (writeError) {
+        console.warn("Failed to write to print window, falling back to iframe:", writeError);
+        try {
+          printWindow.close();
+        } catch {
+          // ignore
+        }
+        printWindow = null;
+      }
+    }
   }
 
-  // Write the HTML to the new window
-  printWindow.document.write(fullHtml);
-  printWindow.document.close();
+  if (!printWindow || !printDocument) {
+    if (printWindow && !printWindow.closed && printWindow !== window) {
+      try {
+        printWindow.close();
+      } catch {
+        // ignore
+      }
+    }
+    URL.revokeObjectURL(printBlobUrl);
+    blobUrlInUse = false;
+    printFrame = createPrintFrame(fullHtml);
+    await waitForFrameLoad(printFrame);
+    printWindow = printFrame.contentWindow;
+    printDocument = printFrame.contentDocument;
+  }
 
-  // Wait for content to load
-  await new Promise<void>((resolve) => {
-    printWindow.onload = () => resolve();
-    // Fallback timeout
-    setTimeout(resolve, 2000);
-  });
+  if (!printWindow || !printDocument) {
+    if (printFrame?.parentNode) printFrame.parentNode.removeChild(printFrame);
+    throw new Error("Could not create print target.");
+  }
 
   // Wait for fonts
   try {
-    await printWindow.document.fonts.ready;
+    await printDocument.fonts.ready;
   } catch (e) {
     console.warn("Font loading in print window:", e);
   }
 
   // Wait for images to load
-  const images = printWindow.document.querySelectorAll('img');
+  const images = printDocument.querySelectorAll('img');
   await Promise.all(
     Array.from(images).map(img => {
       if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
@@ -142,11 +256,26 @@ export const exportToPDFNative = async ({
   // Small delay for final render
   await new Promise(resolve => setTimeout(resolve, 500));
 
+  const cleanup = () => {
+    if (blobUrlInUse) {
+      URL.revokeObjectURL(printBlobUrl);
+      blobUrlInUse = false;
+    }
+    if (printFrame?.parentNode) {
+      printFrame.parentNode.removeChild(printFrame);
+    }
+    if (printWindow && !printWindow.closed && printWindow !== window) {
+      printWindow.close();
+    }
+  };
+  printWindow.addEventListener("afterprint", cleanup, { once: true });
+  setTimeout(cleanup, 60000);
+
   // Trigger print dialog
+  printWindow.focus();
   printWindow.print();
 
-  // Note: The window will stay open so user can see preview
-  // They can close it after saving the PDF
+  // The print frame is removed after printing or timeout.
 };
 
 /**
@@ -226,24 +355,21 @@ export const exportToPDF = async (params: ExportToPDFParams): Promise<PdfExportM
       await exportToPDFNative(params);
       return "print";
     } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      if (/popup|pop-up/i.test(message)) {
-        await exportToPDFHtml2(
-          params.htmlContent,
-          params.fileName,
-          params.showFoto,
-          params.fotoUrl,
-          params.showSignatur,
-          params.signaturUrl,
-          params.stadt
-        );
-        return "download";
-      }
-      throw error;
+      console.warn("Native PDF export failed, falling back to download:", error);
+      const fallbackMode = await exportToPDFHtml2(
+        params.htmlContent,
+        params.fileName,
+        params.showFoto,
+        params.fotoUrl,
+        params.showSignatur,
+        params.signaturUrl,
+        params.stadt
+      );
+      return fallbackMode;
     }
   }
 
-  await exportToPDFHtml2(
+  const downloadMode = await exportToPDFHtml2(
     params.htmlContent,
     params.fileName,
     params.showFoto,
@@ -252,5 +378,5 @@ export const exportToPDF = async (params: ExportToPDFParams): Promise<PdfExportM
     params.signaturUrl,
     params.stadt
   );
-  return "download";
+  return downloadMode;
 };

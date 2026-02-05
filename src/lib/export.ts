@@ -19,6 +19,73 @@ import { sanitizeHtml } from "@/lib/sanitize-html";
 
 // ============= Helper Functions =============
 
+export type PdfDownloadMode = "download" | "share" | "open";
+
+const getUserAgent = () => (typeof navigator !== "undefined" ? navigator.userAgent : "");
+
+const isIOSDevice = (): boolean => {
+  if (typeof navigator === "undefined") return false;
+  const ua = getUserAgent();
+  const isIpad = /iPad/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  return /iPhone|iPod/i.test(ua) || isIpad;
+};
+
+const isAndroidDevice = (): boolean => /Android/i.test(getUserAgent());
+
+const canShareFiles = (file: File): boolean =>
+  typeof navigator !== "undefined" &&
+  typeof navigator.canShare === "function" &&
+  navigator.canShare({ files: [file] });
+
+const downloadPdfBlob = async (blob: Blob, fileName: string): Promise<PdfDownloadMode> => {
+  const normalizedName = fileName.toLowerCase().endsWith(".pdf") ? fileName : `${fileName}.pdf`;
+  let shareFile: File | null = null;
+  try {
+    shareFile = new File([blob], normalizedName, { type: "application/pdf" });
+  } catch {
+    shareFile = null;
+  }
+
+  if (
+    shareFile &&
+    typeof navigator !== "undefined" &&
+    typeof navigator.share === "function" &&
+    canShareFiles(shareFile)
+  ) {
+    try {
+      await navigator.share({ files: [shareFile], title: normalizedName });
+      return "share";
+    } catch (error) {
+      const isAbort = error instanceof DOMException && error.name === "AbortError";
+      if (isAbort) return "share";
+    }
+  }
+
+  const blobUrl = URL.createObjectURL(blob);
+
+  if (isIOSDevice()) {
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.target = "_blank";
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    return "open";
+  }
+
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.download = normalizedName;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(blobUrl);
+  return "download";
+};
+
 // Fetch image as ArrayBuffer for DOCX embedding
 async function fetchImageAsBuffer(url: string): Promise<ArrayBuffer | null> {
   try {
@@ -406,7 +473,7 @@ export const exportToPDF = async (
   showSignatur?: boolean,
   signaturUrl?: string | null,
   stadt?: string | null
-): Promise<void> => {
+): Promise<PdfDownloadMode> => {
   const sanitizedHtml = sanitizeHtml(htmlContent);
   const MM_TO_PX = 96 / 25.4;
   const A4_WIDTH_PX = Math.round(210 * MM_TO_PX);
@@ -710,7 +777,8 @@ export const exportToPDF = async (
   const renderHeight = element.scrollHeight || element.clientHeight || A4_HEIGHT_PX;
   const safeWidth = Math.max(A4_WIDTH_PX, renderWidth);
   const safeHeight = Math.max(A4_HEIGHT_PX, renderHeight);
-  const renderScale = Math.min(1.5, typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1);
+  const baseScale = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
+  const renderScale = isIOSDevice() ? 1 : Math.min(1.5, baseScale);
 
   const opt = {
     margin: [0, 0, 0, 0] as [number, number, number, number],
@@ -735,7 +803,14 @@ export const exportToPDF = async (
   };
 
   try {
-    await html2pdf().set(opt).from(element).save();
+    const worker = html2pdf().set(opt).from(element);
+    const shouldUseBlobDownload = isIOSDevice() || isAndroidDevice();
+    if (shouldUseBlobDownload) {
+      const pdfBlob = await worker.outputPdf("blob");
+      return await downloadPdfBlob(pdfBlob, fileName);
+    }
+    await worker.save();
+    return "download";
   } finally {
     document.body.removeChild(element);
     document.documentElement.style.overflow = prevHtmlOverflow;
