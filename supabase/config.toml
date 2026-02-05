@@ -1,4 +1,4 @@
-project_id = "hrsfelmpgwezuoszaili"
+project_id = "sfmgdvjwmoxoeqmcarbv"
 
 [functions.generate-cv]
 verify_jwt = false
@@ -10,4 +10,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.delete-account]
+verify_jwt = false
+
+[functions.parse-cv]
 verify_jwt = false
