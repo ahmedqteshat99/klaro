@@ -6,8 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, FileEdit, Download, Loader2, Image, PenTool } from "lucide-react";
-import { exportToPDF } from "@/lib/pdf-export";
-import { exportToDocx } from "@/lib/export";
+import type { PdfExportMode } from "@/lib/pdf-export";
 import { useToast } from "@/hooks/use-toast";
 import type { Profile } from "@/hooks/useProfile";
 import CVTemplate from "@/components/cv/CVTemplate";
@@ -66,6 +65,7 @@ const DocumentPreview = ({
         ? `Lebenslauf_${profile?.nachname || "Arzt"}`
         : `Anschreiben_${profile?.nachname || "Arzt"}`;
 
+      const { exportToPDF } = await import("@/lib/pdf-export");
       const exportMode = await exportToPDF({
         htmlContent: html,
         fileName,
@@ -74,7 +74,7 @@ const DocumentPreview = ({
         showSignatur,
         signaturUrl,
         stadt: profile?.stadt
-      });
+      }) as PdfExportMode;
 
       void logEvent(
         "export",
@@ -116,6 +116,7 @@ const DocumentPreview = ({
         ? `Lebenslauf_${profile?.nachname || "Arzt"}`
         : `Anschreiben_${profile?.nachname || "Arzt"}`;
 
+      const { exportToDocx } = await import("@/lib/export");
       await exportToDocx(
         html,
         fileName,
@@ -173,7 +174,7 @@ const DocumentPreview = ({
 
             {/* Preview - uses shared CVTemplate with A4 paper dimensions */}
             <div className="w-full">
-              <ScrollArea className="max-h-[600px] rounded-lg border overflow-auto">
+              <ScrollArea className="max-h-none md:max-h-[600px] rounded-lg border overflow-auto">
                 {cvHtml ? (
                   <div className="cv-paper-wrapper bg-gray-100 p-4">
                     <CVTemplate
@@ -199,7 +200,7 @@ const DocumentPreview = ({
 
             {/* Actions */}
             <div className="flex flex-wrap gap-2">
-              <Button onClick={onGenerateCV} disabled={isGeneratingCV}>
+              <Button onClick={onGenerateCV} disabled={isGeneratingCV} className="w-full sm:w-auto">
                 {isGeneratingCV ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -214,11 +215,11 @@ const DocumentPreview = ({
               </Button>
               {cvHtml && (
                 <>
-                  <Button variant="outline" onClick={() => handleExportPDF("cv")} disabled={isExporting}>
+                  <Button variant="outline" onClick={() => handleExportPDF("cv")} disabled={isExporting} className="w-full sm:w-auto">
                     <Download className="mr-2 h-4 w-4" />
                     PDF
                   </Button>
-                  <Button variant="outline" onClick={() => handleExportDocx("cv")} disabled={isExporting}>
+                  <Button variant="outline" onClick={() => handleExportDocx("cv")} disabled={isExporting} className="w-full sm:w-auto">
                     <Download className="mr-2 h-4 w-4" />
                     DOCX
                   </Button>
@@ -243,7 +244,7 @@ const DocumentPreview = ({
 
             {/* Preview */}
             <div className="w-full">
-              <ScrollArea className="max-h-[600px] rounded-lg border overflow-auto">
+              <ScrollArea className="max-h-none md:max-h-[600px] rounded-lg border overflow-auto">
                 {anschreibenHtml ? (
                   <div className="bg-gray-100 p-4 flex items-start">
                     <CVTemplate
@@ -273,6 +274,7 @@ const DocumentPreview = ({
               <Button
                 onClick={onGenerateAnschreiben}
                 disabled={isGeneratingAnschreiben || !canGenerateAnschreiben}
+                className="w-full sm:w-auto"
               >
                 {isGeneratingAnschreiben ? (
                   <>
@@ -288,11 +290,11 @@ const DocumentPreview = ({
               </Button>
               {anschreibenHtml && (
                 <>
-                  <Button variant="outline" onClick={() => handleExportPDF("anschreiben")} disabled={isExporting}>
+                  <Button variant="outline" onClick={() => handleExportPDF("anschreiben")} disabled={isExporting} className="w-full sm:w-auto">
                     <Download className="mr-2 h-4 w-4" />
                     PDF
                   </Button>
-                  <Button variant="outline" onClick={() => handleExportDocx("anschreiben")} disabled={isExporting}>
+                  <Button variant="outline" onClick={() => handleExportDocx("anschreiben")} disabled={isExporting} className="w-full sm:w-auto">
                     <Download className="mr-2 h-4 w-4" />
                     DOCX
                   </Button>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useProfile } from "@/hooks/useProfile";
@@ -12,9 +12,9 @@ import { useToast } from "@/hooks/use-toast";
 import { User, LogOut, Loader2, Trash2, Settings, ArrowRight } from "lucide-react";
 import type { User as SupabaseUser, Session } from "@supabase/supabase-js";
 
-import JobExtractionForm from "@/components/generation/JobExtractionForm";
-import DocumentPreview from "@/components/generation/DocumentPreview";
-import DocumentVersionsList from "@/components/generation/DocumentVersionsList";
+const JobExtractionForm = lazy(() => import("@/components/generation/JobExtractionForm"));
+const DocumentPreview = lazy(() => import("@/components/generation/DocumentPreview"));
+const DocumentVersionsList = lazy(() => import("@/components/generation/DocumentVersionsList"));
 import AppFooter from "@/components/AppFooter";
 import DisclaimerBanner from "@/components/DisclaimerBanner";
 import BrandLogo from "@/components/BrandLogo";
@@ -346,11 +346,22 @@ const Dashboard = () => {
     );
   }
 
+  const SectionFallback = ({ title }: { title: string }) => (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="text-sm text-muted-foreground">
+        Lädt…
+      </CardContent>
+    </Card>
+  );
+
   return (
     <div className="min-h-screen bg-background">
       {/* Navigation */}
       <nav className="glass-nav fixed top-0 left-0 right-0 z-50">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="container mx-auto px-4 py-3 sm:px-6 sm:py-4 flex items-center justify-between">
           <Link to="/dashboard" className="flex items-center gap-3">
             <BrandLogo />
           </Link>
@@ -367,21 +378,21 @@ const Dashboard = () => {
                 Hallo, {profile?.vorname || "User"}!
               </span>
             </div>
-            <Button asChild variant="ghost" size="sm">
+            <Button asChild variant="ghost" size="sm" className="h-10 px-3 sm:h-9 sm:px-4">
               <Link to="/profil">
-                <User className="mr-2 h-4 w-4" />
-                Profil
+                <User className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Profil</span>
               </Link>
             </Button>
-            <Button variant="ghost" size="sm" onClick={handleLogout}>
-              <LogOut className="mr-2 h-4 w-4" />
-              Abmelden
+            <Button variant="ghost" size="sm" onClick={handleLogout} className="h-10 px-3 sm:h-9 sm:px-4">
+              <LogOut className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Abmelden</span>
             </Button>
           </div>
         </div>
       </nav>
 
-      <div className="container mx-auto px-6 pt-24 pb-8">
+      <div className="container mx-auto px-4 sm:px-6 pt-20 sm:pt-24 pb-8">
         {/* Welcome Section */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2 tracking-tight">
@@ -422,22 +433,26 @@ const Dashboard = () => {
             </Card>
 
             {/* Job Extraction */}
-            <JobExtractionForm
-              onJobDataExtracted={setJobData}
-              jobData={jobData}
-              setJobData={setJobData}
-              onGenerateAnschreiben={handleGenerateAnschreiben}
-              isGeneratingAnschreiben={isGeneratingAnschreiben}
-              jobUrl={jobUrl}
-              setJobUrl={setJobUrl}
-            />
+            <Suspense fallback={<SectionFallback title="Stellenanzeige" />}>
+              <JobExtractionForm
+                onJobDataExtracted={setJobData}
+                jobData={jobData}
+                setJobData={setJobData}
+                onGenerateAnschreiben={handleGenerateAnschreiben}
+                isGeneratingAnschreiben={isGeneratingAnschreiben}
+                jobUrl={jobUrl}
+                setJobUrl={setJobUrl}
+              />
+            </Suspense>
 
             {/* Document Versions */}
-            <DocumentVersionsList
-              onLoadDocument={handleLoadDocument}
-              userId={userId}
-              refreshTrigger={documentRefreshTrigger}
-            />
+            <Suspense fallback={<SectionFallback title="Meine Dokumente" />}>
+              <DocumentVersionsList
+                onLoadDocument={handleLoadDocument}
+                userId={userId}
+                refreshTrigger={documentRefreshTrigger}
+              />
+            </Suspense>
 
             {/* Danger Zone */}
             <Card className="border-destructive/30">
@@ -491,20 +506,28 @@ const Dashboard = () => {
 
           {/* Right Column - Preview */}
           <div className="min-w-0">
-            <DocumentPreview
-              cvHtml={cvHtml}
-              anschreibenHtml={anschreibenHtml}
-              profile={profile}
-              isGeneratingCV={isGeneratingCV}
-              isGeneratingAnschreiben={isGeneratingAnschreiben}
-              onGenerateCV={handleGenerateCV}
-              onGenerateAnschreiben={handleGenerateAnschreiben}
-              canGenerateAnschreiben={!!(jobData?.krankenhaus || jobData?.fachabteilung)}
-              jobData={jobData}
-              jobUrl={jobUrl}
-              userId={userId}
-              onDocumentSaved={handleDocumentSaved}
-            />
+            <Suspense
+              fallback={
+                <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
+                  Lädt Vorschau…
+                </div>
+              }
+            >
+              <DocumentPreview
+                cvHtml={cvHtml}
+                anschreibenHtml={anschreibenHtml}
+                profile={profile}
+                isGeneratingCV={isGeneratingCV}
+                isGeneratingAnschreiben={isGeneratingAnschreiben}
+                onGenerateCV={handleGenerateCV}
+                onGenerateAnschreiben={handleGenerateAnschreiben}
+                canGenerateAnschreiben={!!(jobData?.krankenhaus || jobData?.fachabteilung)}
+                jobData={jobData}
+                jobUrl={jobUrl}
+                userId={userId}
+                onDocumentSaved={handleDocumentSaved}
+              />
+            </Suspense>
           </div>
         </div>
 

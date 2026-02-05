@@ -172,6 +172,9 @@ const PersonalDataForm = ({ profile, onSave, isLoading }: PersonalDataFormProps)
             <Label htmlFor="telefon">Telefon</Label>
             <Input
               id="telefon"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
               value={formData.telefon}
               onChange={(e) => setFormData({ ...formData, telefon: e.target.value })}
               placeholder="+49 123 456789"

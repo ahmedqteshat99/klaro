@@ -254,7 +254,7 @@ const AuthPage = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <div className="flex-1 flex items-center justify-center p-6">
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-6">
         <div className="w-full max-w-md">
         {/* Logo */}
         <Link to="/" className="flex items-center justify-center mb-10">
@@ -321,7 +321,7 @@ const AuthPage = () => {
             {/* Email Form */}
             <form onSubmit={handleEmailAuth} className="space-y-4">
               {!isLogin && (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="vorname">Vorname</Label>
                     <div className="relative">

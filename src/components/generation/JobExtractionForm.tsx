@@ -177,9 +177,12 @@ const JobExtractionForm = ({
         {/* URL Input with Extract button */}
         <div className="space-y-2">
           <Label htmlFor="jobUrl">Stellenanzeigen-URL</Label>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <Input
               id="jobUrl"
+              type="url"
+              inputMode="url"
+              autoComplete="url"
               value={jobUrl}
               onChange={(e) => setJobUrl(e.target.value)}
               placeholder="https://stellenanzeige.de/arzt-stelle..."
@@ -188,7 +191,7 @@ const JobExtractionForm = ({
             <Button
               onClick={handleExtract}
               disabled={isExtracting || !jobUrl.trim()}
-              className="shrink-0 bg-neutral-900 text-white hover:bg-neutral-800"
+              className="shrink-0 bg-neutral-900 text-white hover:bg-neutral-800 w-full sm:w-auto"
             >
               {isExtracting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

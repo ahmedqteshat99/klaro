@@ -101,27 +101,27 @@ const ProfilPage = () => {
     <div className="min-h-screen bg-background">
       {/* Navigation */}
       <nav className="glass-nav fixed top-0 left-0 right-0 z-50">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="container mx-auto px-4 py-3 sm:px-6 sm:py-4 flex items-center justify-between">
           <Link to="/dashboard" className="flex items-center gap-3">
             <BrandLogo />
           </Link>
-          <Button asChild variant="ghost" size="sm">
+          <Button asChild variant="ghost" size="sm" className="h-10 px-3 sm:h-9 sm:px-4">
             <Link to="/dashboard">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Zurück zum Dashboard
+              <ArrowLeft className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Zurück zum Dashboard</span>
             </Link>
           </Button>
         </div>
       </nav>
 
-      <div className="container mx-auto px-6 pt-24 pb-8">
+      <div className="container mx-auto px-4 sm:px-6 pt-20 sm:pt-24 pb-8">
         <div className="mb-10">
           <h1 className="text-3xl font-bold text-foreground mb-3 tracking-tight">
             Mein Profil
           </h1>
         </div>
 
-        <ScrollArea className="h-[calc(100vh-220px)]">
+        <ScrollArea className="h-auto md:h-[calc(100vh-220px)]">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-8">
             {/* Left Column - Photo & Signature */}
             <div className="lg:col-span-1 space-y-6">
