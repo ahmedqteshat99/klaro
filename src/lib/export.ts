@@ -673,6 +673,11 @@ export const exportToPDF = async (
   element.style.position = "relative";
   document.body.appendChild(element);
 
+  const prevHtmlOverflow = document.documentElement.style.overflow;
+  const prevBodyOverflow = document.body.style.overflow;
+  document.documentElement.style.overflow = "visible";
+  document.body.style.overflow = "visible";
+
   // Wait for all images to fully load before rendering
   const images = element.querySelectorAll('img');
   await Promise.all(
@@ -690,6 +695,9 @@ export const exportToPDF = async (
   // Additional wait for layout to stabilize (increased for image rendering)
   await new Promise(resolve => setTimeout(resolve, 500));
 
+  const renderWidth = element.scrollWidth || element.clientWidth;
+  const renderHeight = element.scrollHeight || element.clientHeight;
+
   const opt = {
     margin: [0, 0, 0, 0] as [number, number, number, number],
     filename: `${fileName}.pdf`,
@@ -700,7 +708,13 @@ export const exportToPDF = async (
       letterRendering: true,
       allowTaint: true,
       logging: false,
-      imageTimeout: 10000
+      imageTimeout: 15000,
+      windowWidth: renderWidth,
+      windowHeight: renderHeight,
+      width: renderWidth,
+      height: renderHeight,
+      scrollX: 0,
+      scrollY: 0
     },
     jsPDF: { unit: "mm" as const, format: "a4" as const, orientation: "portrait" as const },
     pagebreak: { mode: ['css', 'legacy'], avoid: ['h2', 'h3', '.cv-entry', '.cv-languages', '.cv-signature-block', 'tr', 'table'] }
@@ -710,6 +724,8 @@ export const exportToPDF = async (
     await html2pdf().set(opt).from(element).save();
   } finally {
     document.body.removeChild(element);
+    document.documentElement.style.overflow = prevHtmlOverflow;
+    document.body.style.overflow = prevBodyOverflow;
   }
 };
 
