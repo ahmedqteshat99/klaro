@@ -22,6 +22,20 @@ const FAMILIENSTAND_OPTIONS = [
   "In Partnerschaft"
 ];
 
+const parseDateString = (value?: string | null): Date | null => {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+};
+
+const toLocalDateString = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 const PersonalDataForm = ({ profile, onSave, isLoading }: PersonalDataFormProps) => {
   const [formData, setFormData] = useState({
     vorname: "",
@@ -40,7 +54,7 @@ const PersonalDataForm = ({ profile, onSave, isLoading }: PersonalDataFormProps)
       setFormData({
         vorname: profile.vorname || "",
         nachname: profile.nachname || "",
-        geburtsdatum: profile.geburtsdatum ? new Date(profile.geburtsdatum) : null,
+        geburtsdatum: parseDateString(profile.geburtsdatum),
         staatsangehoerigkeit: profile.staatsangehoerigkeit || "",
         familienstand: profile.familienstand || "",
         stadt: profile.stadt || "",
@@ -54,7 +68,7 @@ const PersonalDataForm = ({ profile, onSave, isLoading }: PersonalDataFormProps)
     setIsSaving(true);
     await onSave({
       ...formData,
-      geburtsdatum: formData.geburtsdatum?.toISOString().split("T")[0] || null
+      geburtsdatum: formData.geburtsdatum ? toLocalDateString(formData.geburtsdatum) : null
     });
     setIsSaving(false);
   };
