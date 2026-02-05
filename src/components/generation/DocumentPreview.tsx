@@ -66,7 +66,7 @@ const DocumentPreview = ({
         ? `Lebenslauf_${profile?.nachname || "Arzt"}`
         : `Anschreiben_${profile?.nachname || "Arzt"}`;
 
-      await exportToPDF({
+      const exportMode = await exportToPDF({
         htmlContent: html,
         fileName,
         showFoto: type === "cv" ? showFoto : false,
@@ -83,10 +83,17 @@ const DocumentPreview = ({
       );
       void touchLastSeen(userId);
 
-      toast({
-        title: "PDF Druckvorschau",
-        description: "Bitte wählen Sie 'Als PDF speichern' im Druckdialog."
-      });
+      if (exportMode === "print") {
+        toast({
+          title: "PDF Druckvorschau",
+          description: "Bitte wählen Sie 'Als PDF speichern' im Druckdialog."
+        });
+      } else {
+        toast({
+          title: "PDF erstellt",
+          description: "Die PDF-Datei wurde erstellt und heruntergeladen. Bitte prüfen Sie Ihre Dateien/Downloads."
+        });
+      }
     } catch (error) {
       console.error("PDF export error:", error);
       toast({

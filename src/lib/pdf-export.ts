@@ -1,4 +1,5 @@
 import { generateCVHtml } from "@/components/cv/CVTemplate";
+import { exportToPDF as exportToPDFHtml2 } from "@/lib/export";
 
 interface ExportToPDFParams {
   htmlContent: string;
@@ -9,6 +10,24 @@ interface ExportToPDFParams {
   signaturUrl?: string | null;
   stadt?: string | null;
 }
+
+export type PdfExportMode = "print" | "download";
+
+const isMobileDevice = (): boolean => {
+  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  const uaMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(ua);
+  const coarsePointer = typeof window.matchMedia === "function"
+    ? window.matchMedia("(pointer: coarse)").matches
+    : false;
+  const smallScreen = typeof window.matchMedia === "function"
+    ? window.matchMedia("(max-width: 768px)").matches
+    : false;
+  return uaMobile || (coarsePointer && smallScreen);
+};
+
+export const getPdfExportMode = (): PdfExportMode =>
+  isMobileDevice() ? "download" : "print";
 
 /**
  * Converts an image URL to a base64 data URL for reliable embedding
@@ -199,4 +218,39 @@ export const exportToPDFPlaywright = async ({
  * Main export function - uses native print by default
  * Can be switched to Playwright backend when available
  */
-export const exportToPDF = exportToPDFNative;
+export const exportToPDF = async (params: ExportToPDFParams): Promise<PdfExportMode> => {
+  const preferredMode = getPdfExportMode();
+
+  if (preferredMode === "print") {
+    try {
+      await exportToPDFNative(params);
+      return "print";
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (/popup|pop-up/i.test(message)) {
+        await exportToPDFHtml2(
+          params.htmlContent,
+          params.fileName,
+          params.showFoto,
+          params.fotoUrl,
+          params.showSignatur,
+          params.signaturUrl,
+          params.stadt
+        );
+        return "download";
+      }
+      throw error;
+    }
+  }
+
+  await exportToPDFHtml2(
+    params.htmlContent,
+    params.fileName,
+    params.showFoto,
+    params.fotoUrl,
+    params.showSignatur,
+    params.signaturUrl,
+    params.stadt
+  );
+  return "download";
+};

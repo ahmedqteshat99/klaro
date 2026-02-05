@@ -19,6 +19,8 @@ import CertificationsForm from "@/components/profile/CertificationsForm";
 import PublicationsForm from "@/components/profile/PublicationsForm";
 import PhotoUpload from "@/components/profile/PhotoUpload";
 import SignatureCanvas from "@/components/profile/SignatureCanvas";
+import CvImportCard from "@/components/profile/CvImportCard";
+import { CustomSectionForm } from "@/components/profile/CustomSectionForm";
 
 const ProfilPage = () => {
   const navigate = useNavigate();
@@ -31,24 +33,38 @@ const ProfilPage = () => {
     practicalExperiences,
     certifications,
     publications,
+    customSections,
     isLoading,
     userId,
     saveProfile,
     addWorkExperience,
     updateWorkExperience,
     deleteWorkExperience,
+    addWorkExperiencesLocal,
     addEducation,
     updateEducation,
     deleteEducation,
+    addEducationEntriesLocal,
     addPracticalExperience,
     updatePracticalExperience,
     deletePracticalExperience,
+    addPracticalExperiencesLocal,
     addCertification,
     updateCertification,
     deleteCertification,
+    addCertificationsLocal,
     addPublication,
     updatePublication,
-    deletePublication
+    deletePublication,
+    updateLocalProfile,
+    addPublicationsLocal,
+    addCustomSection,
+    updateCustomSection,
+    deleteCustomSection,
+    addCustomSectionEntry,
+    updateCustomSectionEntry,
+    deleteCustomSectionEntry,
+    getEntriesForSection
   } = useProfile();
 
 
@@ -123,6 +139,18 @@ const ProfilPage = () => {
 
             {/* Right Column - Forms */}
             <div className="lg:col-span-2 space-y-6">
+              <CvImportCard
+                profile={profile}
+                updateLocalProfile={updateLocalProfile}
+                addWorkExperiencesLocal={addWorkExperiencesLocal}
+                addEducationEntriesLocal={addEducationEntriesLocal}
+                addPracticalExperiencesLocal={addPracticalExperiencesLocal}
+                addCertificationsLocal={addCertificationsLocal}
+                addPublicationsLocal={addPublicationsLocal}
+                addCustomSection={addCustomSection}
+                addCustomSectionEntry={addCustomSectionEntry}
+              />
+
               <PersonalDataForm
                 profile={profile}
                 onSave={saveProfile}
@@ -181,6 +209,20 @@ const ProfilPage = () => {
                 onUpdate={updatePublication}
                 onDelete={deletePublication}
               />
+
+              {/* Custom Sections */}
+              {customSections.map((section) => (
+                <CustomSectionForm
+                  key={section.id}
+                  section={section}
+                  entries={getEntriesForSection(section.id)}
+                  onUpdateSection={updateCustomSection}
+                  onDeleteSection={deleteCustomSection}
+                  onAddEntry={addCustomSectionEntry}
+                  onUpdateEntry={updateCustomSectionEntry}
+                  onDeleteEntry={deleteCustomSectionEntry}
+                />
+              ))}
 
             </div>
           </div>
