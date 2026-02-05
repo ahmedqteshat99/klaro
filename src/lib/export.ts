@@ -438,10 +438,52 @@ export const exportToPDF = async (
 
   // Create wrapper - matching preview styles from index.css
   let fullHtml = `
-    <div class="document-preview" style="font-family: 'Spectral', Georgia, serif; font-size: 10.5pt; font-weight: 300; line-height: 1.35; color: #1a1a1a; padding: 0; overflow: visible; box-sizing: border-box;">
+    <div class="document-preview cv-paper" style="font-family: 'Spectral', Georgia, serif; font-size: 10.5pt; font-weight: 300; line-height: 1.35; color: #1a1a1a; padding: 0; overflow: visible; box-sizing: border-box;">
       <style>
         * {
           box-sizing: border-box;
+        }
+
+        .cv-paper {
+          width: 210mm !important;
+          min-height: 297mm !important;
+          padding: 15mm !important;
+          margin: 0 !important;
+          background: #ffffff !important;
+          box-sizing: border-box !important;
+          position: relative !important;
+        }
+
+        .cv-content-area {
+          width: 100% !important;
+          position: relative !important;
+        }
+
+        .cv-content-area::after {
+          content: "";
+          display: table;
+          clear: both;
+        }
+
+        /* Photo container - German CV standard portrait size (35mm x 45mm) */
+        .cv-photo-container {
+          width: 35mm !important;
+          height: 45mm !important;
+          float: right !important;
+          margin-left: 5mm !important;
+          margin-bottom: 3mm !important;
+          border-radius: 1mm !important;
+          border: 0.3mm solid #e5e5e5 !important;
+          box-sizing: border-box !important;
+          overflow: hidden !important;
+        }
+
+        .cv-photo-container img {
+          width: 100% !important;
+          height: 100% !important;
+          object-fit: cover !important;
+          object-position: center !important;
+          display: block !important;
         }
 
         /* Section headers - matching .document-preview h2 from index.css */
@@ -590,11 +632,13 @@ export const exportToPDF = async (
       </style>
   `;
 
+  fullHtml += `<div class="cv-content-area">`;
+
   // Add photo using FLOAT - matching .cv-photo-container from index.css
   if (showFoto && fotoDataUrl) {
     fullHtml += `
-      <div class="cv-photo-container" style="width: 130px; height: 170px; float: right; margin-left: 1rem; margin-bottom: 0.5rem; border-radius: 3px; overflow: hidden; border: 1px solid #e5e5e5; box-sizing: border-box;">
-        <img src="${fotoDataUrl}" alt="Bewerbungsfoto" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
+      <div class="cv-photo-container">
+        <img src="${fotoDataUrl}" alt="Bewerbungsfoto" />
       </div>
     `;
   }
@@ -616,8 +660,8 @@ export const exportToPDF = async (
     `;
   }
 
-  // Close main wrapper
-  fullHtml += `<div style="clear: both; height: 1px;"></div></div>`;
+  // Close content area and main wrapper
+  fullHtml += `<div style="clear: both; height: 1px;"></div></div></div>`;
 
   const element = document.createElement("div");
   element.innerHTML = fullHtml;
@@ -647,7 +691,7 @@ export const exportToPDF = async (
   await new Promise(resolve => setTimeout(resolve, 500));
 
   const opt = {
-    margin: [15, 15, 15, 15] as [number, number, number, number],
+    margin: [0, 0, 0, 0] as [number, number, number, number],
     filename: `${fileName}.pdf`,
     image: { type: "jpeg" as const, quality: 0.98 },
     html2canvas: {
