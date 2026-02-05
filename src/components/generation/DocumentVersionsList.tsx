@@ -27,7 +27,6 @@ interface DocumentVersion {
   id: string;
   name: string;
   typ: string;
-  html_content: string;
   created_at: string;
   updated_at: string;
   hospital_name: string | null;
@@ -53,6 +52,7 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
   const [editName, setEditName] = useState("");
   const [filterApplied, setFilterApplied] = useState<"all" | "applied" | "not_applied">("all");
   const [sortBy, setSortBy] = useState<"newest" | "hospital">("newest");
+  const [loadingId, setLoadingId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const fetchDocuments = async () => {
@@ -61,7 +61,7 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
     
     const { data, error } = await supabase
       .from("document_versions")
-      .select("*")
+      .select("id, name, typ, created_at, updated_at, hospital_name, department_or_specialty, position_title, job_url, applied, applied_date, show_foto, show_signatur")
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
 
@@ -77,6 +77,30 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
   useEffect(() => {
     fetchDocuments();
   }, [userId, refreshTrigger]);
+
+  const loadDocumentContent = async (doc: DocumentVersion, type: "cv" | "anschreiben") => {
+    if (!userId) return;
+    setLoadingId(doc.id);
+
+    const { data, error } = await supabase
+      .from("document_versions")
+      .select("html_content, created_at")
+      .eq("id", doc.id)
+      .maybeSingle();
+
+    if (error || !data?.html_content) {
+      console.error("Error loading document content:", error);
+      toast({
+        title: "Fehler",
+        description: "Dokumentinhalt konnte nicht geladen werden.",
+        variant: "destructive"
+      });
+    } else {
+      onLoadDocument(data.html_content, type, data.created_at ?? doc.created_at);
+    }
+
+    setLoadingId(null);
+  };
 
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from("document_versions").delete().eq("id", id);
@@ -194,8 +218,9 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
             variant="ghost"
             size="icon"
             className="h-9 w-9 sm:h-8 sm:w-8"
-            onClick={() => onLoadDocument(doc.html_content, isAnschreiben ? "anschreiben" : "cv", doc.created_at)}
+            onClick={() => loadDocumentContent(doc, isAnschreiben ? "anschreiben" : "cv")}
             title="Laden"
+            disabled={loadingId === doc.id}
           >
             <FolderOpen className="h-4 w-4" />
           </Button>

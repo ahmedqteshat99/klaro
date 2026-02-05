@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 
-export type AppEventType = "signup" | "login" | "generate" | "export";
+export type AppEventType = "signup" | "login" | "generate" | "export" | "slow_endpoint";
 
 export const logEvent = async (
   type: AppEventType,
@@ -26,6 +26,23 @@ export const logEvent = async (
     console.warn("logEvent error:", error);
     return { success: false, error: "unexpected_error" };
   }
+};
+
+export const logSlowEndpoint = async (
+  name: string,
+  durationMs: number,
+  meta?: Json,
+  userId?: string | null
+) => {
+  return logEvent(
+    "slow_endpoint",
+    {
+      name,
+      duration_ms: Math.round(durationMs),
+      ...(meta ?? {})
+    },
+    userId
+  );
 };
 
 export const touchLastSeen = async (userId?: string | null) => {

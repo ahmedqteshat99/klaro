@@ -17,15 +17,7 @@ interface SaveDocumentParams {
 
 interface DocumentVersion {
   id: string;
-  name: string;
-  typ: string;
   html_content: string;
-  hospital_name: string | null;
-  department_or_specialty: string | null;
-  position_title: string | null;
-  job_url: string | null;
-  show_foto: boolean | null;
-  show_signatur: boolean | null;
   created_at: string;
 }
 
@@ -35,7 +27,7 @@ export const useDocumentVersions = () => {
   const getNextVersionName = async (userId: string, typ: "CV" | "Anschreiben", hospitalName?: string | null): Promise<string> => {
     const { count, error } = await supabase
       .from("document_versions")
-      .select("*", { count: "exact", head: true })
+      .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
       .eq("typ", typ);
 
@@ -56,7 +48,7 @@ export const useDocumentVersions = () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase
         .from("document_versions") as any)
-        .select("*")
+        .select("id, html_content, created_at")
         .eq("user_id", userId)
         .eq("typ", typ)
         .order("created_at", { ascending: false })
