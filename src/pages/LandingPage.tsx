@@ -86,17 +86,19 @@ const LandingPage = () => {
     <div className="min-h-screen bg-background">
       {/* Navigation */}
       <nav className="glass-nav fixed top-0 left-0 right-0 z-50">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="container mx-auto px-4 py-3 sm:px-6 sm:py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <BrandLogo />
           </div>
-          <div className="flex items-center gap-6">
-            <Link to="/datenschutz" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-              Datenschutz
-            </Link>
-            <Link to="/impressum" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-              Impressum
-            </Link>
+          <div className="flex items-center gap-3 sm:gap-6">
+            <div className="hidden sm:flex items-center gap-6">
+              <Link to="/datenschutz" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                Datenschutz
+              </Link>
+              <Link to="/impressum" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                Impressum
+              </Link>
+            </div>
             <Button asChild size="sm">
               <Link to="/auth">Anmelden</Link>
             </Button>
@@ -105,8 +107,8 @@ const LandingPage = () => {
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-20 lg:pt-40 lg:pb-32">
-        <div className="container mx-auto px-6">
+      <section className="pt-24 pb-16 sm:pt-32 sm:pb-20 lg:pt-40 lg:pb-32">
+        <div className="container mx-auto px-4 sm:px-6">
           <div className="max-w-4xl mx-auto text-center">
             {showDeletedNotice && (
               <Alert className="mb-6 text-left">
@@ -146,7 +148,7 @@ const LandingPage = () => {
 
       {/* Problem / Brand Story Section */}
       <section className="py-24 bg-secondary/50">
-        <div className="container mx-auto px-6">
+        <div className="container mx-auto px-4 sm:px-6">
           <div className="max-w-3xl mx-auto">
             <div className="text-center mb-16">
               <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4 tracking-tight">
@@ -175,7 +177,7 @@ const LandingPage = () => {
 
       {/* Preview Section */}
       <section className="py-24">
-        <div className="container mx-auto px-6">
+        <div className="container mx-auto px-4 sm:px-6">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4 tracking-tight">
               Beispiele
@@ -304,7 +306,7 @@ const LandingPage = () => {
 
       {/* How it works */}
       <section id="so-funktionierts" className="py-24">
-        <div className="container mx-auto px-6">
+        <div className="container mx-auto px-4 sm:px-6">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4 tracking-tight">
               So funktioniert&apos;s
@@ -342,7 +344,7 @@ const LandingPage = () => {
 
       {/* Claude AI Transparency Section */}
       <section className="py-24 bg-secondary/50">
-        <div className="container mx-auto px-6">
+        <div className="container mx-auto px-4 sm:px-6">
           <div className="max-w-4xl mx-auto">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
               <div>
@@ -360,6 +362,8 @@ const LandingPage = () => {
                       src="https://raw.githubusercontent.com/lobehub/lobe-icons/refs/heads/master/packages/static-png/dark/claude-color.png"
                       alt="Claude"
                       className="h-6 w-6"
+                      loading="lazy"
+                      decoding="async"
                     />
                   </div>
                   <div>
@@ -375,7 +379,7 @@ const LandingPage = () => {
 
       {/* Features Section */}
       <section className="py-24">
-        <div className="container mx-auto px-6">
+        <div className="container mx-auto px-4 sm:px-6">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4 tracking-tight">
               Funktionen, die wirklich helfen
@@ -403,7 +407,7 @@ const LandingPage = () => {
 
       {/* Trust & Privacy Section */}
       <section className="py-24 bg-secondary/50">
-        <div className="container mx-auto px-6">
+        <div className="container mx-auto px-4 sm:px-6">
           <div className="max-w-3xl mx-auto">
             <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4 tracking-tight">
@@ -429,7 +433,7 @@ const LandingPage = () => {
 
       {/* CTA Section */}
       <section className="py-24">
-        <div className="container mx-auto px-6">
+        <div className="container mx-auto px-4 sm:px-6">
           <div className="max-w-4xl mx-auto rounded-3xl gradient-primary p-12 md:p-16 text-center shadow-apple-xl">
             <h2 className="text-3xl md:text-4xl font-bold text-primary-foreground mb-4 tracking-tight">
               Bereit für eine Bewerbung, die klar wirkt?

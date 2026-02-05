@@ -193,7 +193,7 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
+            className="h-9 w-9 sm:h-8 sm:w-8"
             onClick={() => onLoadDocument(doc.html_content, isAnschreiben ? "anschreiben" : "cv", doc.created_at)}
             title="Laden"
           >
@@ -202,7 +202,7 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
+            className="h-9 w-9 sm:h-8 sm:w-8"
             onClick={() => { setEditingId(doc.id); setEditName(doc.name); }}
             title="Umbenennen"
           >
@@ -212,7 +212,7 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-9 w-9 sm:h-8 sm:w-8"
               onClick={() => handleDelete(doc.id)}
               title="Entfernen"
             >
@@ -283,7 +283,7 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
           </TabsList>
 
           <TabsContent value="cv" className="mt-4 min-w-0">
-            <ScrollArea className="h-[300px] w-full min-w-0">
+            <ScrollArea className="h-[50vh] sm:h-[300px] w-full min-w-0">
               {cvDocuments.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">
                   Noch keine Lebensläufe gespeichert.
@@ -299,10 +299,10 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
           <TabsContent value="anschreiben" className="mt-4 space-y-3 min-w-0">
             {/* Filters */}
             <div className="flex gap-2 items-center flex-wrap min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
                 <Filter className="h-4 w-4 text-muted-foreground" />
                 <Select value={filterApplied} onValueChange={(v) => setFilterApplied(v as typeof filterApplied)}>
-                  <SelectTrigger className="w-[150px] h-8">
+                  <SelectTrigger className="w-full sm:w-[150px] h-10 sm:h-8">
                     <SelectValue placeholder="Filter" />
                   </SelectTrigger>
                   <SelectContent>
@@ -313,7 +313,7 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
                 </Select>
               </div>
               <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
-                <SelectTrigger className="w-[140px] h-8">
+                <SelectTrigger className="w-full sm:w-[140px] h-10 sm:h-8">
                   <SelectValue placeholder="Sortierung" />
                 </SelectTrigger>
                 <SelectContent>
@@ -323,7 +323,7 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
               </Select>
             </div>
 
-            <ScrollArea className="h-[260px] w-full min-w-0">
+            <ScrollArea className="h-[50vh] sm:h-[260px] w-full min-w-0">
               {filteredAnschreiben.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">
                   {anschreibenDocuments.length === 0 

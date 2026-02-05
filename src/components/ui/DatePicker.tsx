@@ -1,5 +1,6 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 interface DatePickerProps {
   value: Date | null;
@@ -28,6 +29,33 @@ const getDaysInMonth = (month: number, year: number): number => {
   return new Date(year, month, 0).getDate();
 };
 
+const isMobileDevice = () => {
+  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  const uaMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(ua);
+  const coarsePointer = typeof window.matchMedia === "function"
+    ? window.matchMedia("(pointer: coarse)").matches
+    : false;
+  const smallScreen = typeof window.matchMedia === "function"
+    ? window.matchMedia("(max-width: 768px)").matches
+    : false;
+  return uaMobile || (coarsePointer && smallScreen);
+};
+
+const toLocalDateString = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const parseDateString = (value: string): Date | null => {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+};
+
 export const DatePicker = ({ 
   value, 
   onChange, 
@@ -35,6 +63,23 @@ export const DatePicker = ({
   minYear = 1940,
   maxYear = new Date().getFullYear()
 }: DatePickerProps) => {
+  if (isMobileDevice()) {
+    const minValue = `${minYear}-01-01`;
+    const maxValue = `${maxYear}-12-31`;
+    return (
+      <div className="space-y-2">
+        {label && <Label>{label}</Label>}
+        <Input
+          type="date"
+          value={value ? toLocalDateString(value) : ""}
+          onChange={(e) => onChange(parseDateString(e.target.value))}
+          min={minValue}
+          max={maxValue}
+        />
+      </div>
+    );
+  }
+
   const day = value ? String(value.getDate()).padStart(2, "0") : "";
   const month = value ? String(value.getMonth() + 1).padStart(2, "0") : "";
   const year = value ? String(value.getFullYear()) : "";
