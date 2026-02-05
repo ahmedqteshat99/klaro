@@ -708,28 +708,29 @@ export const exportToPDF = async (
 
   const renderWidth = element.scrollWidth || element.clientWidth || A4_WIDTH_PX;
   const renderHeight = element.scrollHeight || element.clientHeight || A4_HEIGHT_PX;
-  const canvasWidth = Math.max(renderWidth, A4_WIDTH_PX);
-  const canvasHeight = Math.max(renderHeight, A4_HEIGHT_PX);
+  const safeWidth = Math.max(A4_WIDTH_PX, renderWidth);
+  const safeHeight = Math.max(A4_HEIGHT_PX, renderHeight);
+  const renderScale = Math.min(1.5, typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1);
 
   const opt = {
     margin: [0, 0, 0, 0] as [number, number, number, number],
     filename: `${fileName}.pdf`,
     image: { type: "jpeg" as const, quality: 0.98 },
     html2canvas: {
-      scale: 2,
+      scale: renderScale,
       useCORS: true,
       letterRendering: true,
       allowTaint: true,
       logging: false,
       imageTimeout: 15000,
-      windowWidth: canvasWidth,
-      windowHeight: canvasHeight,
-      width: canvasWidth,
-      height: canvasHeight,
+      windowWidth: safeWidth,
+      windowHeight: safeHeight,
+      width: safeWidth,
+      height: safeHeight,
       scrollX: 0,
       scrollY: 0
     },
-    jsPDF: { unit: "mm" as const, format: "a4" as const, orientation: "portrait" as const },
+    jsPDF: { unit: "px" as const, format: [A4_WIDTH_PX, A4_HEIGHT_PX] as [number, number], orientation: "portrait" as const },
     pagebreak: { mode: ['css', 'legacy'], avoid: ['h2', 'h3', '.cv-entry', '.cv-languages', '.cv-signature-block', 'tr', 'table'] }
   };
 
