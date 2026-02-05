@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { logSlowEndpoint } from "@/lib/app-events";
 
 export interface CvImportProfile {
   vorname?: string | null;
@@ -72,6 +73,7 @@ export interface CvImportData {
 export const parseCvText = async (
   text: string
 ): Promise<{ success: boolean; data?: CvImportData; error?: string }> => {
+  const start = typeof performance !== "undefined" ? performance.now() : Date.now();
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
   if (sessionError) {
     console.error("Parse CV session error:", sessionError);
@@ -88,6 +90,10 @@ export const parseCvText = async (
     body: { text },
     headers: { Authorization: `Bearer ${accessToken}` },
   });
+  const durationMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - start;
+  if (durationMs > 1500) {
+    void logSlowEndpoint("parse-cv", durationMs, { ok: !error, status: response?.status ?? null });
+  }
 
   if (error) {
     let errorMessage = error.message || "Unbekannter Fehler";
