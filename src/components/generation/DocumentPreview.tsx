@@ -37,6 +37,20 @@ interface DocumentPreviewProps {
   onDocumentSaved?: () => void;
 }
 
+const isLikelyMobile = (): boolean => {
+  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  const isIpad = /iPad/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const uaMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(ua) || isIpad;
+  const coarsePointer = typeof window.matchMedia === "function"
+    ? window.matchMedia("(pointer: coarse)").matches
+    : false;
+  const smallScreen = typeof window.matchMedia === "function"
+    ? window.matchMedia("(max-width: 768px)").matches
+    : false;
+  return uaMobile || (coarsePointer && smallScreen);
+};
+
 const DocumentPreview = ({
   cvHtml,
   anschreibenHtml,
@@ -59,6 +73,19 @@ const DocumentPreview = ({
     const html = type === "cv" ? cvHtml : anschreibenHtml;
     if (!html) return;
 
+    let preOpenedWindow: Window | null = null;
+    if (!isLikelyMobile()) {
+      try {
+        preOpenedWindow = window.open("about:blank", "_blank");
+        if (preOpenedWindow) {
+          preOpenedWindow.document.title = "PDF Vorschau";
+          preOpenedWindow.document.body.innerHTML = "<p style=\"font-family: sans-serif; padding: 1rem;\">PDF wird vorbereitet…</p>";
+        }
+      } catch {
+        preOpenedWindow = null;
+      }
+    }
+
     setIsExporting(true);
     try {
       const fileName = type === "cv"
@@ -73,8 +100,13 @@ const DocumentPreview = ({
         fotoUrl,
         showSignatur,
         signaturUrl,
-        stadt: profile?.stadt
+        stadt: profile?.stadt,
+        printWindow: preOpenedWindow
       }) as PdfExportMode;
+
+      if (exportMode !== "print" && preOpenedWindow && !preOpenedWindow.closed) {
+        preOpenedWindow.close();
+      }
 
       void logEvent(
         "export",
@@ -88,6 +120,16 @@ const DocumentPreview = ({
           title: "PDF Druckvorschau",
           description: "Bitte wählen Sie 'Als PDF speichern' im Druckdialog."
         });
+      } else if (exportMode === "share") {
+        toast({
+          title: "PDF erstellt",
+          description: "Das System-Teilen-Dialogfenster wurde geöffnet. Bitte speichern oder teilen Sie die Datei."
+        });
+      } else if (exportMode === "open") {
+        toast({
+          title: "PDF erstellt",
+          description: "Die PDF-Datei wurde in einem neuen Tab geöffnet. Nutzen Sie dort 'Teilen' oder 'In Dateien sichern'."
+        });
       } else {
         toast({
           title: "PDF erstellt",
@@ -96,6 +138,9 @@ const DocumentPreview = ({
       }
     } catch (error) {
       console.error("PDF export error:", error);
+      if (preOpenedWindow && !preOpenedWindow.closed) {
+        preOpenedWindow.close();
+      }
       toast({
         title: "Fehler",
         description: error instanceof Error ? error.message : "PDF konnte nicht erstellt werden.",
