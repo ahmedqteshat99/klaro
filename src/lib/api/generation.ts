@@ -2,6 +2,47 @@ import { supabase } from "@/integrations/supabase/client";
 import { logSlowEndpoint } from "@/lib/app-events";
 import type { Profile, WorkExperience, EducationEntry, PracticalExperience, Certification, Publication } from "@/hooks/useProfile";
 
+/**
+ * Ensure a valid (non-expired) user session exists before calling an edge function.
+ * If the access token is expired or expiring within 30 s, forces a refresh.
+ * Throws a German-language error when no session can be obtained so callers
+ * surface a meaningful message instead of the cryptic "missing sub claim".
+ */
+async function ensureFreshSession(): Promise<void> {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session) {
+    throw new Error("Nicht angemeldet. Bitte melden Sie sich erneut an.");
+  }
+
+  const expiresAt = session.expires_at; // unix seconds
+  const now = Math.floor(Date.now() / 1000);
+
+  if (expiresAt && expiresAt - now < 30) {
+    const { error } = await supabase.auth.refreshSession();
+    if (error) {
+      throw new Error("Sitzung abgelaufen. Bitte melden Sie sich erneut an.");
+    }
+  }
+}
+
+/** Extract server error message from Edge Function invoke error (4xx/5xx response body). */
+function getInvokeErrorMessage(error: unknown): string {
+  const err = error as { context?: { body?: string }; message?: string };
+  const body = err?.context?.body;
+  if (body) {
+    try {
+      const parsed = JSON.parse(body) as { error?: string };
+      if (typeof parsed?.error === "string" && parsed.error.trim()) {
+        return parsed.error;
+      }
+    } catch {
+      // ignore parse failure
+    }
+  }
+  return err?.message ?? "Unbekannter Fehler";
+}
+
 interface GenerateCVParams {
   profile: Profile | null;
   workExperiences: WorkExperience[];
@@ -25,6 +66,7 @@ interface GenerateAnschreibenParams extends GenerateCVParams {
 }
 
 export const generateCV = async (params: GenerateCVParams): Promise<{ success: boolean; html?: string; error?: string }> => {
+  await ensureFreshSession();
   const start = typeof performance !== "undefined" ? performance.now() : Date.now();
   const { data, error } = await supabase.functions.invoke('generate-cv', {
     body: params
@@ -36,7 +78,7 @@ export const generateCV = async (params: GenerateCVParams): Promise<{ success: b
 
   if (error) {
     console.error('Generate CV error:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: getInvokeErrorMessage(error) };
   }
 
   return data;
@@ -45,6 +87,7 @@ export const generateCV = async (params: GenerateCVParams): Promise<{ success: b
 export const extractJobData = async (
   params: { url?: string; rawText?: string }
 ): Promise<{ success: boolean; data?: JobData; rawContent?: string; error?: string }> => {
+  await ensureFreshSession();
   const start = typeof performance !== "undefined" ? performance.now() : Date.now();
   const { data, error } = await supabase.functions.invoke('extract-job', {
     body: params
@@ -56,13 +99,14 @@ export const extractJobData = async (
 
   if (error) {
     console.error('Extract job error:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: getInvokeErrorMessage(error) };
   }
 
   return data;
 };
 
 export const generateAnschreiben = async (params: GenerateAnschreibenParams): Promise<{ success: boolean; html?: string; error?: string }> => {
+  await ensureFreshSession();
   const start = typeof performance !== "undefined" ? performance.now() : Date.now();
   const { data, error } = await supabase.functions.invoke('generate-anschreiben', {
     body: params
@@ -74,13 +118,14 @@ export const generateAnschreiben = async (params: GenerateAnschreibenParams): Pr
 
   if (error) {
     console.error('Generate Anschreiben error:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: getInvokeErrorMessage(error) };
   }
 
   return data;
 };
 
 export const deleteAccount = async (): Promise<{ success: boolean; error?: string }> => {
+  await ensureFreshSession();
   const start = typeof performance !== "undefined" ? performance.now() : Date.now();
   const { data, error } = await supabase.functions.invoke('delete-account');
   const durationMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - start;
@@ -90,7 +135,7 @@ export const deleteAccount = async (): Promise<{ success: boolean; error?: strin
 
   if (error) {
     console.error('Delete account error:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: getInvokeErrorMessage(error) };
   }
 
   return data;
