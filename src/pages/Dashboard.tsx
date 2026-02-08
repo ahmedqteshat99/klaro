@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { User, LogOut, Loader2, Trash2, Settings, ArrowRight } from "lucide-react";
+import { User, LogOut, Loader2, Trash2, Settings } from "lucide-react";
 import type { User as SupabaseUser, Session } from "@supabase/supabase-js";
 
 const JobExtractionForm = lazy(() => import("@/components/generation/JobExtractionForm"));
@@ -85,6 +85,7 @@ const Dashboard = () => {
     userId
   } = useProfile();
   const { url: profilePhotoUrl } = useUserFileUrl(profile?.foto_url);
+ 
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -421,12 +422,11 @@ const Dashboard = () => {
                   }
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
                 <Button asChild variant="outline" className="w-full">
                   <Link to="/profil">
                     <Settings className="mr-2 h-4 w-4" />
                     Profil bearbeiten
-                    <ArrowRight className="ml-auto h-4 w-4" />
                   </Link>
                 </Button>
               </CardContent>

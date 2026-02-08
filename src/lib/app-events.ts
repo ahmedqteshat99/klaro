@@ -1,7 +1,12 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 
-export type AppEventType = "signup" | "login" | "generate" | "export" | "slow_endpoint";
+export type AppEventType =
+  | "signup"
+  | "login"
+  | "generate"
+  | "export"
+  | "slow_endpoint";
 
 export const logEvent = async (
   type: AppEventType,

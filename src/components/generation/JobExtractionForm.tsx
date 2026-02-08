@@ -37,10 +37,20 @@ const emptyJobData: JobData = {
   anforderungen: ""
 };
 
-const JobExtractionForm = ({ 
-  onJobDataExtracted, 
-  jobData, 
-  setJobData, 
+const jobFields: Array<{ key: keyof JobData; label: string }> = [
+  { key: "krankenhaus", label: "Krankenhaus" },
+  { key: "standort", label: "Standort" },
+  { key: "fachabteilung", label: "Fachabteilung" },
+  { key: "position", label: "Position" },
+  { key: "ansprechpartner", label: "Ansprechpartner" },
+  { key: "anforderungen", label: "Anforderungen" }
+];
+
+
+const JobExtractionForm = ({
+  onJobDataExtracted,
+  jobData,
+  setJobData,
   onGenerateAnschreiben,
   isGeneratingAnschreiben,
   jobUrl,
@@ -66,7 +76,7 @@ const JobExtractionForm = ({
     setExtractionFailed(false);
     try {
       const result = await extractJobData({ url: jobUrl });
-      
+
       if (result.success && result.data) {
         setJobData(result.data);
         onJobDataExtracted(result.data);
@@ -197,7 +207,7 @@ const JobExtractionForm = ({
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <>
-                  Mit Sonnet 4.5 generieren
+                  Anschreiben generieren
                   <img
                     src="https://raw.githubusercontent.com/lobehub/lobe-icons/refs/heads/master/packages/static-png/dark/claude-color.png"
                     alt="Claude"
@@ -221,7 +231,7 @@ const JobExtractionForm = ({
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              Die automatische Extraktion war nicht erfolgreich. Sie können den Text der Stellenanzeige unten einfügen 
+              Die automatische Extraktion war nicht erfolgreich. Sie können den Text der Stellenanzeige unten einfügen
               oder die Felder manuell ausfüllen.
             </AlertDescription>
           </Alert>
@@ -327,8 +337,8 @@ const JobExtractionForm = ({
             {/* Generate Anschreiben Button */}
             {onGenerateAnschreiben && (
               <div className="pt-4 border-t">
-                <Button 
-                  onClick={onGenerateAnschreiben} 
+                <Button
+                  onClick={onGenerateAnschreiben}
                   disabled={isGeneratingAnschreiben || !canGenerate}
                   className="w-full"
                   size="lg"

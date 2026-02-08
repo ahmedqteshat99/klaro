@@ -1,5 +1,5 @@
 -- Create profiles table (stores all doctor profile data)
-CREATE TABLE public.profiles (
+CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   -- Personal data
@@ -34,7 +34,7 @@ CREATE TABLE public.profiles (
 );
 
 -- Create work_experiences table
-CREATE TABLE public.work_experiences (
+CREATE TABLE IF NOT EXISTS public.work_experiences (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   klinik TEXT NOT NULL,
@@ -47,7 +47,7 @@ CREATE TABLE public.work_experiences (
 );
 
 -- Create education_entries table
-CREATE TABLE public.education_entries (
+CREATE TABLE IF NOT EXISTS public.education_entries (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   universitaet TEXT NOT NULL,
@@ -60,7 +60,7 @@ CREATE TABLE public.education_entries (
 );
 
 -- Create practical_experiences table (Famulaturen, PJ, Hospitationen)
-CREATE TABLE public.practical_experiences (
+CREATE TABLE IF NOT EXISTS public.practical_experiences (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   typ TEXT CHECK (typ IN ('Famulatur', 'PJ', 'Hospitation')),
@@ -74,7 +74,7 @@ CREATE TABLE public.practical_experiences (
 );
 
 -- Create certifications table
-CREATE TABLE public.certifications (
+CREATE TABLE IF NOT EXISTS public.certifications (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -85,7 +85,7 @@ CREATE TABLE public.certifications (
 );
 
 -- Create publications table
-CREATE TABLE public.publications (
+CREATE TABLE IF NOT EXISTS public.publications (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   typ TEXT CHECK (typ IN ('Publikation', 'Kongress', 'Poster', 'Vortrag', 'Doktorarbeit')),
@@ -98,7 +98,7 @@ CREATE TABLE public.publications (
 );
 
 -- Create document_versions table (saved CVs and cover letters)
-CREATE TABLE public.document_versions (
+CREATE TABLE IF NOT EXISTS public.document_versions (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   typ TEXT NOT NULL CHECK (typ IN ('CV', 'Anschreiben')),
@@ -249,30 +249,37 @@ END;
 $$ LANGUAGE plpgsql SET search_path = public;
 
 -- Add triggers to all tables
+DROP TRIGGER IF EXISTS update_profiles_updated_at ON public.profiles;
 CREATE TRIGGER update_profiles_updated_at
   BEFORE UPDATE ON public.profiles
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_work_experiences_updated_at ON public.work_experiences;
 CREATE TRIGGER update_work_experiences_updated_at
   BEFORE UPDATE ON public.work_experiences
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_education_entries_updated_at ON public.education_entries;
 CREATE TRIGGER update_education_entries_updated_at
   BEFORE UPDATE ON public.education_entries
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_practical_experiences_updated_at ON public.practical_experiences;
 CREATE TRIGGER update_practical_experiences_updated_at
   BEFORE UPDATE ON public.practical_experiences
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_certifications_updated_at ON public.certifications;
 CREATE TRIGGER update_certifications_updated_at
   BEFORE UPDATE ON public.certifications
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_publications_updated_at ON public.publications;
 CREATE TRIGGER update_publications_updated_at
   BEFORE UPDATE ON public.publications
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_document_versions_updated_at ON public.document_versions;
 CREATE TRIGGER update_document_versions_updated_at
   BEFORE UPDATE ON public.document_versions
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();

@@ -1,10 +1,25 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.47.10";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+const corsHeaders = (req: Request) => {
+  const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  const origin = req.headers.get("Origin") ?? "";
+  const allowOrigin = !origin
+    ? "*"
+    : allowedOrigins.length === 0 || allowedOrigins.includes(origin)
+      ? origin
+      : "null";
+
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    Vary: "Origin",
+  };
 };
 
 const normalizeArray = (value: unknown): string[] =>
@@ -27,7 +42,7 @@ const normalizeDate = (value: unknown): string | null => {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(req) });
   }
 
   try {
@@ -35,7 +50,7 @@ serve(async (req) => {
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Nicht autorisiert" }), {
         status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -51,7 +66,7 @@ serve(async (req) => {
       console.error("Auth error:", userError);
       return new Response(JSON.stringify({ error: "Nicht autorisiert" }), {
         status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -59,7 +74,7 @@ serve(async (req) => {
     if (!text || typeof text !== "string" || text.trim().length < 50) {
       return new Response(
         JSON.stringify({ success: false, error: "Lebenslauf-Text ist erforderlich." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -137,11 +152,39 @@ Schema:
   "unmatchedData": string[]
 }
 
-Regeln:
+WICHTIGE KATEGORISIERUNGSREGELN:
+
+1. certifications - Hierhin gehören ALLE Fortbildungen und Qualifikationen:
+   - Fortbildungen, Weiterbildungen, Kurse, Workshops, Seminare
+   - Zertifikate, Fachkunde, Zusatzbezeichnungen, Qualifikationen
+   - CME-Punkte, Notfallkurse (ACLS, BLS, ATLS, etc.)
+   - Strahlenschutzkurse, Hygieneschulungen
+   - Jeder einzelne Kurs/Fortbildung als separater Eintrag!
+
+2. publications - Hierhin gehören ALLE wissenschaftlichen Aktivitäten:
+   - Kongresse, Konferenzen, Symposien (mit Teilnahme oder Vortrag)
+   - Vorträge, Poster, Abstracts, Präsentationen
+   - Publikationen, Paper, Artikel, Buchbeiträge
+   - Doktorarbeit/Dissertation (typ: "Dissertation")
+   - Forschungsprojekte, wissenschaftliche Mitarbeit
+
+3. practicalExperiences - Praktische klinische Erfahrungen während der Ausbildung:
+   - Famulaturen, Praktisches Jahr (PJ), Hospitationen
+   - Praktika in Kliniken oder Praxen
+
+4. workExperiences - Bezahlte Arbeitsverhältnisse als Arzt:
+   - Assistenzarzt, Facharzt, Oberarzt Stellen
+   - Ärztliche Tätigkeiten mit Arbeitsvertrag
+
+5. unmatchedData - NUR als letzter Ausweg für:
+   - Hobbys, Referenzen, Ehrenämter, Mitgliedschaften in Vereinen
+   - NICHT für Fortbildungen, Kongresse oder wissenschaftliche Aktivitäten!
+
+Allgemeine Regeln:
 - Unbekannte Werte als null setzen.
 - Datumsformat: ISO "YYYY-MM-DD" (bei Monat/Jahr den ersten Tag verwenden, z.B. 2020-05-01).
 - sprachkenntnisse im Format "Deutsch (C1)" oder "Englisch (Muttersprache)".
-- unmatchedData: Enthält Textabschnitte die nicht in die obigen Kategorien passen (z.B. Hobbys, Referenzen, Auszeichnungen, Mitgliedschaften). Jeder Abschnitt als eigener String.
+- Priorisiere die Zuordnung zu bestehenden Kategorien. Verwende unmatchedData nur wenn keine andere Kategorie passt.
 - Keine Erklärungen, kein Markdown, nur JSON.
 
 LEBENSLAUF:
@@ -270,14 +313,14 @@ ${text.substring(0, 12000)}`;
     };
 
     return new Response(JSON.stringify({ success: true, data }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
   } catch (error) {
     console.error("Error parsing CV:", error);
     const errorMessage = error instanceof Error ? error.message : "Unbekannter Fehler";
     return new Response(JSON.stringify({ success: false, error: errorMessage }), {
       status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
   }
 });
