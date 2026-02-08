@@ -131,13 +131,41 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
   };
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from("document_versions").delete().eq("id", id);
-    if (error) {
-      toast({ title: "Fehler", description: "Dokument konnte nicht gelöscht werden.", variant: "destructive" });
-    } else {
-      setDocuments(documents.filter((d) => d.id !== id));
-      toast({ title: "Gelöscht", description: "Dokument wurde entfernt." });
-    }
+    // Store the document before removing from UI
+    const deletedDoc = documents.find((d) => d.id === id);
+    if (!deletedDoc) return;
+
+    // Optimistically remove from UI
+    setDocuments(documents.filter((d) => d.id !== id));
+
+    // Create a timeout for actual deletion
+    const timeoutId = setTimeout(async () => {
+      const { error } = await supabase.from("document_versions").delete().eq("id", id);
+      if (error) {
+        // Restore if delete failed
+        setDocuments((prev) => [...prev, deletedDoc]);
+        toast({ title: "Fehler", description: "Dokument konnte nicht gelöscht werden.", variant: "destructive" });
+      }
+    }, 5000);
+
+    // Show toast with undo option
+    toast({
+      title: "Dokument entfernt",
+      description: "Das Dokument wurde entfernt.",
+      action: (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            clearTimeout(timeoutId);
+            setDocuments((prev) => [...prev, deletedDoc]);
+            toast({ title: "Rückgängig", description: "Dokument wurde wiederhergestellt." });
+          }}
+        >
+          Rückgängig
+        </Button>
+      ),
+    });
   };
 
   const handleRename = async (id: string) => {
@@ -445,17 +473,17 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
                   )}
                 </PopoverContent>
               </Popover>
-            </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 px-2 text-destructive border-destructive/40 hover:text-destructive"
-              onClick={() => handleDelete(doc.id)}
-            >
-              <Trash2 className="h-3.5 w-3.5 mr-1" />
-              Entfernen
-            </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={() => handleDelete(doc.id)}
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Entfernen
+              </Button>
+            </div>
           </div>
         </div>
       </div>
