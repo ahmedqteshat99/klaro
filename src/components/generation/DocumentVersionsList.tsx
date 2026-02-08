@@ -354,8 +354,9 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
         </div>
 
         {/* Action buttons */}
-        <div className="mt-3 pt-2 border-t flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-1">
+        <div className="mt-3 pt-2 border-t space-y-2">
+          {/* First row: Status + main actions */}
+          <div className="flex items-center gap-1 flex-wrap">
             {/* Status dropdown - first button, highlighted */}
             <Select
               value={doc.application_status || "draft"}
@@ -400,56 +401,62 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
               <Pencil className="h-4 w-4 mr-1" />
               Name
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 px-2"
-              onClick={() => { setEditingNotesId(doc.id); setEditNotes(doc.notes || ""); }}
-            >
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Notizen
-            </Button>
-
-            {/* Followup date picker */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 px-2">
-                  <CalendarClock className="h-4 w-4 mr-1" />
-                  Erinnerung
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={doc.followup_date ? new Date(doc.followup_date) : undefined}
-                  onSelect={(date) => handleFollowupDate(doc.id, date)}
-                  locale={de}
-                />
-                {doc.followup_date && (
-                  <div className="p-2 border-t">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full text-destructive"
-                      onClick={() => handleFollowupDate(doc.id, undefined)}
-                    >
-                      Erinnerung entfernen
-                    </Button>
-                  </div>
-                )}
-              </PopoverContent>
-            </Popover>
           </div>
 
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 px-2 text-destructive border-destructive/40 hover:text-destructive"
-            onClick={() => handleDelete(doc.id)}
-          >
-            <Trash2 className="h-3.5 w-3.5 mr-1" />
-            Entfernen
-          </Button>
+          {/* Second row: Secondary actions */}
+          <div className="flex items-center justify-between gap-1 flex-wrap">
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2"
+                onClick={() => { setEditingNotesId(doc.id); setEditNotes(doc.notes || ""); }}
+              >
+                <MessageSquare className="h-4 w-4 mr-1" />
+                Notizen
+              </Button>
+
+              {/* Followup date picker */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 px-2">
+                    <CalendarClock className="h-4 w-4 mr-1" />
+                    Erinnerung
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={doc.followup_date ? new Date(doc.followup_date) : undefined}
+                    onSelect={(date) => handleFollowupDate(doc.id, date)}
+                    locale={de}
+                  />
+                  {doc.followup_date && (
+                    <div className="p-2 border-t">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full text-destructive"
+                        onClick={() => handleFollowupDate(doc.id, undefined)}
+                      >
+                        Erinnerung entfernen
+                      </Button>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 px-2 text-destructive border-destructive/40 hover:text-destructive"
+              onClick={() => handleDelete(doc.id)}
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1" />
+              Entfernen
+            </Button>
+          </div>
         </div>
       </div>
     );
