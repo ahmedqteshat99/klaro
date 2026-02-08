@@ -292,27 +292,6 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
                   </>
                 )}
               </div>
-
-              {/* Status dropdown */}
-              <Select
-                value={doc.application_status || "draft"}
-                onValueChange={(v) => handleStatusChange(doc.id, v as ApplicationStatus)}
-              >
-                <SelectTrigger className="h-7 w-auto gap-1 px-2 border-0 bg-transparent hover:bg-muted">
-                  {renderStatusBadge(doc.application_status || "draft")}
-                  <ChevronDown className="h-3 w-3 opacity-50" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(APPLICATION_STATUSES).map(([key, config]) => (
-                    <SelectItem key={key} value={key}>
-                      <div className="flex items-center gap-2">
-                        <div className={cn("w-2 h-2 rounded-full", config.color.split(" ")[0])} />
-                        {config.label}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
 
             {/* Meta info */}
@@ -377,6 +356,31 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
         {/* Action buttons */}
         <div className="mt-3 pt-2 border-t flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-1">
+            {/* Status dropdown - first button, highlighted */}
+            <Select
+              value={doc.application_status || "draft"}
+              onValueChange={(v) => handleStatusChange(doc.id, v as ApplicationStatus)}
+            >
+              <SelectTrigger
+                className={cn(
+                  "h-8 w-auto gap-1 px-3 rounded-md border font-medium text-sm",
+                  APPLICATION_STATUSES[doc.application_status || "draft"].color
+                )}
+              >
+                {APPLICATION_STATUSES[doc.application_status || "draft"].label}
+                <ChevronDown className="h-3 w-3 opacity-50" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(APPLICATION_STATUSES).map(([key, config]) => (
+                  <SelectItem key={key} value={key}>
+                    <div className="flex items-center gap-2">
+                      <div className={cn("w-2 h-2 rounded-full", config.color.split(" ")[0])} />
+                      {config.label}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               variant="ghost"
               size="sm"
