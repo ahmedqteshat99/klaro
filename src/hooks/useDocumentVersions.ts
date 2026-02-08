@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -43,7 +44,7 @@ export const useDocumentVersions = () => {
     return typ === "CV" ? `Lebenslauf v${version}` : `Anschreiben v${version}`;
   };
 
-  const getLatestDocument = async (userId: string, typ: "CV" | "Anschreiben"): Promise<DocumentVersion | null> => {
+  const getLatestDocument = useCallback(async (userId: string, typ: "CV" | "Anschreiben"): Promise<DocumentVersion | null> => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase
@@ -66,7 +67,7 @@ export const useDocumentVersions = () => {
       console.error("Error in getLatestDocument:", error);
       return null;
     }
-  };
+  }, []);
 
 
   const saveDocument = async ({
