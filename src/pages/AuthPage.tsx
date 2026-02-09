@@ -52,13 +52,13 @@ const AuthPage = () => {
       }
 
       if (session) {
-        navigate(isOnboardingDone() ? "/dashboard" : "/onboarding");
+        navigate(isOnboardingDone(session.user.id) ? "/dashboard" : "/onboarding");
       }
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        navigate(isOnboardingDone() ? "/dashboard" : "/onboarding");
+        navigate(isOnboardingDone(session.user.id) ? "/dashboard" : "/onboarding");
       }
     });
 

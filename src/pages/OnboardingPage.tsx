@@ -57,11 +57,19 @@ const STEPS = [
     },
 ];
 
-export const completeOnboarding = () => {
+export const completeOnboarding = (userId?: string | null) => {
+    if (userId) {
+        localStorage.setItem(`${ONBOARDING_KEY}_${userId}`, "true");
+    }
+    // Also set global key as fallback
     localStorage.setItem(ONBOARDING_KEY, "true");
 };
 
-export const isOnboardingDone = () => {
+export const isOnboardingDone = (userId?: string | null) => {
+    if (userId) {
+        return localStorage.getItem(`${ONBOARDING_KEY}_${userId}`) === "true";
+    }
+    // Fallback to global key only if no userId provided
     return localStorage.getItem(ONBOARDING_KEY) === "true";
 };
 
@@ -141,7 +149,7 @@ const OnboardingPage = () => {
     };
 
     const finishOnboarding = () => {
-        completeOnboarding();
+        completeOnboarding(userId);
         navigate("/dashboard");
     };
 
