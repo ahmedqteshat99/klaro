@@ -101,42 +101,7 @@ const DocumentPreview = ({
     }
   };
 
-  const handleExportDocx = async (type: "cv" | "anschreiben") => {
-    const html = type === "cv" ? cvHtml : anschreibenHtml;
-    if (!html) return;
 
-    setIsExporting(true);
-    try {
-      const fileName = type === "cv"
-        ? `Lebenslauf_${profile?.nachname || "Arzt"}`
-        : `Anschreiben_${profile?.nachname || "Arzt"}`;
-
-      const { exportToDocx } = await import("@/lib/export");
-      await exportToDocx(
-        html,
-        fileName,
-        type === "cv" ? showFoto : false,
-        fotoUrl ?? undefined,
-        showSignatur,
-        signaturUrl ?? undefined,
-        profile?.stadt
-      );
-
-      void logEvent(
-        "export",
-        { format: "DOCX", docType: type === "cv" ? "CV" : "ANSCHREIBEN" },
-        userId
-      );
-      void touchLastSeen(userId);
-
-      toast({ title: "DOCX erstellt", description: `${fileName}.docx wurde heruntergeladen.` });
-    } catch (error) {
-      console.error("DOCX export error:", error);
-      toast({ title: "Fehler", description: "DOCX konnte nicht erstellt werden.", variant: "destructive" });
-    } finally {
-      setIsExporting(false);
-    }
-  };
 
   return (
     <Card className="h-full flex flex-col min-w-0 overflow-hidden">
@@ -209,16 +174,10 @@ const DocumentPreview = ({
                 )}
               </Button>
               {cvHtml && (
-                <>
-                  <Button variant="outline" onClick={() => handleExportPDF("cv")} disabled={isExporting} className="w-full sm:w-auto">
-                    <Download className="mr-2 h-4 w-4" />
-                    PDF
-                  </Button>
-                  <Button variant="outline" onClick={() => handleExportDocx("cv")} disabled={isExporting} className="w-full sm:w-auto">
-                    <Download className="mr-2 h-4 w-4" />
-                    DOCX
-                  </Button>
-                </>
+                <Button variant="outline" onClick={() => handleExportPDF("cv")} disabled={isExporting} className="w-full sm:w-auto">
+                  <Download className="mr-2 h-4 w-4" />
+                  PDF
+                </Button>
               )}
             </div>
             <p className="text-xs text-muted-foreground">
@@ -284,16 +243,10 @@ const DocumentPreview = ({
                 )}
               </Button>
               {anschreibenHtml && (
-                <>
-                  <Button variant="outline" onClick={() => handleExportPDF("anschreiben")} disabled={isExporting} className="w-full sm:w-auto">
-                    <Download className="mr-2 h-4 w-4" />
-                    PDF
-                  </Button>
-                  <Button variant="outline" onClick={() => handleExportDocx("anschreiben")} disabled={isExporting} className="w-full sm:w-auto">
-                    <Download className="mr-2 h-4 w-4" />
-                    DOCX
-                  </Button>
-                </>
+                <Button variant="outline" onClick={() => handleExportPDF("anschreiben")} disabled={isExporting} className="w-full sm:w-auto">
+                  <Download className="mr-2 h-4 w-4" />
+                  PDF
+                </Button>
               )}
             </div>
             <p className="text-xs text-muted-foreground">
