@@ -1,14 +1,14 @@
 import html2pdf from "html2pdf.js";
-import { 
-  Document, 
-  Packer, 
-  Paragraph, 
-  TextRun, 
-  HeadingLevel, 
-  Table, 
-  TableRow, 
-  TableCell, 
-  WidthType, 
+import {
+  Document,
+  Packer,
+  Paragraph,
+  TextRun,
+  HeadingLevel,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
   BorderStyle,
   ImageRun,
   AlignmentType,
@@ -129,9 +129,9 @@ const noBorders = {
 function createSectionHeader(text: string): Paragraph {
   return new Paragraph({
     children: [
-      new TextRun({ 
-        text: text.toUpperCase(), 
-        bold: true, 
+      new TextRun({
+        text: text.toUpperCase(),
+        bold: true,
         size: 24, // 12pt
         font: "Spectral"
       })
@@ -145,19 +145,19 @@ function createSectionHeader(text: string): Paragraph {
 
 // Create two-column entry table (date | content)
 function createTwoColumnEntry(
-  date: string, 
-  title: string, 
-  subtitle?: string, 
+  date: string,
+  title: string,
+  subtitle?: string,
   bullets?: string[]
 ): Table {
   const contentChildren: Paragraph[] = [];
-  
+
   // Title (bold)
   contentChildren.push(new Paragraph({
     children: [new TextRun({ text: title, bold: true, size: 22, font: "Spectral" })],
     spacing: { after: 40 }
   }));
-  
+
   // Subtitle (institution/hospital)
   if (subtitle) {
     contentChildren.push(new Paragraph({
@@ -165,7 +165,7 @@ function createTwoColumnEntry(
       spacing: { after: 40 }
     }));
   }
-  
+
   // Bullet points
   if (bullets && bullets.length > 0) {
     bullets.forEach(bullet => {
@@ -211,7 +211,7 @@ function createTwoColumnEntry(
 
 // Create language table row
 function createLanguageTable(languages: Array<{ language: string; level: string; description: string }>): Table {
-  const rows = languages.map(lang => 
+  const rows = languages.map(lang =>
     new TableRow({
       children: [
         new TableCell({
@@ -777,13 +777,14 @@ export const exportToPDF = async (
   const renderHeight = element.scrollHeight || element.clientHeight || A4_HEIGHT_PX;
   const safeWidth = Math.max(A4_WIDTH_PX, renderWidth);
   const safeHeight = Math.max(A4_HEIGHT_PX, renderHeight);
-  const baseScale = typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1;
-  const renderScale = isIOSDevice() ? 1 : Math.min(1.5, baseScale);
+  // Use consistent high quality scale for all devices to ensure identical output
+  const renderScale = 2;
 
   const opt = {
     margin: [0, 0, 0, 0] as [number, number, number, number],
     filename: `${fileName}.pdf`,
-    image: { type: "jpeg" as const, quality: 0.98 },
+    // Use PNG for better quality (no JPEG compression artifacts)
+    image: { type: "png" as const, quality: 1 },
     html2canvas: {
       scale: renderScale,
       useCORS: true,
@@ -796,9 +797,11 @@ export const exportToPDF = async (
       width: safeWidth,
       height: safeHeight,
       scrollX: 0,
-      scrollY: 0
+      scrollY: 0,
+      // Use higher DPI for sharper text
+      dpi: 300
     },
-    jsPDF: { unit: "px" as const, format: [A4_WIDTH_PX, A4_HEIGHT_PX] as [number, number], orientation: "portrait" as const },
+    jsPDF: { unit: "px" as const, format: [A4_WIDTH_PX, A4_HEIGHT_PX] as [number, number], orientation: "portrait" as const, compress: false },
     pagebreak: { mode: ['css', 'legacy'], avoid: ['h2', 'h3', '.cv-entry', '.cv-languages', '.cv-signature-block', 'tr', 'table'] }
   };
 
@@ -986,9 +989,9 @@ export const exportToDocx = async (
           if (section.entries) {
             for (const entry of section.entries) {
               docChildren.push(createTwoColumnEntry(
-                entry.date, 
-                entry.title, 
-                entry.subtitle, 
+                entry.date,
+                entry.title,
+                entry.subtitle,
                 entry.bullets
               ));
               // Add spacing between entries
@@ -1029,10 +1032,10 @@ export const exportToDocx = async (
     // Add signature at the end
     if (showSignatur && signaturUrl) {
       const signatureBuffer = await fetchImageAsBuffer(signaturUrl);
-      const currentDate = new Date().toLocaleDateString('de-DE', { 
-        day: '2-digit', 
-        month: '2-digit', 
-        year: 'numeric' 
+      const currentDate = new Date().toLocaleDateString('de-DE', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
       });
 
       // Add some spacing before signature
@@ -1054,9 +1057,9 @@ export const exportToDocx = async (
       docChildren.push(new Paragraph({
         alignment: AlignmentType.RIGHT,
         children: [
-          new TextRun({ 
-            text: `${stadt || 'Ort'}, ${currentDate}`, 
-            size: 20, 
+          new TextRun({
+            text: `${stadt || 'Ort'}, ${currentDate}`,
+            size: 20,
             color: "666666",
             font: "Spectral"
           })
