@@ -173,16 +173,29 @@ export const exportToPDF = async ({
         width: 210mm !important;
         margin: 0 !important;
         padding: 0 !important;
+        height: auto !important;
+        min-height: 0 !important;
+        overflow: visible !important;
       }
 
-      /* Reset body/html for clean print */
+      /* Reset body/html for clean print — NO min-height to prevent extra page */
       html, body {
         margin: 0 !important;
         padding: 0 !important;
         width: 210mm !important;
+        height: auto !important;
+        min-height: 0 !important;
+        overflow: visible !important;
         background: #ffffff !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
+      }
+
+      /* Remove min-height from cv-paper so content flows naturally across pages */
+      .cv-paper {
+        min-height: 0 !important;
+        height: auto !important;
+        overflow: visible !important;
       }
     }
   `;
