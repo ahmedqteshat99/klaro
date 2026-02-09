@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { isOnboardingDone } from "@/pages/OnboardingPage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,13 +52,13 @@ const AuthPage = () => {
       }
 
       if (session) {
-        navigate("/dashboard");
+        navigate(isOnboardingDone() ? "/dashboard" : "/onboarding");
       }
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        navigate("/dashboard");
+        navigate(isOnboardingDone() ? "/dashboard" : "/onboarding");
       }
     });
 
