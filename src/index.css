@@ -572,7 +572,7 @@ table.cv-languages td:nth-child(3) {
 
 @page {
   size: A4;
-  margin: 0;
+  margin: 0mm;
 }
 
 @media print {
@@ -585,14 +585,16 @@ table.cv-languages td:nth-child(3) {
   }
 
   html {
-    width: 210mm;
+    width: 100%;
+    max-width: 210mm;
     height: auto;
     margin: 0;
     padding: 0;
   }
 
   body {
-    width: 210mm;
+    width: 100%;
+    max-width: 210mm;
     min-height: 0;
     margin: 0 !important;
     padding: 0 !important;
@@ -625,7 +627,8 @@ table.cv-languages td:nth-child(3) {
 
   /* CV Paper - fills the page, reset all screen transforms */
   .cv-paper {
-    width: 210mm !important;
+    width: 100% !important;
+    max-width: 210mm !important;
     min-height: 0 !important;
     height: auto !important;
     padding: 15mm !important;
