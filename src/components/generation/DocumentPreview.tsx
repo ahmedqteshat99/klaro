@@ -6,7 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, FileEdit, Download, Loader2, Image, PenTool } from "lucide-react";
-import type { PdfExportMode } from "@/lib/pdf-export";
+
 import { useToast } from "@/hooks/use-toast";
 import type { Profile } from "@/hooks/useProfile";
 import CVTemplate from "@/components/cv/CVTemplate";
@@ -37,19 +37,7 @@ interface DocumentPreviewProps {
   onDocumentSaved?: () => void;
 }
 
-const isLikelyMobile = (): boolean => {
-  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
-  const ua = navigator.userAgent || "";
-  const isIpad = /iPad/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  const uaMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(ua) || isIpad;
-  const coarsePointer = typeof window.matchMedia === "function"
-    ? window.matchMedia("(pointer: coarse)").matches
-    : false;
-  const smallScreen = typeof window.matchMedia === "function"
-    ? window.matchMedia("(max-width: 768px)").matches
-    : false;
-  return uaMobile || (coarsePointer && smallScreen);
-};
+
 
 const DocumentPreview = ({
   cvHtml,
@@ -73,19 +61,6 @@ const DocumentPreview = ({
     const html = type === "cv" ? cvHtml : anschreibenHtml;
     if (!html) return;
 
-    let preOpenedWindow: Window | null = null;
-    if (!isLikelyMobile()) {
-      try {
-        preOpenedWindow = window.open("about:blank", "_blank");
-        if (preOpenedWindow) {
-          preOpenedWindow.document.title = "PDF Vorschau";
-          preOpenedWindow.document.body.innerHTML = "<p style=\"font-family: sans-serif; padding: 1rem;\">PDF wird vorbereitet…</p>";
-        }
-      } catch {
-        preOpenedWindow = null;
-      }
-    }
-
     setIsExporting(true);
     try {
       const fileName = type === "cv"
@@ -93,20 +68,15 @@ const DocumentPreview = ({
         : `Anschreiben_${profile?.nachname || "Arzt"}`;
 
       const { exportToPDF } = await import("@/lib/pdf-export");
-      const exportMode = await exportToPDF({
+      await exportToPDF({
         htmlContent: html,
         fileName,
         showFoto: type === "cv" ? showFoto : false,
         fotoUrl,
         showSignatur,
         signaturUrl,
-        stadt: profile?.stadt,
-        printWindow: preOpenedWindow
-      }) as PdfExportMode;
-
-      if (exportMode !== "print" && preOpenedWindow && !preOpenedWindow.closed) {
-        preOpenedWindow.close();
-      }
+        stadt: profile?.stadt
+      });
 
       void logEvent(
         "export",
@@ -115,32 +85,12 @@ const DocumentPreview = ({
       );
       void touchLastSeen(userId);
 
-      if (exportMode === "print") {
-        toast({
-          title: "PDF Druckvorschau",
-          description: "Bitte wählen Sie 'Als PDF speichern' im Druckdialog."
-        });
-      } else if (exportMode === "share") {
-        toast({
-          title: "PDF erstellt",
-          description: "Das System-Teilen-Dialogfenster wurde geöffnet. Bitte speichern oder teilen Sie die Datei."
-        });
-      } else if (exportMode === "open") {
-        toast({
-          title: "PDF erstellt",
-          description: "Die PDF-Datei wurde in einem neuen Tab geöffnet. Nutzen Sie dort 'Teilen' oder 'In Dateien sichern'."
-        });
-      } else {
-        toast({
-          title: "PDF erstellt",
-          description: "Die PDF-Datei wurde erstellt und heruntergeladen. Bitte prüfen Sie Ihre Dateien/Downloads."
-        });
-      }
+      toast({
+        title: "PDF Druckvorschau",
+        description: "Bitte wählen Sie 'Als PDF speichern' im Druckdialog."
+      });
     } catch (error) {
       console.error("PDF export error:", error);
-      if (preOpenedWindow && !preOpenedWindow.closed) {
-        preOpenedWindow.close();
-      }
       toast({
         title: "Fehler",
         description: error instanceof Error ? error.message : "PDF konnte nicht erstellt werden.",
