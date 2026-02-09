@@ -151,7 +151,6 @@ export const generateCVHtml = ({
 
     html, body {
       width: 210mm;
-      min-height: 297mm;
       margin: 0;
       padding: 0;
       background: #ffffff;
@@ -167,7 +166,6 @@ export const generateCVHtml = ({
     /* CV Paper - Fixed A4 container with mm-based dimensions */
     .cv-paper {
       width: 210mm;
-      min-height: 297mm;
       padding: 15mm;
       margin: 0;
       background: #ffffff;
@@ -370,18 +368,19 @@ export const generateCVHtml = ({
     @media print {
       html, body {
         width: 210mm;
-        min-height: 297mm;
         margin: 0 !important;
         padding: 0 !important;
+        height: auto !important;
+        min-height: 0 !important;
       }
 
       .cv-paper {
         width: 210mm !important;
-        min-height: 297mm !important;
         padding: 15mm !important;
         margin: 0 !important;
-        page-break-after: always;
-        break-after: page;
+        height: auto !important;
+        min-height: 0 !important;
+        /* NO page-break-after — it creates a blank trailing page */
       }
 
       h2, h3 {
