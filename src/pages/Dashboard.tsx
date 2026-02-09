@@ -96,7 +96,7 @@ const Dashboard = () => {
 
       if (!session) {
         navigate("/auth");
-      } else if (!isOnboardingDone()) {
+      } else if (!isOnboardingDone(session.user.id)) {
         navigate("/onboarding");
       }
     });
@@ -108,7 +108,7 @@ const Dashboard = () => {
 
       if (!session) {
         navigate("/auth");
-      } else if (!isOnboardingDone()) {
+      } else if (!isOnboardingDone(session.user.id)) {
         navigate("/onboarding");
       }
     });
