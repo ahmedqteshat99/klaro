@@ -3,12 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useProfile } from "@/hooks/useProfile";
 import { useDocumentVersions } from "@/hooks/useDocumentVersions";
-import { generateCV } from "@/lib/api/generation";
+import { generateCV, generateAnschreiben } from "@/lib/api/generation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import {
-    FileText, Upload, Camera, PenTool, Sparkles,
+    FileText, Upload, Camera, PenTool, Sparkles, FileEdit,
     ChevronRight, SkipForward, Loader2, CheckCircle2, ArrowLeft
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
@@ -19,9 +19,10 @@ const CvImportCard = lazy(() => import("@/components/profile/CvImportCard"));
 const PhotoUpload = lazy(() => import("@/components/profile/PhotoUpload"));
 const SignatureCanvas = lazy(() => import("@/components/profile/SignatureCanvas"));
 const CVTemplate = lazy(() => import("@/components/cv/CVTemplate"));
+const JobExtractionForm = lazy(() => import("@/components/generation/JobExtractionForm"));
 
 const ONBOARDING_KEY = "onboarding_done";
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 5;
 
 const STEPS = [
     {
@@ -44,6 +45,12 @@ const STEPS = [
     },
     {
         number: 4,
+        title: "Anschreiben erstellen",
+        subtitle: "Erstellen Sie Ihr erstes Bewerbungsanschreiben für eine Stelle.",
+        icon: FileEdit,
+    },
+    {
+        number: 5,
         title: "Fertig!",
         subtitle: "Sie sind bereit, Bewerbungen zu erstellen.",
         icon: Sparkles,
@@ -63,6 +70,17 @@ const OnboardingPage = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [cvHtml, setCvHtml] = useState<string | null>(null);
     const [isGeneratingCV, setIsGeneratingCV] = useState(false);
+    const [anschreibenHtml, setAnschreibenHtml] = useState<string | null>(null);
+    const [isGeneratingAnschreiben, setIsGeneratingAnschreiben] = useState(false);
+    const [jobData, setJobData] = useState<{
+        krankenhaus: string | null;
+        standort: string | null;
+        fachabteilung: string | null;
+        position: string | null;
+        ansprechpartner: string | null;
+        anforderungen: string | null;
+    } | null>(null);
+    const [jobUrl, setJobUrl] = useState("");
 
     const navigate = useNavigate();
     const { toast } = useToast();
@@ -184,6 +202,80 @@ const OnboardingPage = () => {
             });
         } finally {
             setIsGeneratingCV(false);
+        }
+    };
+
+    const handleGenerateAnschreiben = async () => {
+        if (!profile?.vorname || !profile?.nachname) {
+            toast({
+                title: "Profil unvollständig",
+                description: "Bitte geben Sie mindestens Ihren Namen ein.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        if (!jobData?.krankenhaus && !jobData?.fachabteilung) {
+            toast({
+                title: "Stellenanzeige fehlt",
+                description: "Bitte fügen Sie Informationen zur Stelle hinzu.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        setIsGeneratingAnschreiben(true);
+        try {
+            const result = await generateAnschreiben({
+                profile,
+                workExperiences,
+                educationEntries,
+                practicalExperiences,
+                certifications,
+                publications,
+                jobData
+            });
+
+            if (result.success && result.html) {
+                setAnschreibenHtml(result.html);
+
+                if (userId) {
+                    await saveDocument({
+                        userId,
+                        typ: "Anschreiben",
+                        htmlContent: result.html,
+                        hospitalName: jobData?.krankenhaus,
+                        departmentOrSpecialty: jobData?.fachabteilung,
+                        positionTitle: jobData?.position,
+                        jobUrl: jobUrl || undefined,
+                        showFoto: false,
+                        showSignatur: true
+                    });
+                }
+
+                void logEvent("generate", { docType: "Anschreiben", source: "onboarding" }, userId);
+                void touchLastSeen(userId);
+
+                toast({
+                    title: "Anschreiben erstellt! 🎉",
+                    description: "Ihr erstes Bewerbungsanschreiben wurde generiert."
+                });
+            } else {
+                toast({
+                    title: "Fehler",
+                    description: result.error || "Anschreiben konnte nicht erstellt werden.",
+                    variant: "destructive"
+                });
+            }
+        } catch (error) {
+            console.error("Generate Anschreiben error:", error);
+            toast({
+                title: "Fehler",
+                description: "Ein unerwarteter Fehler ist aufgetreten.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsGeneratingAnschreiben(false);
         }
     };
 
@@ -394,6 +486,39 @@ const OnboardingPage = () => {
                         )}
 
                         {step === 4 && (
+                            <div className="space-y-6">
+                                {!anschreibenHtml ? (
+                                    <>
+                                        <JobExtractionForm
+                                            onJobDataExtracted={(data) => setJobData(data)}
+                                            jobData={jobData}
+                                            setJobData={setJobData}
+                                            onGenerateAnschreiben={handleGenerateAnschreiben}
+                                            isGeneratingAnschreiben={isGeneratingAnschreiben}
+                                            jobUrl={jobUrl}
+                                            setJobUrl={setJobUrl}
+                                        />
+                                    </>
+                                ) : (
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-2 text-primary">
+                                            <CheckCircle2 className="h-5 w-5" />
+                                            <span className="font-medium">Ihr Anschreiben wurde erfolgreich erstellt!</span>
+                                        </div>
+                                        <Card>
+                                            <CardContent className="py-6">
+                                                <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: anschreibenHtml }} />
+                                            </CardContent>
+                                        </Card>
+                                        <p className="text-sm text-muted-foreground text-center">
+                                            Ihr Anschreiben wurde gespeichert. Sie können es im Dashboard als PDF herunterladen.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {step === 5 && (
                             <Card>
                                 <CardHeader className="text-center pb-4">
                                     <div className="flex justify-center mb-4">
