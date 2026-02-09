@@ -142,11 +142,17 @@ const ProfilPage = () => {
               <CvImportCard
                 profile={profile}
                 updateLocalProfile={updateLocalProfile}
+                saveProfile={saveProfile}
                 addWorkExperiencesLocal={addWorkExperiencesLocal}
+                addWorkExperience={addWorkExperience}
                 addEducationEntriesLocal={addEducationEntriesLocal}
+                addEducation={addEducation}
                 addPracticalExperiencesLocal={addPracticalExperiencesLocal}
+                addPracticalExperience={addPracticalExperience}
                 addCertificationsLocal={addCertificationsLocal}
+                addCertification={addCertification}
                 addPublicationsLocal={addPublicationsLocal}
+                addPublication={addPublication}
                 addCustomSection={addCustomSection}
                 addCustomSectionEntry={addCustomSectionEntry}
               />

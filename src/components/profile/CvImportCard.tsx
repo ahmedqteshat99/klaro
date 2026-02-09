@@ -24,21 +24,37 @@ import type {
 interface CvImportCardProps {
   profile: Profile | null;
   updateLocalProfile: (data: Partial<Profile>) => void;
+  saveProfile: (data: Partial<Profile>) => Promise<void>;
   addWorkExperiencesLocal: (
     entries: Omit<WorkExperience, "id" | "user_id" | "created_at" | "updated_at">[]
   ) => void;
+  addWorkExperience: (
+    data: Omit<WorkExperience, "id" | "user_id" | "created_at" | "updated_at">
+  ) => Promise<void>;
   addEducationEntriesLocal: (
     entries: Omit<EducationEntry, "id" | "user_id" | "created_at" | "updated_at">[]
   ) => void;
+  addEducation: (
+    data: Omit<EducationEntry, "id" | "user_id" | "created_at" | "updated_at">
+  ) => Promise<void>;
   addPracticalExperiencesLocal: (
     entries: Omit<PracticalExperience, "id" | "user_id" | "created_at" | "updated_at">[]
   ) => void;
+  addPracticalExperience: (
+    data: Omit<PracticalExperience, "id" | "user_id" | "created_at" | "updated_at">
+  ) => Promise<void>;
   addCertificationsLocal: (
     entries: Omit<Certification, "id" | "user_id" | "created_at" | "updated_at">[]
   ) => void;
+  addCertification: (
+    data: Omit<Certification, "id" | "user_id" | "created_at" | "updated_at">
+  ) => Promise<void>;
   addPublicationsLocal: (
     entries: Omit<Publication, "id" | "user_id" | "created_at" | "updated_at">[]
   ) => void;
+  addPublication: (
+    data: Omit<Publication, "id" | "user_id" | "created_at" | "updated_at">
+  ) => Promise<void>;
   addCustomSection?: (sectionName: string) => Promise<CustomSection | null>;
   addCustomSectionEntry?: (
     sectionId: string,
@@ -75,11 +91,17 @@ const mergeUnique = (current: string[] | null | undefined, incoming: string[]) =
 const CvImportCard = ({
   profile,
   updateLocalProfile,
+  saveProfile,
   addWorkExperiencesLocal,
+  addWorkExperience,
   addEducationEntriesLocal,
+  addEducation,
   addPracticalExperiencesLocal,
+  addPracticalExperience,
   addCertificationsLocal,
+  addCertification,
   addPublicationsLocal,
+  addPublication,
   addCustomSection,
   addCustomSectionEntry,
 }: CvImportCardProps) => {
@@ -137,8 +159,46 @@ const CvImportCard = ({
     sourceText: string,
     customSections: CustomSectionToCreate[]
   ) => {
-    applyProfileImport(data.profile || undefined, sourceText);
+    // Save profile data to database
+    if (data.profile) {
+      const profileUpdates: Partial<Profile> = {};
 
+      const assignIfAllowed = (key: keyof Profile, value: unknown) => {
+        if (value == null) return;
+        if (Array.isArray(value)) {
+          const merged = overwrite ? value : mergeUnique(profile?.[key] as string[] | null, value);
+          if (merged.length > 0) {
+            (profileUpdates as any)[key] = merged;
+          }
+          return;
+        }
+        if (typeof value === "number") {
+          if (overwrite || profile?.[key] == null) {
+            (profileUpdates as any)[key] = value;
+          }
+          return;
+        }
+        if (typeof value === "string") {
+          if (overwrite || !String(profile?.[key] || "").trim()) {
+            (profileUpdates as any)[key] = value.trim();
+          }
+        }
+      };
+
+      Object.entries(data.profile).forEach(([key, value]) => {
+        assignIfAllowed(key as keyof Profile, value);
+      });
+
+      if (sourceText.trim()) {
+        assignIfAllowed("cv_text", sourceText.trim().slice(0, MAX_PROFILE_TEXT));
+      }
+
+      if (Object.keys(profileUpdates).length > 0) {
+        await saveProfile(profileUpdates);
+      }
+    }
+
+    // Prepare all entries
     const workExperiences =
       data.workExperiences?.flatMap((entry) => {
         if (!entry?.klinik) return [];
@@ -198,11 +258,22 @@ const CvImportCard = ({
         }];
       }) || [];
 
-    if (workExperiences.length) addWorkExperiencesLocal(workExperiences);
-    if (educationEntries.length) addEducationEntriesLocal(educationEntries);
-    if (practicalExperiences.length) addPracticalExperiencesLocal(practicalExperiences);
-    if (certifications.length) addCertificationsLocal(certifications);
-    if (publications.length) addPublicationsLocal(publications);
+    // Save all entries directly to database (not just local state)
+    for (const entry of workExperiences) {
+      await addWorkExperience(entry);
+    }
+    for (const entry of educationEntries) {
+      await addEducation(entry);
+    }
+    for (const entry of practicalExperiences) {
+      await addPracticalExperience(entry);
+    }
+    for (const entry of certifications) {
+      await addCertification(entry);
+    }
+    for (const entry of publications) {
+      await addPublication(entry);
+    }
 
     // Create custom sections if functions are available
     if (addCustomSection && addCustomSectionEntry && customSections.length > 0) {
@@ -274,7 +345,7 @@ const CvImportCard = ({
 
     toast({
       title: "Import abgeschlossen",
-      description: "Daten wurden in die Formulare übernommen. Bitte prüfen und speichern.",
+      description: "Alle Daten wurden automatisch gespeichert.",
     });
   };
 
