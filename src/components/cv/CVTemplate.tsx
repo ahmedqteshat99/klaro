@@ -140,7 +140,7 @@ export const generateCVHtml = ({
     /* Page setup for A4 printing - no margins since we use padding in .cv-paper */
     @page {
       size: A4;
-      margin: 0;
+      margin: 0mm;
     }
 
     * {
@@ -150,7 +150,8 @@ export const generateCVHtml = ({
     }
 
     html, body {
-      width: 210mm;
+      width: 100%;
+      max-width: 210mm;
       margin: 0;
       padding: 0;
       background: #ffffff;
@@ -165,7 +166,8 @@ export const generateCVHtml = ({
 
     /* CV Paper - Fixed A4 container with mm-based dimensions */
     .cv-paper {
-      width: 210mm;
+      width: 100%;
+      max-width: 210mm;
       padding: 15mm;
       margin: 0;
       background: #ffffff;
@@ -367,7 +369,8 @@ export const generateCVHtml = ({
     /* Print-specific overrides */
     @media print {
       html, body {
-        width: 210mm;
+        width: 100%;
+        max-width: 210mm;
         margin: 0 !important;
         padding: 0 !important;
         height: auto !important;
@@ -375,7 +378,8 @@ export const generateCVHtml = ({
       }
 
       .cv-paper {
-        width: 210mm !important;
+        width: 100% !important;
+        max-width: 210mm !important;
         padding: 15mm !important;
         margin: 0 !important;
         height: auto !important;

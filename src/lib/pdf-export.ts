@@ -14,6 +14,7 @@ export type PdfExportMode = "print";
 
 const PRINT_CONTAINER_ID = "pdf-print-container";
 const PRINT_STYLE_ID = "pdf-print-styles";
+const GENERATED_STYLE_ID = "pdf-generated-styles";
 
 /**
  * Converts an image URL to a base64 data URL for reliable embedding in print
@@ -58,8 +59,10 @@ async function waitForImages(container: HTMLElement): Promise<void> {
 function cleanup(): void {
   const container = document.getElementById(PRINT_CONTAINER_ID);
   const style = document.getElementById(PRINT_STYLE_ID);
+  const genStyle = document.getElementById(GENERATED_STYLE_ID);
   if (container?.parentNode) container.parentNode.removeChild(container);
   if (style?.parentNode) style.parentNode.removeChild(style);
+  if (genStyle?.parentNode) genStyle.parentNode.removeChild(genStyle);
 }
 
 /**
@@ -124,9 +127,16 @@ export const exportToPDF = async ({
   const bodyContent = doc.body.innerHTML;
 
   // Create the print container (hidden on screen, visible only in print)
+  // Inject generated styles into HEAD to ensure @page rules work correctly
+  const genStyle = document.createElement("style");
+  genStyle.id = GENERATED_STYLE_ID;
+  genStyle.textContent = styleContent;
+  document.head.appendChild(genStyle);
+
+  // Create the print container (hidden on screen, visible only in print)
   const container = document.createElement("div");
   container.id = PRINT_CONTAINER_ID;
-  container.innerHTML = `<style>${styleContent}</style>${bodyContent}`;
+  container.innerHTML = bodyContent; // Styles are now in HEAD
   document.body.appendChild(container);
 
   // Add print-specific styles that hide everything except our container
