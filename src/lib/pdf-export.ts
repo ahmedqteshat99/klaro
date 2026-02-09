@@ -133,6 +133,13 @@ export const exportToPDF = async ({
   const printStyle = document.createElement("style");
   printStyle.id = PRINT_STYLE_ID;
   printStyle.textContent = `
+    /* @page MUST be top-level (not inside @media print) for browsers to respect it.
+       margin: 0 removes the space where browsers render headers/footers (URL, date, page#) */
+    @page {
+      size: A4;
+      margin: 0;
+    }
+
     /* Hide the print container on screen */
     #${PRINT_CONTAINER_ID} {
       position: fixed;
@@ -176,12 +183,6 @@ export const exportToPDF = async ({
         background: #ffffff !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
-      }
-
-      /* Page setup */
-      @page {
-        size: A4;
-        margin: 0;
       }
     }
   `;
