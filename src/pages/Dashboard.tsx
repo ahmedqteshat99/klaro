@@ -1,6 +1,7 @@
 import { useEffect, useState, lazy, Suspense } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { isOnboardingDone } from "@/pages/OnboardingPage";
 import { useProfile } from "@/hooks/useProfile";
 import { useDocumentVersions } from "@/hooks/useDocumentVersions";
 import { generateCV, generateAnschreiben, deleteAccount } from "@/lib/api/generation";
@@ -69,7 +70,7 @@ const Dashboard = () => {
   const [jobData, setJobData] = useState<JobData | null>(null);
   const [jobUrl, setJobUrl] = useState("");
   const [documentRefreshTrigger, setDocumentRefreshTrigger] = useState(0);
-  
+
   const navigate = useNavigate();
   const { toast } = useToast();
   const { saveDocument, getLatestDocument } = useDocumentVersions();
@@ -85,7 +86,7 @@ const Dashboard = () => {
     userId
   } = useProfile();
   const { url: profilePhotoUrl } = useUserFileUrl(profile?.foto_url);
- 
+
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -95,6 +96,8 @@ const Dashboard = () => {
 
       if (!session) {
         navigate("/auth");
+      } else if (!isOnboardingDone()) {
+        navigate("/onboarding");
       }
     });
 
@@ -105,6 +108,8 @@ const Dashboard = () => {
 
       if (!session) {
         navigate("/auth");
+      } else if (!isOnboardingDone()) {
+        navigate("/onboarding");
       }
     });
 
@@ -115,13 +120,13 @@ const Dashboard = () => {
   useEffect(() => {
     const loadLatestDocuments = async () => {
       if (!userId) return;
-      
+
       try {
         const [latestCv, latestAnschreiben] = await Promise.all([
           getLatestDocument(userId, "CV"),
           getLatestDocument(userId, "Anschreiben")
         ]);
-        
+
         if (latestCv?.html_content) {
           setCvHtml(latestCv.html_content);
         }
@@ -164,7 +169,7 @@ const Dashboard = () => {
 
       if (result.success && result.html) {
         setCvHtml(result.html);
-        
+
         // Auto-save to database
         if (userId) {
           const saveResult = await saveDocument({
@@ -174,7 +179,7 @@ const Dashboard = () => {
             showFoto: true,
             showSignatur: true
           });
-          
+
           if (saveResult.success) {
             setDocumentRefreshTrigger((prev) => prev + 1);
           }
@@ -234,7 +239,7 @@ const Dashboard = () => {
 
       if (result.success && result.html) {
         setAnschreibenHtml(result.html);
-        
+
         // Auto-save to database with hospital metadata
         if (userId) {
           const saveResult = await saveDocument({
@@ -248,7 +253,7 @@ const Dashboard = () => {
             showFoto: false,
             showSignatur: true
           });
-          
+
           if (saveResult.success) {
             setDocumentRefreshTrigger((prev) => prev + 1);
           }
@@ -296,7 +301,7 @@ const Dashboard = () => {
     setIsDeletingAccount(true);
     try {
       const result = await deleteAccount();
-      
+
       if (result.success) {
         toast({
           title: "Konto gelöscht",
@@ -416,7 +421,7 @@ const Dashboard = () => {
                   Ihr Profil
                 </CardTitle>
                 <CardDescription>
-                  {profile?.vorname && profile?.nachname 
+                  {profile?.vorname && profile?.nachname
                     ? `${profile.vorname} ${profile.nachname}`
                     : "Profil unvollständig"
                   }
@@ -463,9 +468,9 @@ const Dashboard = () => {
                   </div>
                   DSGVO - Datenkontrolle
                 </CardTitle>
-              <CardDescription>
-                Konto und Daten löschen
-              </CardDescription>
+                <CardDescription>
+                  Konto und Daten löschen
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <AlertDialog>
@@ -479,7 +484,7 @@ const Dashboard = () => {
                     <AlertDialogHeader>
                       <AlertDialogTitle>Sind Sie sicher?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Diese Aktion kann nicht rückgängig gemacht werden. Ihr Konto und alle gespeicherten 
+                        Diese Aktion kann nicht rückgängig gemacht werden. Ihr Konto und alle gespeicherten
                         Daten (Profil, Dokumente, Fotos) werden permanent gelöscht.
                       </AlertDialogDescription>
                     </AlertDialogHeader>

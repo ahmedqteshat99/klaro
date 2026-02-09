@@ -13,6 +13,7 @@ const ProfilPage = lazy(() => import("./pages/ProfilPage"));
 const DatenschutzPage = lazy(() => import("./pages/DatenschutzPage"));
 const ImpressumPage = lazy(() => import("./pages/ImpressumPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
 const AdminDashboardPage = lazy(() => import("./pages/admin/AdminDashboardPage"));
 const AdminUsersPage = lazy(() => import("./pages/admin/AdminUsersPage"));
 const AdminUserDetailPage = lazy(() => import("./pages/admin/AdminUserDetailPage"));
@@ -36,6 +37,7 @@ const App = () => (
             <Route path="/" element={<LandingPage />} />
             <Route path="/auth" element={<AuthPage />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/onboarding" element={<OnboardingPage />} />
             <Route path="/profil" element={<ProfilPage />} />
             <Route path="/datenschutz" element={<DatenschutzPage />} />
             <Route path="/impressum" element={<ImpressumPage />} />
