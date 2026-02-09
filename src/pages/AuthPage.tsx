@@ -36,7 +36,7 @@ const AuthPage = () => {
     envSiteUrl && envSiteUrl.trim().length > 0
       ? envSiteUrl.trim().replace(/\/+$/, "")
       : window.location.origin;
-  const dashboardRedirectUrl = `${appBaseUrl}/dashboard`;
+  const authRedirectUrl = `${appBaseUrl}/auth`;
 
   // Check if user is already logged in
   useEffect(() => {
@@ -148,7 +148,7 @@ const AuthPage = () => {
           }
         }
       } else {
-        const redirectUrl = dashboardRedirectUrl;
+        const redirectUrl = authRedirectUrl;
 
         const { error } = await supabase.auth.signUp({
           email,
@@ -203,7 +203,7 @@ const AuthPage = () => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: dashboardRedirectUrl,
+          redirectTo: authRedirectUrl,
         },
       });
 
