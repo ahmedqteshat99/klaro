@@ -102,7 +102,7 @@ export const generateCVHtml = ({
       font-style: normal;
       font-weight: 300;
       font-display: swap;
-      src: url('https://fonts.gstatic.com/s/spectral/v13/rnCr-xNNww_2s0amA9M5knjsS_ul.woff2') format('woff2');
+      src: url('https://fonts.gstatic.com/s/spectral/v15/rnCs-xNNww_2s0amA9uSsG3BafaPWnII.woff2') format('woff2');
     }
 
     @font-face {
@@ -110,7 +110,7 @@ export const generateCVHtml = ({
       font-style: normal;
       font-weight: 400;
       font-display: swap;
-      src: url('https://fonts.gstatic.com/s/spectral/v13/rnCt-xNNww_2s0amA9uSsHnQ.woff2') format('woff2');
+      src: url('https://fonts.gstatic.com/s/spectral/v15/rnCr-xNNww_2s0amA9M5knjsS_ul.woff2') format('woff2');
     }
 
     @font-face {
@@ -118,7 +118,7 @@ export const generateCVHtml = ({
       font-style: normal;
       font-weight: 500;
       font-display: swap;
-      src: url('https://fonts.gstatic.com/s/spectral/v13/rnCr-xNNww_2s0amA9M5kijsSPul.woff2') format('woff2');
+      src: url('https://fonts.gstatic.com/s/spectral/v15/rnCs-xNNww_2s0amA9vKsW3BafaPWnII.woff2') format('woff2');
     }
 
     @font-face {
@@ -126,7 +126,7 @@ export const generateCVHtml = ({
       font-style: normal;
       font-weight: 600;
       font-display: swap;
-      src: url('https://fonts.gstatic.com/s/spectral/v13/rnCr-xNNww_2s0amA9M5khDtS_ul.woff2') format('woff2');
+      src: url('https://fonts.gstatic.com/s/spectral/v15/rnCs-xNNww_2s0amA9vmtm3BafaPWnII.woff2') format('woff2');
     }
 
     @font-face {
@@ -134,7 +134,7 @@ export const generateCVHtml = ({
       font-style: normal;
       font-weight: 700;
       font-display: swap;
-      src: url('https://fonts.gstatic.com/s/spectral/v13/rnCr-xNNww_2s0amA9M5knTuS_ul.woff2') format('woff2');
+      src: url('https://fonts.gstatic.com/s/spectral/v15/rnCs-xNNww_2s0amA9uCt23BafaPWnII.woff2') format('woff2');
     }
 
     /* Page setup for A4 printing - no margins since we use padding in .cv-paper */

@@ -67,28 +67,58 @@ const DocumentPreview = ({
         ? `Lebenslauf_${profile?.nachname || "Arzt"}`
         : `Anschreiben_${profile?.nachname || "Arzt"}`;
 
-      const { exportToPDF } = await import("@/lib/pdf-export");
-      await exportToPDF({
-        htmlContent: html,
-        fileName,
-        showFoto: type === "cv" ? showFoto : false,
-        fotoUrl,
-        showSignatur,
-        signaturUrl,
-        stadt: profile?.stadt
-      });
+      // Check if server-side PDF generation is enabled
+      const { isServerPdfEnabled, downloadPdfFromServer } = await import("@/lib/api/pdf-service");
 
-      void logEvent(
-        "export",
-        { format: "PDF", docType: type === "cv" ? "CV" : "ANSCHREIBEN" },
-        userId
-      );
-      void touchLastSeen(userId);
+      if (isServerPdfEnabled()) {
+        // Server-side: direct PDF download via Puppeteer (no print dialog)
+        await downloadPdfFromServer({
+          type,
+          htmlContent: html,
+          showFoto: type === "cv" ? showFoto : false,
+          fotoUrl,
+          showSignatur,
+          signaturUrl,
+          stadt: profile?.stadt,
+          fileName: `${fileName}.pdf`,
+        });
 
-      toast({
-        title: "PDF Druckvorschau",
-        description: "Bitte wählen Sie 'Als PDF speichern' im Druckdialog."
-      });
+        void logEvent(
+          "export",
+          { format: "PDF", method: "server", docType: type === "cv" ? "CV" : "ANSCHREIBEN" },
+          userId
+        );
+        void touchLastSeen(userId);
+
+        toast({
+          title: "PDF heruntergeladen",
+          description: "Ihr PDF wurde erfolgreich erstellt und heruntergeladen."
+        });
+      } else {
+        // Client-side fallback: window.print()
+        const { exportToPDF } = await import("@/lib/pdf-export");
+        await exportToPDF({
+          htmlContent: html,
+          fileName,
+          showFoto: type === "cv" ? showFoto : false,
+          fotoUrl,
+          showSignatur,
+          signaturUrl,
+          stadt: profile?.stadt
+        });
+
+        void logEvent(
+          "export",
+          { format: "PDF", method: "print", docType: type === "cv" ? "CV" : "ANSCHREIBEN" },
+          userId
+        );
+        void touchLastSeen(userId);
+
+        toast({
+          title: "PDF Druckvorschau",
+          description: "Bitte wählen Sie 'Als PDF speichern' im Druckdialog."
+        });
+      }
     } catch (error) {
       console.error("PDF export error:", error);
       toast({
