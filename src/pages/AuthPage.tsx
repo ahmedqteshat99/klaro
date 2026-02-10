@@ -150,7 +150,7 @@ const AuthPage = () => {
       } else {
         const redirectUrl = authRedirectUrl;
 
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -179,9 +179,17 @@ const AuthPage = () => {
               variant: "destructive",
             });
           }
-        } else {
+        } else if (data.session) {
+          // User is auto-confirmed and logged in
           toast({
-            title: "Erfolgreich registriert!",
+            title: "Willkommen!",
+            description: "Sie wurden erfolgreich registriert und angemeldet.",
+          });
+          // Redirect handled by onAuthStateChange
+        } else {
+          // User needs email verification
+          toast({
+            title: "Registrierung erfolgreich!",
             description: "Bitte prüfen Sie Ihre E-Mails und bestätigen Sie Ihre Registrierung.",
           });
         }
