@@ -119,26 +119,30 @@ const ProfilPage = () => {
           </h1>
         </div>
 
+        {/* CV Import - full width, always first */}
+        <div className="mb-6">
+          <CvImportCard
+            profile={profile}
+            updateLocalProfile={updateLocalProfile}
+            saveProfile={saveProfile}
+            addWorkExperiencesLocal={addWorkExperiencesLocal}
+            addWorkExperience={addWorkExperience}
+            addEducationEntriesLocal={addEducationEntriesLocal}
+            addEducation={addEducation}
+            addPracticalExperiencesLocal={addPracticalExperiencesLocal}
+            addPracticalExperience={addPracticalExperience}
+            addCertificationsLocal={addCertificationsLocal}
+            addCertification={addCertification}
+            addPublicationsLocal={addPublicationsLocal}
+            addPublication={addPublication}
+            addCustomSection={addCustomSection}
+            addCustomSectionEntry={addCustomSectionEntry}
+          />
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-8">
-            {/* Left Column - CV Import, Photo & Signature */}
+            {/* Left Column - Photo & Signature */}
             <div className="lg:col-span-1 space-y-6 order-1 lg:order-1">
-              <CvImportCard
-                profile={profile}
-                updateLocalProfile={updateLocalProfile}
-                saveProfile={saveProfile}
-                addWorkExperiencesLocal={addWorkExperiencesLocal}
-                addWorkExperience={addWorkExperience}
-                addEducationEntriesLocal={addEducationEntriesLocal}
-                addEducation={addEducation}
-                addPracticalExperiencesLocal={addPracticalExperiencesLocal}
-                addPracticalExperience={addPracticalExperience}
-                addCertificationsLocal={addCertificationsLocal}
-                addCertification={addCertification}
-                addPublicationsLocal={addPublicationsLocal}
-                addPublication={addPublication}
-                addCustomSection={addCustomSection}
-                addCustomSectionEntry={addCustomSectionEntry}
-              />
               <PhotoUpload
                 profile={profile}
                 userId={userId}
