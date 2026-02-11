@@ -537,6 +537,7 @@ export type Database = {
           last_seen_at: string | null
           medizinische_kenntnisse: string[] | null
           nachname: string
+          onboarding_completed: boolean | null
           role: string
           share_consent: boolean | null
           share_consent_at: string | null
@@ -569,6 +570,7 @@ export type Database = {
           last_seen_at?: string | null
           medizinische_kenntnisse?: string[] | null
           nachname: string
+          onboarding_completed?: boolean | null
           role?: string
           share_consent?: boolean | null
           share_consent_at?: string | null
@@ -601,6 +603,7 @@ export type Database = {
           last_seen_at?: string | null
           medizinische_kenntnisse?: string[] | null
           nachname?: string
+          onboarding_completed?: boolean | null
           role?: string
           share_consent?: boolean | null
           share_consent_at?: string | null
