@@ -185,7 +185,7 @@ const DocumentPreview = ({
             <div className="w-full">
               <ScrollArea className="max-h-[50vh] md:max-h-[600px] rounded-lg border overflow-auto">
                 {anschreibenHtml ? (
-                  <div className="bg-gray-100 p-1 sm:p-4 flex items-start">
+                  <div className="bg-gray-100 p-1 sm:p-4 flex items-start justify-center">
                     <CVTemplate
                       htmlContent={anschreibenHtml}
                       showFoto={false}

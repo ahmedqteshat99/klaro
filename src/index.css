@@ -190,6 +190,7 @@
   .cv-paper {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     transform-origin: top left;
+    margin-left: 0;
     /* Mobile-first: scale to ~42% for 375px phones */
     transform: scale(0.42);
     margin-bottom: calc(-297mm * 0.58);
@@ -222,7 +223,8 @@
 
   .cv-paper-wrapper {
     overflow: hidden;
-    display: block;
+    display: flex;
+    justify-content: center;
     min-width: 0;
     width: 100%;
   }
