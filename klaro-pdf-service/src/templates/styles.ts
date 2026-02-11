@@ -327,7 +327,7 @@ export const anschreibenStyles = `
   .anschreiben-paper {
     width: 100%;
     max-width: 210mm;
-    min-height: 297mm;
+    height: 297mm;
     padding: 20mm 25mm;
     margin: 0;
     background: #ffffff;
@@ -338,6 +338,14 @@ export const anschreibenStyles = `
     line-height: 1.5;
     color: #1a1a1a;
     position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .anschreiben-content {
+    flex: 1;
+    min-height: 0;
   }
 
   .anschreiben-paper p {
@@ -350,15 +358,15 @@ export const anschreibenStyles = `
     font-weight: 600;
   }
 
-  .cv-signature-block {
-    margin-top: 8mm;
+  .anschreiben-paper .cv-signature-block {
+    margin-top: auto;
+    margin-bottom: 2mm;
+    flex-shrink: 0;
     text-align: right;
     clear: both;
-    page-break-inside: avoid;
-    break-inside: avoid;
   }
 
-  .cv-signature-block img {
+  .anschreiben-paper .cv-signature-block img {
     height: 12mm;
     width: auto;
     max-width: 50mm;
@@ -367,7 +375,7 @@ export const anschreibenStyles = `
     object-fit: contain;
   }
 
-  .cv-signature-block p {
+  .anschreiben-paper .cv-signature-block p {
     font-size: 9pt;
     color: #666666;
     margin-top: 1mm;
@@ -385,10 +393,11 @@ export const anschreibenStyles = `
     .anschreiben-paper {
       width: 100% !important;
       max-width: 210mm !important;
+      height: 297mm !important;
       padding: 20mm 25mm !important;
       margin: 0 !important;
-      height: auto !important;
       min-height: 0 !important;
+      overflow: hidden !important;
     }
   }
 `;

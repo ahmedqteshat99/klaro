@@ -197,7 +197,7 @@ const ProfessionalProfileForm = ({ profile, onSave, isLoading }: ProfessionalPro
         </div>
 
         <div className="flex justify-end pt-4">
-          <Button onClick={handleSave} disabled={isSaving || isLoading}>
+          <Button onClick={handleSave} disabled={isSaving || isLoading} className="w-full sm:w-auto">
             <Save className="mr-2 h-4 w-4" />
             {isSaving ? "Speichern..." : "Speichern"}
           </Button>

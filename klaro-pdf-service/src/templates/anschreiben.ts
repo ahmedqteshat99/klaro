@@ -35,10 +35,15 @@ export function buildAnschreibenHtml({
 </head>
 <body>
   <div class="anschreiben-paper">
+    <div class="anschreiben-content">
 `;
 
     // Add content
     html += htmlContent;
+
+    // Close content wrapper
+    html += `
+    </div>`;
 
     // Add signature
     if (showSignatur && signaturUrl) {

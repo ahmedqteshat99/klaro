@@ -139,7 +139,7 @@ export function CustomSectionForm({
                 <Settings className="h-4 w-4" />
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[400px]">
+            <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-[400px]">
               <DialogHeader>
                 <DialogTitle>Sektion bearbeiten</DialogTitle>
               </DialogHeader>
@@ -200,7 +200,7 @@ export function CustomSectionForm({
                 Hinzufügen
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-[500px]">
               <DialogHeader>
                 <DialogTitle>
                   {editingEntryId ? "Eintrag bearbeiten" : "Eintrag hinzufügen"}
@@ -216,7 +216,7 @@ export function CustomSectionForm({
                     placeholder="Titel des Eintrags"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="entry-von">Von (YYYY-MM-DD)</Label>
                     <Input

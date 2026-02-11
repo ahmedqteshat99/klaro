@@ -118,7 +118,7 @@ const LanguageSkillsForm = ({ profile, onSave, isLoading }: LanguageSkillsFormPr
       </CardHeader>
       <CardContent className="space-y-4">
         {languages.map((lang, index) => (
-          <div key={index} className="flex gap-2 items-end">
+          <div key={index} className="flex flex-col sm:flex-row gap-2 sm:items-end">
             <div className="flex-1 space-y-1 relative">
               <Label htmlFor={`lang-${index}`}>Sprache</Label>
               <Input
@@ -144,33 +144,35 @@ const LanguageSkillsForm = ({ profile, onSave, isLoading }: LanguageSkillsFormPr
                 </div>
               )}
             </div>
-            <div className="w-[200px] space-y-1">
-              <Label>Niveau</Label>
-              <Select
-                value={lang.level}
-                onValueChange={(value) => updateLanguage(index, "level", value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Niveau wählen" />
-                </SelectTrigger>
-                <SelectContent>
-                  {LANGUAGE_LEVELS.map((level) => (
-                    <SelectItem key={level.value} value={level.value}>
-                      {level.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex gap-2 items-end">
+              <div className="w-full sm:w-[200px] space-y-1">
+                <Label>Niveau</Label>
+                <Select
+                  value={lang.level}
+                  onValueChange={(value) => updateLanguage(index, "level", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Niveau wählen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LANGUAGE_LEVELS.map((level) => (
+                      <SelectItem key={level.value} value={level.value}>
+                        {level.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {languages.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => removeLanguage(index)}
+                >
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              )}
             </div>
-            {languages.length > 1 && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => removeLanguage(index)}
-              >
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
-            )}
           </div>
         ))}
 
@@ -180,7 +182,7 @@ const LanguageSkillsForm = ({ profile, onSave, isLoading }: LanguageSkillsFormPr
         </Button>
 
         <div className="flex justify-end pt-4">
-          <Button onClick={handleSave} disabled={isSaving || isLoading}>
+          <Button onClick={handleSave} disabled={isSaving || isLoading} className="w-full sm:w-auto">
             <Save className="mr-2 h-4 w-4" />
             {isSaving ? "Speichern..." : "Speichern"}
           </Button>

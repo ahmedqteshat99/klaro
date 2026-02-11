@@ -100,7 +100,7 @@ const EducationForm = ({ educationEntries, onAdd, onUpdate, onDelete }: Educatio
                 Hinzufügen
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-[500px]">
               <DialogHeader>
                 <DialogTitle>
                   {editingId ? "Ausbildung bearbeiten" : "Neue Ausbildung"}
@@ -125,7 +125,7 @@ const EducationForm = ({ educationEntries, onAdd, onUpdate, onDelete }: Educatio
                     placeholder="z.B. Staatsexamen Humanmedizin"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <MonthYearPicker
                     label="Von"
                     value={formData.zeitraum_von}
@@ -183,11 +183,11 @@ const EducationForm = ({ educationEntries, onAdd, onUpdate, onDelete }: Educatio
                       <p className="text-sm mt-2 italic">{entry.abschlussarbeit}</p>
                     )}
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(entry)}>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" className="h-10 w-10 sm:h-9 sm:w-9" onClick={() => handleEdit(entry)}>
                       <Pencil className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => onDelete(entry.id)}>
+                    <Button variant="ghost" size="icon" className="h-10 w-10 sm:h-9 sm:w-9" onClick={() => onDelete(entry.id)}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>

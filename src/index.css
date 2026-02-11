@@ -190,10 +190,28 @@
   .cv-paper {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     transform-origin: top left;
-    /* Scale to 70% for better fit in preview panels */
-    transform: scale(0.7);
-    margin-bottom: calc(-297mm * 0.3);
-    margin-right: calc(-210mm * 0.3);
+    /* Mobile-first: scale to ~42% for 375px phones */
+    transform: scale(0.42);
+    margin-bottom: calc(-297mm * 0.58);
+    margin-right: calc(-210mm * 0.58);
+  }
+
+  /* Larger phones (430px+) */
+  @media (min-width: 430px) {
+    .cv-paper {
+      transform: scale(0.50);
+      margin-bottom: calc(-297mm * 0.50);
+      margin-right: calc(-210mm * 0.50);
+    }
+  }
+
+  /* Tablets / sm breakpoint (640px+) */
+  @media (min-width: 640px) {
+    .cv-paper {
+      transform: scale(0.7);
+      margin-bottom: calc(-297mm * 0.3);
+      margin-right: calc(-210mm * 0.3);
+    }
   }
 
   .anschreiben-paper {
@@ -203,9 +221,10 @@
   }
 
   .cv-paper-wrapper {
-    overflow: visible;
-    display: inline-block;
-    min-width: max-content;
+    overflow: hidden;
+    display: block;
+    min-width: 0;
+    width: 100%;
   }
 }
 
@@ -737,6 +756,14 @@ table.cv-languages td:nth-child(3) {
    ═══════════════════════════════════════════════════════════════════ */
 
 @layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
   .animate-fade-in {
     animation: fade-in 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   }

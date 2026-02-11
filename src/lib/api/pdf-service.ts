@@ -2,23 +2,6 @@ import { supabase } from "@/integrations/supabase/client";
 
 const PDF_SERVICE_URL = import.meta.env.VITE_PDF_SERVICE_URL;
 
-/**
- * Whether server-side PDF generation is enabled.
- * Checks env var first, then falls back to localStorage for dev testing.
- */
-export function isServerPdfEnabled(): boolean {
-    // Env var "true" forces ON globally
-    const envFlag = import.meta.env.VITE_USE_SERVER_PDF;
-    if (envFlag === "true") return true;
-
-    // localStorage allows per-user / per-device testing even when env is "false"
-    try {
-        return localStorage.getItem("USE_SERVER_PDF") === "true";
-    } catch {
-        return false;
-    }
-}
-
 export interface ServerPdfParams {
     type: "cv" | "anschreiben";
     htmlContent: string;
@@ -90,14 +73,17 @@ export async function downloadPdfFromServer({
 
     const defaultFileName =
         type === "cv" ? "Lebenslauf.pdf" : "Anschreiben.pdf";
+    const finalName = fileName || defaultFileName;
 
+    // Use an anchor element to trigger the download.
+    // On iOS Safari the `download` attribute is ignored — the PDF opens
+    // inline in the same tab, where the user can share/save via the OS.
     const link = document.createElement("a");
     link.href = url;
-    link.download = fileName || defaultFileName;
+    link.download = finalName;
     document.body.appendChild(link);
     link.click();
 
-    // Clean up
     setTimeout(() => {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);

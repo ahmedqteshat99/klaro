@@ -154,7 +154,8 @@ const AdminUsersPage = () => {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
+          <div className="overflow-x-auto -mx-6 px-6">
+          <Table className="min-w-[600px]">
             <TableHeader>
               <TableRow>
                 <TableHead>E-Mail</TableHead>
@@ -200,6 +201,7 @@ const AdminUsersPage = () => {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

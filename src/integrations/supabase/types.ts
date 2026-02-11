@@ -38,6 +38,153 @@ export type Database = {
         }
         Relationships: []
       }
+      application_attachments: {
+        Row: {
+          application_id: string
+          created_at: string | null
+          file_name: string | null
+          file_path: string
+          id: string
+          mime_type: string | null
+          size_bytes: number | null
+          user_document_id: string | null
+        }
+        Insert: {
+          application_id: string
+          created_at?: string | null
+          file_name?: string | null
+          file_path: string
+          id?: string
+          mime_type?: string | null
+          size_bytes?: number | null
+          user_document_id?: string | null
+        }
+        Update: {
+          application_id?: string
+          created_at?: string | null
+          file_name?: string | null
+          file_path?: string
+          id?: string
+          mime_type?: string | null
+          size_bytes?: number | null
+          user_document_id?: string | null
+        }
+        Relationships: []
+      }
+      application_messages: {
+        Row: {
+          application_id: string
+          created_at: string | null
+          direction: string
+          headers: Json | null
+          html_body: string | null
+          id: string
+          is_read: boolean
+          message_id: string | null
+          payload: Json | null
+          provider_message_id: string | null
+          recipient: string | null
+          reply_to: string | null
+          sender: string | null
+          subject: string | null
+          text_body: string | null
+        }
+        Insert: {
+          application_id: string
+          created_at?: string | null
+          direction: string
+          headers?: Json | null
+          html_body?: string | null
+          id?: string
+          is_read?: boolean
+          message_id?: string | null
+          payload?: Json | null
+          provider_message_id?: string | null
+          recipient?: string | null
+          reply_to?: string | null
+          sender?: string | null
+          subject?: string | null
+          text_body?: string | null
+        }
+        Update: {
+          application_id?: string
+          created_at?: string | null
+          direction?: string
+          headers?: Json | null
+          html_body?: string | null
+          id?: string
+          is_read?: boolean
+          message_id?: string | null
+          payload?: Json | null
+          provider_message_id?: string | null
+          recipient?: string | null
+          reply_to?: string | null
+          sender?: string | null
+          subject?: string | null
+          text_body?: string | null
+        }
+        Relationships: []
+      }
+      applications: {
+        Row: {
+          cover_letter_document_id: string | null
+          created_at: string | null
+          cv_document_id: string | null
+          error_message: string | null
+          id: string
+          job_id: string
+          message_html: string | null
+          message_text: string | null
+          recipient_email: string
+          reply_to: string | null
+          reply_token: string | null
+          sender_email: string
+          status: string
+          subject: string | null
+          submitted_at: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          cover_letter_document_id?: string | null
+          created_at?: string | null
+          cv_document_id?: string | null
+          error_message?: string | null
+          id?: string
+          job_id: string
+          message_html?: string | null
+          message_text?: string | null
+          recipient_email: string
+          reply_to?: string | null
+          reply_token?: string | null
+          sender_email?: string
+          status?: string
+          subject?: string | null
+          submitted_at?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          cover_letter_document_id?: string | null
+          created_at?: string | null
+          cv_document_id?: string | null
+          error_message?: string | null
+          id?: string
+          job_id?: string
+          message_html?: string | null
+          message_text?: string | null
+          recipient_email?: string
+          reply_to?: string | null
+          reply_token?: string | null
+          sender_email?: string
+          status?: string
+          subject?: string | null
+          submitted_at?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       candidate_share_requests: {
         Row: {
           candidate_user_id: string
@@ -271,6 +418,66 @@ export type Database = {
         }
         Relationships: []
       }
+      jobs: {
+        Row: {
+          apply_url: string | null
+          contact_email: string | null
+          contact_name: string | null
+          created_at: string | null
+          created_by: string | null
+          department: string | null
+          description: string | null
+          expires_at: string | null
+          hospital_name: string | null
+          id: string
+          is_published: boolean
+          location: string | null
+          published_at: string | null
+          requirements: string | null
+          tags: string[] | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          apply_url?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          department?: string | null
+          description?: string | null
+          expires_at?: string | null
+          hospital_name?: string | null
+          id?: string
+          is_published?: boolean
+          location?: string | null
+          published_at?: string | null
+          requirements?: string | null
+          tags?: string[] | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          apply_url?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          department?: string | null
+          description?: string | null
+          expires_at?: string | null
+          hospital_name?: string | null
+          id?: string
+          is_published?: boolean
+          location?: string | null
+          published_at?: string | null
+          requirements?: string | null
+          tags?: string[] | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       practical_experiences: {
         Row: {
           beschreibung: string | null
@@ -406,6 +613,51 @@ export type Database = {
           user_id?: string
           visibility_status?: string | null
           vorname?: string
+        }
+        Relationships: []
+      }
+      user_documents: {
+        Row: {
+          created_at: string | null
+          doc_type: string
+          expires_at: string | null
+          file_name: string | null
+          file_path: string
+          id: string
+          include_by_default: boolean
+          mime_type: string | null
+          size_bytes: number | null
+          title: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          doc_type: string
+          expires_at?: string | null
+          file_name?: string | null
+          file_path: string
+          id?: string
+          include_by_default?: boolean
+          mime_type?: string | null
+          size_bytes?: number | null
+          title?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          doc_type?: string
+          expires_at?: string | null
+          file_name?: string | null
+          file_path?: string
+          id?: string
+          include_by_default?: boolean
+          mime_type?: string | null
+          size_bytes?: number | null
+          title?: string | null
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }

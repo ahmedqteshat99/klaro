@@ -10,14 +10,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { User, LogOut, Loader2, Trash2, Settings } from "lucide-react";
+import { User, LogOut, Loader2, Trash2, Settings, FileText } from "lucide-react";
 import type { User as SupabaseUser, Session } from "@supabase/supabase-js";
 
 const JobExtractionForm = lazy(() => import("@/components/generation/JobExtractionForm"));
 const DocumentPreview = lazy(() => import("@/components/generation/DocumentPreview"));
 const DocumentVersionsList = lazy(() => import("@/components/generation/DocumentVersionsList"));
-import AppFooter from "@/components/AppFooter";
-import DisclaimerBanner from "@/components/DisclaimerBanner";
 import BrandLogo from "@/components/BrandLogo";
 import { logEvent, touchLastSeen } from "@/lib/app-events";
 import { useUserFileUrl } from "@/hooks/useUserFileUrl";
@@ -404,13 +402,10 @@ const Dashboard = () => {
           <h1 className="text-3xl font-bold text-foreground mb-2 tracking-tight">
             Hallo{profile?.vorname ? `, ${profile.vorname}` : ""}.
           </h1>
-          <DisclaimerBanner className="mt-4 max-w-2xl" />
         </div>
 
         {/* Main Dashboard Layout */}
-        <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-6 items-start">
-          {/* Left Column - Input */}
-          <div className="space-y-6 min-w-0">
+        <div className="space-y-6">
             {/* Profile Status Card */}
             <Card>
               <CardHeader>
@@ -427,12 +422,29 @@ const Dashboard = () => {
                   }
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3">
                 <Button asChild variant="outline" className="w-full">
                   <Link to="/profil">
                     <Settings className="mr-2 h-4 w-4" />
                     Profil bearbeiten
                   </Link>
+                </Button>
+                <Button
+                  onClick={handleGenerateCV}
+                  disabled={isGeneratingCV}
+                  className="w-full"
+                >
+                  {isGeneratingCV ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Generiere...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="mr-2 h-4 w-4" />
+                      Lebenslauf generieren
+                    </>
+                  )}
                 </Button>
               </CardContent>
             </Card>
@@ -456,6 +468,30 @@ const Dashboard = () => {
                 onLoadDocument={handleLoadDocument}
                 userId={userId}
                 refreshTrigger={documentRefreshTrigger}
+              />
+            </Suspense>
+
+            {/* Preview */}
+            <Suspense
+              fallback={
+                <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
+                  Lädt Vorschau…
+                </div>
+              }
+            >
+              <DocumentPreview
+                cvHtml={cvHtml}
+                anschreibenHtml={anschreibenHtml}
+                profile={profile}
+                isGeneratingCV={isGeneratingCV}
+                isGeneratingAnschreiben={isGeneratingAnschreiben}
+                onGenerateCV={handleGenerateCV}
+                onGenerateAnschreiben={handleGenerateAnschreiben}
+                canGenerateAnschreiben={!!(jobData?.krankenhaus || jobData?.fachabteilung)}
+                jobData={jobData}
+                jobUrl={jobUrl}
+                userId={userId}
+                onDocumentSaved={handleDocumentSaved}
               />
             </Suspense>
 
@@ -507,36 +543,8 @@ const Dashboard = () => {
                 </AlertDialog>
               </CardContent>
             </Card>
-          </div>
-
-          {/* Right Column - Preview */}
-          <div className="min-w-0">
-            <Suspense
-              fallback={
-                <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
-                  Lädt Vorschau…
-                </div>
-              }
-            >
-              <DocumentPreview
-                cvHtml={cvHtml}
-                anschreibenHtml={anschreibenHtml}
-                profile={profile}
-                isGeneratingCV={isGeneratingCV}
-                isGeneratingAnschreiben={isGeneratingAnschreiben}
-                onGenerateCV={handleGenerateCV}
-                onGenerateAnschreiben={handleGenerateAnschreiben}
-                canGenerateAnschreiben={!!(jobData?.krankenhaus || jobData?.fachabteilung)}
-                jobData={jobData}
-                jobUrl={jobUrl}
-                userId={userId}
-                onDocumentSaved={handleDocumentSaved}
-              />
-            </Suspense>
-          </div>
         </div>
 
-        <AppFooter />
       </div>
     </div>
   );
