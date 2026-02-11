@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { isOnboardingDone } from "@/pages/OnboardingPage";
+import { isOnboardingDone, checkOnboardingFromDB } from "@/pages/OnboardingPage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,13 +52,25 @@ const AuthPage = () => {
       }
 
       if (session) {
-        navigate(isOnboardingDone(session.user.id) ? "/dashboard" : "/onboarding");
+        const userId = session.user.id;
+        if (isOnboardingDone(userId)) {
+          navigate("/dashboard");
+        } else {
+          const done = await checkOnboardingFromDB(userId);
+          navigate(done ? "/dashboard" : "/onboarding");
+        }
       }
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session) {
-        navigate(isOnboardingDone(session.user.id) ? "/dashboard" : "/onboarding");
+        const userId = session.user.id;
+        if (isOnboardingDone(userId)) {
+          navigate("/dashboard");
+        } else {
+          const done = await checkOnboardingFromDB(userId);
+          navigate(done ? "/dashboard" : "/onboarding");
+        }
       }
     });
 

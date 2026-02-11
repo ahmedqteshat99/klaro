@@ -57,20 +57,41 @@ const STEPS = [
     },
 ];
 
-export const completeOnboarding = (userId?: string | null) => {
+export const completeOnboarding = async (userId?: string | null) => {
     if (userId) {
         localStorage.setItem(`${ONBOARDING_KEY}_${userId}`, "true");
     }
     // Also set global key as fallback
     localStorage.setItem(ONBOARDING_KEY, "true");
+
+    // Persist to database (source of truth)
+    if (userId) {
+        await supabase.from("profiles").update({ onboarding_completed: true }).eq("user_id", userId);
+    }
 };
 
+// Fast synchronous check (localStorage cache)
 export const isOnboardingDone = (userId?: string | null) => {
     if (userId) {
         return localStorage.getItem(`${ONBOARDING_KEY}_${userId}`) === "true";
     }
-    // Fallback to global key only if no userId provided
     return localStorage.getItem(ONBOARDING_KEY) === "true";
+};
+
+// Database check (source of truth) — call when localStorage says false
+export const checkOnboardingFromDB = async (userId: string): Promise<boolean> => {
+    const { data } = await supabase
+        .from("profiles")
+        .select("onboarding_completed")
+        .eq("user_id", userId)
+        .single();
+
+    if (data?.onboarding_completed) {
+        // Re-cache in localStorage
+        localStorage.setItem(`${ONBOARDING_KEY}_${userId}`, "true");
+        return true;
+    }
+    return false;
 };
 
 const OnboardingPage = () => {
@@ -148,8 +169,8 @@ const OnboardingPage = () => {
         }
     };
 
-    const finishOnboarding = () => {
-        completeOnboarding(userId);
+    const finishOnboarding = async () => {
+        await completeOnboarding(userId);
         navigate("/dashboard");
     };
 

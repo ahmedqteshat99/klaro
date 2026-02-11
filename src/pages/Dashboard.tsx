@@ -1,7 +1,7 @@
 import { useEffect, useState, lazy, Suspense } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { isOnboardingDone } from "@/pages/OnboardingPage";
+import { isOnboardingDone, checkOnboardingFromDB } from "@/pages/OnboardingPage";
 import { useProfile } from "@/hooks/useProfile";
 import { useDocumentVersions } from "@/hooks/useDocumentVersions";
 import { generateCV, generateAnschreiben, deleteAccount } from "@/lib/api/generation";
@@ -87,7 +87,7 @@ const Dashboard = () => {
 
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
@@ -95,11 +95,12 @@ const Dashboard = () => {
       if (!session) {
         navigate("/auth");
       } else if (!isOnboardingDone(session.user.id)) {
-        navigate("/onboarding");
+        const done = await checkOnboardingFromDB(session.user.id);
+        if (!done) navigate("/onboarding");
       }
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
@@ -107,7 +108,8 @@ const Dashboard = () => {
       if (!session) {
         navigate("/auth");
       } else if (!isOnboardingDone(session.user.id)) {
-        navigate("/onboarding");
+        const done = await checkOnboardingFromDB(session.user.id);
+        if (!done) navigate("/onboarding");
       }
     });
 
