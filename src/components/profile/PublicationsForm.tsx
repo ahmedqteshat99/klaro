@@ -158,7 +158,7 @@ const PublicationsForm = ({ publications, onAdd, onUpdate, onDelete }: Publicati
                 Hinzufügen
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-[500px]">
               <DialogHeader>
                 <DialogTitle>
                   {editingId ? "Publikation bearbeiten" : "Neue Publikation"}
@@ -263,11 +263,11 @@ const PublicationsForm = ({ publications, onAdd, onUpdate, onDelete }: Publicati
                       <p className="text-sm mt-2 whitespace-pre-wrap">{pub.beschreibung}</p>
                     )}
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(pub)} disabled={isSaving}>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" className="h-10 w-10 sm:h-9 sm:w-9" onClick={() => handleEdit(pub)} disabled={isSaving}>
                       <Pencil className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(pub.id)} disabled={isDeleting === pub.id}>
+                    <Button variant="ghost" size="icon" className="h-10 w-10 sm:h-9 sm:w-9" onClick={() => handleDelete(pub.id)} disabled={isDeleting === pub.id}>
                       {isDeleting === pub.id ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (

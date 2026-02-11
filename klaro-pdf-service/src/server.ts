@@ -9,21 +9,11 @@ const app = express();
 const PORT = parseInt(process.env.PORT || "3001", 10);
 
 // ── CORS ────────────────────────────────────────────────────────────────────
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
-    .split(",")
-    .map((o) => o.trim())
-    .filter(Boolean);
-
+// All origins are allowed — the endpoint is protected by JWT auth, so CORS
+// restrictions add no security value and only cause issues on mobile Safari.
 app.use(
     cors({
-        origin: (origin, callback) => {
-            // Allow requests with no origin (curl, Postman, etc.)
-            if (!origin) return callback(null, true);
-            if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
-                return callback(null, true);
-            }
-            callback(new Error("Not allowed by CORS"));
-        },
+        origin: true,
         methods: ["GET", "POST", "OPTIONS"],
         allowedHeaders: ["Content-Type", "Authorization"],
     })

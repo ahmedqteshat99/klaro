@@ -12,6 +12,13 @@ import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   FileText,
   Trash2,
   Pencil,
@@ -23,7 +30,8 @@ import {
   MessageSquare,
   CalendarClock,
   ChevronDown,
-  AlertCircle
+  AlertCircle,
+  MoreHorizontal
 } from "lucide-react";
 import { format, isPast, isToday, differenceInDays } from "date-fns";
 import { de } from "date-fns/locale";
@@ -286,11 +294,11 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
     const followupStatus = getFollowupStatus(doc.followup_date);
 
     return (
-      <div key={doc.id} className="w-full border rounded-lg p-3 bg-muted/30 hover:bg-muted/50 transition-colors min-w-0">
-        <div className="flex items-start gap-3 min-w-0">
-          <Building2 className="h-4 w-4 text-muted-foreground mt-1 shrink-0" />
+      <div key={doc.id} className="w-full border rounded-lg p-2.5 sm:p-3 bg-muted/30 hover:bg-muted/50 transition-colors min-w-0 overflow-hidden">
+        <div className="flex items-start gap-2 sm:gap-3 min-w-0">
+          <Building2 className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
 
-          <div className="flex-1 min-w-0 space-y-2">
+          <div className="flex-1 min-w-0 overflow-hidden space-y-2">
             {/* Header: Hospital + Status */}
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
@@ -311,9 +319,9 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
                   </div>
                 ) : (
                   <>
-                    <span className="font-medium truncate block">{doc.hospital_name || doc.name}</span>
+                    <span className="font-medium block break-words">{doc.hospital_name || doc.name}</span>
                     {doc.department_or_specialty && (
-                      <span className="text-sm text-muted-foreground block truncate">
+                      <span className="text-sm text-muted-foreground block break-words">
                         {doc.department_or_specialty}
                       </span>
                     )}
@@ -324,7 +332,7 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
 
             {/* Meta info */}
             <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-              {doc.position_title && <span className="truncate">{doc.position_title}</span>}
+              {doc.position_title && <span>{doc.position_title}</span>}
               <span>{format(new Date(doc.created_at), "dd.MM.yyyy", { locale: de })}</span>
               {doc.applied_date && (
                 <span className="text-blue-600">
@@ -381,118 +389,119 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
           </div>
         </div>
 
-        {/* Action buttons */}
-        <div className="mt-3 pt-2 border-t space-y-2">
-          {/* First row: Status + main actions */}
-          <div className="flex items-center gap-1 flex-wrap">
-            {/* Status dropdown - first button, highlighted */}
-            <Select
-              value={doc.application_status || "draft"}
-              onValueChange={(v) => handleStatusChange(doc.id, v as ApplicationStatus)}
+        {/* Action buttons — single compact row */}
+        <div className="mt-2 pt-2 border-t flex items-center gap-1">
+          {/* Status dropdown */}
+          <Select
+            value={doc.application_status || "draft"}
+            onValueChange={(v) => handleStatusChange(doc.id, v as ApplicationStatus)}
+          >
+            <SelectTrigger
+              className={cn(
+                "h-8 w-auto gap-1 px-2.5 rounded-md border font-medium text-xs sm:text-sm",
+                APPLICATION_STATUSES[doc.application_status || "draft"].color
+              )}
             >
-              <SelectTrigger
-                className={cn(
-                  "h-8 w-auto gap-1 px-3 rounded-md border font-medium text-sm",
-                  APPLICATION_STATUSES[doc.application_status || "draft"].color
-                )}
-              >
-                {APPLICATION_STATUSES[doc.application_status || "draft"].label}
-                <ChevronDown className="h-3 w-3 opacity-50" />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(APPLICATION_STATUSES).map(([key, config]) => (
-                  <SelectItem key={key} value={key}>
-                    <div className="flex items-center gap-2">
-                      <div className={cn("w-2 h-2 rounded-full", config.color.split(" ")[0])} />
-                      {config.label}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 px-2"
-              onClick={() => loadDocumentContent(doc, "anschreiben")}
-              disabled={loadingId === doc.id}
-            >
-              <FolderOpen className="h-4 w-4 mr-1" />
-              Laden
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 px-2"
-              onClick={() => { setEditingId(doc.id); setEditName(doc.name); }}
-            >
-              <Pencil className="h-4 w-4 mr-1" />
-              Name
-            </Button>
-          </div>
+              {APPLICATION_STATUSES[doc.application_status || "draft"].label}
+              <ChevronDown className="h-3 w-3 opacity-50" />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(APPLICATION_STATUSES).map(([key, config]) => (
+                <SelectItem key={key} value={key}>
+                  <div className="flex items-center gap-2">
+                    <div className={cn("w-2 h-2 rounded-full", config.color.split(" ")[0])} />
+                    {config.label}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-          {/* Second row: Secondary actions */}
-          <div className="flex items-center justify-between gap-1 flex-wrap">
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2"
-                onClick={() => { setEditingNotesId(doc.id); setEditNotes(doc.notes || ""); }}
-              >
-                <MessageSquare className="h-4 w-4 mr-1" />
-                Notizen
+          {/* Load button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2"
+            onClick={() => loadDocumentContent(doc, "anschreiben")}
+            disabled={loadingId === doc.id}
+          >
+            <FolderOpen className="h-4 w-4 sm:mr-1" />
+            <span className="hidden sm:inline">Laden</span>
+          </Button>
+
+          {/* Spacer pushes overflow menu to the right */}
+          <div className="flex-1" />
+
+          {/* Overflow menu for secondary actions */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreHorizontal className="h-4 w-4" />
               </Button>
-
-              {/* Followup date picker */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 px-2">
-                    <CalendarClock className="h-4 w-4 mr-1" />
-                    Erinnerung
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={doc.followup_date ? new Date(doc.followup_date) : undefined}
-                    onSelect={(date) => handleFollowupDate(doc.id, date)}
-                    locale={de}
-                  />
-                  {doc.followup_date && (
-                    <div className="p-2 border-t">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full text-destructive"
-                        onClick={() => handleFollowupDate(doc.id, undefined)}
-                      >
-                        Erinnerung entfernen
-                      </Button>
-                    </div>
-                  )}
-                </PopoverContent>
-              </Popover>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => { setEditingId(doc.id); setEditName(doc.name); }}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Umbenennen
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setEditingNotesId(doc.id); setEditNotes(doc.notes || ""); }}>
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Notizen
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
                 onClick={() => handleDelete(doc.id)}
               >
-                <Trash2 className="h-4 w-4 mr-1" />
+                <Trash2 className="h-4 w-4 mr-2" />
                 Entfernen
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Followup date picker (inline, small) */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "h-8 w-8",
+                  doc.followup_date && "text-blue-600"
+                )}
+              >
+                <CalendarClock className="h-4 w-4" />
               </Button>
-            </div>
-          </div>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar
+                mode="single"
+                selected={doc.followup_date ? new Date(doc.followup_date) : undefined}
+                onSelect={(date) => handleFollowupDate(doc.id, date)}
+                locale={de}
+              />
+              {doc.followup_date && (
+                <div className="p-2 border-t">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-destructive"
+                    onClick={() => handleFollowupDate(doc.id, undefined)}
+                  >
+                    Erinnerung entfernen
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
     );
   };
 
   const renderCvItem = (doc: DocumentVersion) => (
-    <div key={doc.id} className="w-full border rounded-lg p-3 bg-muted/30 hover:bg-muted/50 transition-colors min-w-0">
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 min-w-0">
+    <div key={doc.id} className="w-full border rounded-lg p-2.5 sm:p-3 bg-muted/30 hover:bg-muted/50 transition-colors min-w-0">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2 sm:gap-3 min-w-0">
         <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
         <div className="min-w-0 overflow-hidden">
           {editingId === doc.id ? (
@@ -568,13 +577,13 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="px-4 sm:px-6">
         <CardTitle className="flex items-center gap-2">
           <FileText className="h-5 w-5" />
           Meine Dokumente
         </CardTitle>
       </CardHeader>
-      <CardContent className="min-w-0">
+      <CardContent className="min-w-0 px-4 sm:px-6">
         <Tabs defaultValue="anschreiben" className="min-w-0">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="cv">
@@ -600,31 +609,31 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
           </TabsContent>
 
           <TabsContent value="anschreiben" className="mt-4 space-y-3 min-w-0">
-            {/* Statistics Dashboard */}
+            {/* Statistics — horizontal scrollable chips on mobile, grid on desktop */}
             {anschreibenDocuments.length > 0 && (
-              <div className="grid grid-cols-5 gap-2 p-3 bg-muted/30 rounded-lg border">
+              <div className="flex sm:grid sm:grid-cols-5 gap-1.5 sm:gap-2 p-2 sm:p-3 bg-muted/30 rounded-lg border overflow-x-auto scrollbar-hide">
                 {Object.entries(APPLICATION_STATUSES).map(([key, config]) => (
                   <button
                     key={key}
                     onClick={() => setFilterStatus(filterStatus === key ? "all" : key as ApplicationStatus)}
                     className={cn(
-                      "flex flex-col items-center p-2 rounded-md transition-colors",
+                      "flex items-center sm:flex-col gap-1.5 sm:gap-0 px-3 sm:px-2 py-1.5 sm:py-2 rounded-md transition-colors whitespace-nowrap shrink-0",
                       filterStatus === key ? "bg-background shadow-sm ring-1 ring-border" : "hover:bg-muted"
                     )}
                   >
-                    <span className="text-lg font-semibold">{stats[key as ApplicationStatus]}</span>
+                    <span className="text-sm sm:text-lg font-semibold">{stats[key as ApplicationStatus]}</span>
                     <span className="text-xs text-muted-foreground">{config.label}</span>
                   </button>
                 ))}
               </div>
             )}
 
-            {/* Filters */}
-            <div className="flex gap-2 items-center flex-wrap min-w-0">
-              <div className="flex items-center gap-2 w-full sm:w-auto">
+            {/* Filters — status filter hidden on mobile (stats grid serves as filter) */}
+            <div className="flex gap-2 items-center min-w-0">
+              <div className="hidden sm:flex items-center gap-2">
                 <Filter className="h-4 w-4 text-muted-foreground" />
                 <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as typeof filterStatus)}>
-                  <SelectTrigger className="w-full sm:w-[150px] h-10 sm:h-8">
+                  <SelectTrigger className="w-[150px] h-8">
                     <SelectValue placeholder="Filter" />
                   </SelectTrigger>
                   <SelectContent>
@@ -635,8 +644,19 @@ const DocumentVersionsList = ({ onLoadDocument, userId, refreshTrigger }: Docume
                   </SelectContent>
                 </Select>
               </div>
+              {filterStatus !== "all" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="sm:hidden h-8 text-xs"
+                  onClick={() => setFilterStatus("all")}
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  Filter: {APPLICATION_STATUSES[filterStatus as ApplicationStatus].label}
+                </Button>
+              )}
               <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
-                <SelectTrigger className="w-full sm:w-[140px] h-10 sm:h-8">
+                <SelectTrigger className="w-full sm:w-[140px] h-9 sm:h-8">
                   <SelectValue placeholder="Sortierung" />
                 </SelectTrigger>
                 <SelectContent>

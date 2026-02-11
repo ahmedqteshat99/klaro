@@ -3,10 +3,8 @@ import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useProfile } from "@/hooks/useProfile";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
-import AppFooter from "@/components/AppFooter";
 
 import PersonalDataForm from "@/components/profile/PersonalDataForm";
 import ProfessionalProfileForm from "@/components/profile/ProfessionalProfileForm";
@@ -121,24 +119,9 @@ const ProfilPage = () => {
           </h1>
         </div>
 
-        <ScrollArea className="h-auto md:h-[calc(100vh-220px)]">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-8">
-            {/* Left Column - Photo & Signature */}
-            <div className="lg:col-span-1 space-y-6">
-              <PhotoUpload
-                profile={profile}
-                userId={userId}
-                onSave={saveProfile}
-              />
-              <SignatureCanvas
-                profile={profile}
-                userId={userId}
-                onSave={saveProfile}
-              />
-            </div>
-
-            {/* Right Column - Forms */}
-            <div className="lg:col-span-2 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-8">
+            {/* Left Column - CV Import, Photo & Signature */}
+            <div className="lg:col-span-1 space-y-6 order-1 lg:order-1">
               <CvImportCard
                 profile={profile}
                 updateLocalProfile={updateLocalProfile}
@@ -156,7 +139,20 @@ const ProfilPage = () => {
                 addCustomSection={addCustomSection}
                 addCustomSectionEntry={addCustomSectionEntry}
               />
+              <PhotoUpload
+                profile={profile}
+                userId={userId}
+                onSave={saveProfile}
+              />
+              <SignatureCanvas
+                profile={profile}
+                userId={userId}
+                onSave={saveProfile}
+              />
+            </div>
 
+            {/* Right Column - Forms */}
+            <div className="lg:col-span-2 space-y-6 order-2 lg:order-2">
               <PersonalDataForm
                 profile={profile}
                 onSave={saveProfile}
@@ -232,8 +228,6 @@ const ProfilPage = () => {
 
             </div>
           </div>
-        </ScrollArea>
-        <AppFooter />
       </div>
     </div>
   );

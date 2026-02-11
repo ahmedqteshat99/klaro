@@ -199,7 +199,7 @@ const SignatureCanvas = ({ profile, userId, onSave }: SignatureCanvasProps) => {
         <div className="border rounded-lg overflow-hidden bg-white">
           <canvas
             ref={canvasRef}
-            className="w-full h-32 cursor-crosshair touch-none"
+            className="w-full h-40 sm:h-32 cursor-crosshair touch-none"
             onMouseDown={startDrawing}
             onMouseMove={draw}
             onMouseUp={stopDrawing}
@@ -210,7 +210,7 @@ const SignatureCanvas = ({ profile, userId, onSave }: SignatureCanvasProps) => {
           />
         </div>
 
-        <div className="flex gap-2 justify-between">
+        <div className="flex flex-wrap gap-2 justify-between">
           <Button variant="outline" onClick={clearCanvas} disabled={!hasContent}>
             <Trash2 className="mr-2 h-4 w-4" />
             Löschen

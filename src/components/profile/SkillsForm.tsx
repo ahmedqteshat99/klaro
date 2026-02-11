@@ -90,7 +90,7 @@ const SkillsForm = ({ profile, onSave, isLoading }: SkillsFormProps) => {
             {medizinische.map((item) => (
               <Badge key={item} variant="secondary" className="gap-1 pr-1">
                 {item}
-                <button onClick={() => removeItem(medizinische, setMedizinische, item)} className="ml-1 hover:bg-destructive/20 rounded-full p-0.5">
+                <button onClick={() => removeItem(medizinische, setMedizinische, item)} className="ml-1 hover:bg-destructive/20 rounded-full p-1.5">
                   <X className="h-3 w-3" />
                 </button>
               </Badge>
@@ -102,7 +102,7 @@ const SkillsForm = ({ profile, onSave, isLoading }: SkillsFormProps) => {
                 key={v}
                 variant="ghost"
                 size="sm"
-                className="text-xs h-7 text-muted-foreground"
+                className="text-xs h-8 sm:h-7 text-muted-foreground"
                 onClick={() => setMedizinische([...medizinische, v])}
               >
                 + {v}
@@ -129,7 +129,7 @@ const SkillsForm = ({ profile, onSave, isLoading }: SkillsFormProps) => {
             {edv.map((item) => (
               <Badge key={item} variant="secondary" className="gap-1 pr-1">
                 {item}
-                <button onClick={() => removeItem(edv, setEdv, item)} className="ml-1 hover:bg-destructive/20 rounded-full p-0.5">
+                <button onClick={() => removeItem(edv, setEdv, item)} className="ml-1 hover:bg-destructive/20 rounded-full p-1.5">
                   <X className="h-3 w-3" />
                 </button>
               </Badge>
@@ -141,7 +141,7 @@ const SkillsForm = ({ profile, onSave, isLoading }: SkillsFormProps) => {
                 key={v}
                 variant="ghost"
                 size="sm"
-                className="text-xs h-7 text-muted-foreground"
+                className="text-xs h-8 sm:h-7 text-muted-foreground"
                 onClick={() => setEdv([...edv, v])}
               >
                 + {v}
@@ -163,7 +163,7 @@ const SkillsForm = ({ profile, onSave, isLoading }: SkillsFormProps) => {
         </div>
 
         <div className="flex justify-end pt-4">
-          <Button onClick={handleSave} disabled={isSaving || isLoading}>
+          <Button onClick={handleSave} disabled={isSaving || isLoading} className="w-full sm:w-auto">
             <Save className="mr-2 h-4 w-4" />
             {isSaving ? "Speichern..." : "Speichern"}
           </Button>

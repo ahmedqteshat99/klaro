@@ -43,11 +43,6 @@ const DocumentPreview = ({
   cvHtml,
   anschreibenHtml,
   profile,
-  isGeneratingCV,
-  isGeneratingAnschreiben,
-  onGenerateCV,
-  onGenerateAnschreiben,
-  canGenerateAnschreiben,
   userId
 }: DocumentPreviewProps) => {
   const [showFoto, setShowFoto] = useState(true);
@@ -61,64 +56,36 @@ const DocumentPreview = ({
     const html = type === "cv" ? cvHtml : anschreibenHtml;
     if (!html) return;
 
+    const fileName = type === "cv"
+      ? `Lebenslauf_${profile?.nachname || "Arzt"}`
+      : `Anschreiben_${profile?.nachname || "Arzt"}`;
+
     setIsExporting(true);
     try {
-      const fileName = type === "cv"
-        ? `Lebenslauf_${profile?.nachname || "Arzt"}`
-        : `Anschreiben_${profile?.nachname || "Arzt"}`;
+      const { downloadPdfFromServer } = await import("@/lib/api/pdf-service");
 
-      // Check if server-side PDF generation is enabled
-      const { isServerPdfEnabled, downloadPdfFromServer } = await import("@/lib/api/pdf-service");
+      await downloadPdfFromServer({
+        type,
+        htmlContent: html,
+        showFoto: type === "cv" ? showFoto : false,
+        fotoUrl,
+        showSignatur,
+        signaturUrl,
+        stadt: profile?.stadt,
+        fileName: `${fileName}.pdf`,
+      });
 
-      if (isServerPdfEnabled()) {
-        // Server-side: direct PDF download via Puppeteer (no print dialog)
-        await downloadPdfFromServer({
-          type,
-          htmlContent: html,
-          showFoto: type === "cv" ? showFoto : false,
-          fotoUrl,
-          showSignatur,
-          signaturUrl,
-          stadt: profile?.stadt,
-          fileName: `${fileName}.pdf`,
-        });
+      void logEvent(
+        "export",
+        { format: "PDF", method: "server", docType: type === "cv" ? "CV" : "ANSCHREIBEN" },
+        userId
+      );
+      void touchLastSeen(userId);
 
-        void logEvent(
-          "export",
-          { format: "PDF", method: "server", docType: type === "cv" ? "CV" : "ANSCHREIBEN" },
-          userId
-        );
-        void touchLastSeen(userId);
-
-        toast({
-          title: "PDF heruntergeladen",
-          description: "Ihr PDF wurde erfolgreich erstellt und heruntergeladen."
-        });
-      } else {
-        // Client-side fallback: window.print()
-        const { exportToPDF } = await import("@/lib/pdf-export");
-        await exportToPDF({
-          htmlContent: html,
-          fileName,
-          showFoto: type === "cv" ? showFoto : false,
-          fotoUrl,
-          showSignatur,
-          signaturUrl,
-          stadt: profile?.stadt
-        });
-
-        void logEvent(
-          "export",
-          { format: "PDF", method: "print", docType: type === "cv" ? "CV" : "ANSCHREIBEN" },
-          userId
-        );
-        void touchLastSeen(userId);
-
-        toast({
-          title: "PDF Druckvorschau",
-          description: "Bitte wählen Sie 'Als PDF speichern' im Druckdialog."
-        });
-      }
+      toast({
+        title: "PDF heruntergeladen",
+        description: "Ihr PDF wurde erfolgreich erstellt und heruntergeladen."
+      });
     } catch (error) {
       console.error("PDF export error:", error);
       toast({
@@ -138,7 +105,7 @@ const DocumentPreview = ({
       <CardHeader className="pb-2">
         <CardTitle>Vorschau</CardTitle>
       </CardHeader>
-      <div className="flex-1 flex flex-col px-6 pb-6 min-h-0">
+      <div className="flex-1 flex flex-col px-3 sm:px-6 pb-4 sm:pb-6 min-h-0">
         <Tabs defaultValue="cv" className="flex-1 flex flex-col min-h-0">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="cv">Mein Lebenslauf</TabsTrigger>
@@ -164,9 +131,9 @@ const DocumentPreview = ({
 
             {/* Preview - uses shared CVTemplate with A4 paper dimensions */}
             <div className="w-full">
-              <ScrollArea className="max-h-none md:max-h-[600px] rounded-lg border overflow-auto">
+              <ScrollArea className="max-h-[50vh] md:max-h-[600px] rounded-lg border overflow-auto">
                 {cvHtml ? (
-                  <div className="cv-paper-wrapper bg-gray-100 p-4">
+                  <div className="cv-paper-wrapper bg-gray-100 p-1 sm:p-4">
                     <CVTemplate
                       htmlContent={cvHtml}
                       showFoto={showFoto}
@@ -189,30 +156,18 @@ const DocumentPreview = ({
             </div>
 
             {/* Actions */}
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={onGenerateCV} disabled={isGeneratingCV} className="w-full sm:w-auto">
-                {isGeneratingCV ? (
-                  <>
+            {cvHtml && (
+              <div className="flex gap-2">
+                <Button onClick={() => handleExportPDF("cv")} disabled={isExporting} className="w-full sm:w-auto">
+                  {isExporting ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generiere...
-                  </>
-                ) : (
-                  <>
-                    <FileText className="mr-2 h-4 w-4" />
-                    Lebenslauf generieren
-                  </>
-                )}
-              </Button>
-              {cvHtml && (
-                <Button variant="outline" onClick={() => handleExportPDF("cv")} disabled={isExporting} className="w-full sm:w-auto">
-                  <Download className="mr-2 h-4 w-4" />
-                  PDF
+                  ) : (
+                    <Download className="mr-2 h-4 w-4" />
+                  )}
+                  PDF herunterladen
                 </Button>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Texte werden automatisch mit KI auf Basis Ihrer Angaben erstellt.
-            </p>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="anschreiben" className="flex flex-col mt-4 space-y-4">
@@ -228,9 +183,9 @@ const DocumentPreview = ({
 
             {/* Preview */}
             <div className="w-full">
-              <ScrollArea className="max-h-none md:max-h-[600px] rounded-lg border overflow-auto">
+              <ScrollArea className="max-h-[50vh] md:max-h-[600px] rounded-lg border overflow-auto">
                 {anschreibenHtml ? (
-                  <div className="bg-gray-100 p-4 flex items-start">
+                  <div className="bg-gray-100 p-1 sm:p-4 flex items-start">
                     <CVTemplate
                       htmlContent={anschreibenHtml}
                       showFoto={false}
@@ -254,34 +209,18 @@ const DocumentPreview = ({
             </div>
 
             {/* Actions */}
-            <div className="flex flex-wrap gap-2">
-              <Button
-                onClick={onGenerateAnschreiben}
-                disabled={isGeneratingAnschreiben || !canGenerateAnschreiben}
-                className="w-full sm:w-auto"
-              >
-                {isGeneratingAnschreiben ? (
-                  <>
+            {anschreibenHtml && (
+              <div className="flex gap-2">
+                <Button onClick={() => handleExportPDF("anschreiben")} disabled={isExporting} className="w-full sm:w-auto">
+                  {isExporting ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generiere...
-                  </>
-                ) : (
-                  <>
-                    <FileEdit className="mr-2 h-4 w-4" />
-                    Anschreiben generieren
-                  </>
-                )}
-              </Button>
-              {anschreibenHtml && (
-                <Button variant="outline" onClick={() => handleExportPDF("anschreiben")} disabled={isExporting} className="w-full sm:w-auto">
-                  <Download className="mr-2 h-4 w-4" />
-                  PDF
+                  ) : (
+                    <Download className="mr-2 h-4 w-4" />
+                  )}
+                  PDF herunterladen
                 </Button>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Texte werden automatisch mit KI auf Basis Ihrer Angaben erstellt.
-            </p>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>

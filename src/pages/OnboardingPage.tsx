@@ -475,7 +475,7 @@ const OnboardingPage = () => {
                                             <CheckCircle2 className="h-5 w-5" />
                                             <span className="font-medium">Ihr Lebenslauf wurde erfolgreich erstellt!</span>
                                         </div>
-                                        <div className="bg-gray-100 rounded-lg p-4 overflow-auto max-h-[500px] border">
+                                        <div className="bg-gray-100 rounded-lg p-4 overflow-auto max-h-[40vh] sm:max-h-[500px] border">
                                             <CVTemplate
                                                 htmlContent={cvHtml}
                                                 showFoto={!!profile?.foto_url}

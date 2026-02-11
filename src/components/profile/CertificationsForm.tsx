@@ -92,7 +92,7 @@ const CertificationsForm = ({ certifications, onAdd, onUpdate, onDelete }: Certi
                 Hinzufügen
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-[425px]">
               <DialogHeader>
                 <DialogTitle>
                   {editingId ? "Zertifikat bearbeiten" : "Neues Zertifikat"}
@@ -152,11 +152,11 @@ const CertificationsForm = ({ certifications, onAdd, onUpdate, onDelete }: Certi
                       {cert.datum && <span>• {format(new Date(cert.datum), "MM/yyyy")}</span>}
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(cert)}>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" className="h-10 w-10 sm:h-9 sm:w-9" onClick={() => handleEdit(cert)}>
                       <Pencil className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => onDelete(cert.id)}>
+                    <Button variant="ghost" size="icon" className="h-10 w-10 sm:h-9 sm:w-9" onClick={() => onDelete(cert.id)}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
