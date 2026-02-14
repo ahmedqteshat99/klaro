@@ -485,6 +485,16 @@ const ProfilPage = () => {
         open={showAiConsentModal}
         onConsent={handleAiConsentGranted}
         onDecline={handleAiConsentDeclined}
+        onUseManualMode={() => {
+          setShowAiConsentModal(false);
+          setPendingGeneration(false);
+          toast({
+            title: "Alternative: Lebenslauf hochladen",
+            description: "Sie werden zu 'Unterlagen' weitergeleitet, wo Sie Ihren CV hochladen können.",
+          });
+          // Redirect to Unterlagen page with focus on CV upload
+          navigate('/unterlagen?tab=cv');
+        }}
       />
     </div>
   );

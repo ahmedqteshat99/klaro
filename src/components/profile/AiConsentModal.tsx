@@ -17,9 +17,10 @@ interface AiConsentModalProps {
   open: boolean;
   onConsent: () => void;
   onDecline: () => void;
+  onUseManualMode?: () => void;  // Optional redirect to manual workflow
 }
 
-export default function AiConsentModal({ open, onConsent, onDecline }: AiConsentModalProps) {
+export default function AiConsentModal({ open, onConsent, onDecline, onUseManualMode }: AiConsentModalProps) {
   const [hasReadAndUnderstood, setHasReadAndUnderstood] = useState(false);
 
   const handleConsent = () => {
@@ -93,6 +94,15 @@ export default function AiConsentModal({ open, onConsent, onDecline }: AiConsent
               </p>
             </div>
 
+            <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 p-4 mt-4">
+              <p className="text-sm font-medium mb-2 text-blue-900 dark:text-blue-200">Alternative ohne KI:</p>
+              <p className="text-sm text-blue-800 dark:text-blue-300">
+                Sie können auch Ihren eigenen Lebenslauf hochladen oder extern erstellen,
+                wenn Sie die KI-Generierung nicht nutzen möchten. Klicken Sie dafür auf
+                "Ohne KI fortfahren".
+              </p>
+            </div>
+
             <div className="flex items-start gap-3 pt-2">
               <Checkbox
                 id="ai-consent-checkbox"
@@ -126,10 +136,15 @@ export default function AiConsentModal({ open, onConsent, onDecline }: AiConsent
         <AlertDialogFooter className="flex-col sm:flex-row gap-2">
           <Button
             variant="outline"
-            onClick={onDecline}
+            onClick={() => {
+              onDecline();
+              if (onUseManualMode) {
+                onUseManualMode();
+              }
+            }}
             className="w-full sm:w-auto"
           >
-            Ablehnen
+            {onUseManualMode ? "Ohne KI fortfahren" : "Ablehnen"}
           </Button>
           <Button
             onClick={handleConsent}

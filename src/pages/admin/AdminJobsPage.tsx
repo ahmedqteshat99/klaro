@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,7 +27,7 @@ import {
   mapExtractedJobToAdminForm,
   type AdminJobFormValues,
 } from "@/lib/job-import";
-import { ExternalLink, Link2, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { ExternalLink, Info, Link2, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 
 interface JobFormState {
   title: string;
@@ -431,94 +432,107 @@ const AdminJobsPage = () => {
         </CardHeader>
         <CardContent>
           <form className="grid gap-4" onSubmit={handleSubmit}>
-            <div className="rounded-lg border border-dashed p-4 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium flex items-center gap-2">
-                    <Link2 className="h-4 w-4" />
-                    Job per Link importieren
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Link einfügen und Felder automatisch befüllen. Danach alles prüfen und bei Bedarf korrigieren.
-                  </p>
+            <Alert className="mb-2">
+              <Info className="h-4 w-4" />
+              <AlertTitle>Job-Import vorübergehend deaktiviert</AlertTitle>
+              <AlertDescription>
+                Aus rechtlichen Gründen (Urheberrecht, Datenbankrechte) ist der automatische
+                Job-Import vorübergehend nicht verfügbar. Bitte erstellen Sie Stellenangebote
+                manuell oder warten Sie auf direkte Partnerschaften mit Krankenhäusern.
+              </AlertDescription>
+            </Alert>
+
+            {/* Job import section - HIDDEN for legal compliance */}
+            {false && (
+              <div className="rounded-lg border border-dashed p-4 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium flex items-center gap-2">
+                      <Link2 className="h-4 w-4" />
+                      Job per Link importieren
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Link einfügen und Felder automatisch befüllen. Danach alles prüfen und bei Bedarf korrigieren.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="import-overwrite"
+                      checked={overwriteImportedValues}
+                      onCheckedChange={setOverwriteImportedValues}
+                    />
+                    <Label htmlFor="import-overwrite" className="text-xs">
+                      Bestehende Felder überschreiben
+                    </Label>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="import-overwrite"
-                    checked={overwriteImportedValues}
-                    onCheckedChange={setOverwriteImportedValues}
+
+                <div className="grid gap-2">
+                  <Label htmlFor="job-import-url">Link zur Stellenanzeige</Label>
+                  <div className="flex flex-col gap-2 md:flex-row">
+                    <Input
+                      id="job-import-url"
+                      value={importUrl}
+                      onChange={(event) => setImportUrl(event.target.value)}
+                      placeholder="https://..."
+                      inputMode="url"
+                      type="url"
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleImportFromUrl}
+                      disabled={isImportingFromUrl || !importUrl.trim()}
+                      className="md:w-auto"
+                    >
+                      {isImportingFromUrl ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Importieren
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="job-import-text">Fallback: Stellenanzeigentext einfügen</Label>
+                  <Textarea
+                    id="job-import-text"
+                    value={importText}
+                    onChange={(event) => setImportText(event.target.value)}
+                    placeholder="Optional: Falls Link-Import fehlschlägt, hier den Anzeigentext einfügen."
+                    rows={4}
                   />
-                  <Label htmlFor="import-overwrite" className="text-xs">
-                    Bestehende Felder überschreiben
-                  </Label>
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleImportFromText}
+                      disabled={isImportingFromText || !importText.trim()}
+                    >
+                      {isImportingFromText ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Text importieren
+                    </Button>
+                  </div>
                 </div>
-              </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="job-import-url">Link zur Stellenanzeige</Label>
-                <div className="flex flex-col gap-2 md:flex-row">
-                  <Input
-                    id="job-import-url"
-                    value={importUrl}
-                    onChange={(event) => setImportUrl(event.target.value)}
-                    placeholder="https://..."
-                    inputMode="url"
-                    type="url"
-                  />
-                  <Button
-                    type="button"
-                    onClick={handleImportFromUrl}
-                    disabled={isImportingFromUrl || !importUrl.trim()}
-                    className="md:w-auto"
-                  >
-                    {isImportingFromUrl ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Importieren
-                  </Button>
-                </div>
+                {lastImportSource ? (
+                  <div className="rounded-md bg-muted/40 p-3 text-xs space-y-1">
+                    <p>
+                      Letzter Import: {lastImportSource === "url" ? "über Link" : "über Text"}.
+                    </p>
+                    <p>
+                      Übernommene Felder:{" "}
+                      {importedFields.length > 0
+                        ? importedFields.map((field) => ADMIN_IMPORT_FIELD_LABELS[field]).join(", ")
+                        : "keine"}
+                    </p>
+                    <p>
+                      Noch leer:{" "}
+                      {missingFields.length > 0
+                        ? missingFields.map((field) => ADMIN_IMPORT_FIELD_LABELS[field]).join(", ")
+                        : "keine"}
+                    </p>
+                  </div>
+                ) : null}
               </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="job-import-text">Fallback: Stellenanzeigentext einfügen</Label>
-                <Textarea
-                  id="job-import-text"
-                  value={importText}
-                  onChange={(event) => setImportText(event.target.value)}
-                  placeholder="Optional: Falls Link-Import fehlschlägt, hier den Anzeigentext einfügen."
-                  rows={4}
-                />
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleImportFromText}
-                    disabled={isImportingFromText || !importText.trim()}
-                  >
-                    {isImportingFromText ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Text importieren
-                  </Button>
-                </div>
-              </div>
-
-              {lastImportSource ? (
-                <div className="rounded-md bg-muted/40 p-3 text-xs space-y-1">
-                  <p>
-                    Letzter Import: {lastImportSource === "url" ? "über Link" : "über Text"}.
-                  </p>
-                  <p>
-                    Übernommene Felder:{" "}
-                    {importedFields.length > 0
-                      ? importedFields.map((field) => ADMIN_IMPORT_FIELD_LABELS[field]).join(", ")
-                      : "keine"}
-                  </p>
-                  <p>
-                    Noch leer:{" "}
-                    {missingFields.length > 0
-                      ? missingFields.map((field) => ADMIN_IMPORT_FIELD_LABELS[field]).join(", ")
-                      : "keine"}
-                  </p>
-                </div>
-              ) : null}
-            </div>
+            )}
 
             <div className="grid gap-2">
               <Label htmlFor="job-title">Titel</Label>

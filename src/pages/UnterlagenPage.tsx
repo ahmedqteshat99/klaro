@@ -6,7 +6,7 @@ import BrandLogo from "@/components/BrandLogo";
 import UserDocumentsVault from "@/components/profile/UserDocumentsVault";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, ArrowLeft, Check, X } from "lucide-react";
+import { Loader2, ArrowLeft, Check, X, AlertTriangle } from "lucide-react";
 
 const REQUIRED_DOC_TYPES = [
   { key: "approbation", label: "Approbation" },
@@ -121,6 +121,22 @@ const UnterlagenPage = () => {
             <div className="space-y-1.5">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Unterlagen</p>
               <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Bewerbungsunterlagen</h1>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-yellow-500/50 bg-yellow-50/10 dark:bg-yellow-900/10">
+          <CardContent className="p-4 flex gap-4 items-start">
+            <div className="p-2 bg-yellow-500/10 rounded-full shrink-0">
+              <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-semibold text-sm">Haftungsausschluss</h4>
+              <p className="text-xs text-muted-foreground">
+                Unsere generierten Dokumente basieren auf KI und können Fehler enthalten.
+                Bitte überprüfen Sie alle Angaben vor der Verwendung.
+                Sie tragen die volle Verantwortung für Ihre Bewerbungsunterlagen.
+              </p>
             </div>
           </CardContent>
         </Card>
