@@ -629,15 +629,6 @@ const JobDetailPage = () => {
       return;
     }
 
-    if (!job.contact_email) {
-      toast({
-        title: "Kontakt-E-Mail fehlt",
-        description: "Dieser Job hat keine Empfänger-E-Mail. Bitte Administrator kontaktieren.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsPreparing(true);
     setPrepareProgress(3);
     setPrepareProgressGoal(14);
@@ -1163,11 +1154,6 @@ const JobDetailPage = () => {
                     Aus rechtlichen Gründen (Urheberrecht, Datenbankrechte) zeigen wir hier nur minimale Informationen.
                     Die <strong>vollständigen Details finden Sie in der Originalanzeige</strong> über den Link unten.
                   </p>
-                  <p className="text-sm text-blue-800 dark:text-blue-300 mt-2">
-                    ✅ <strong>Für Ihre Bewerbung:</strong> Wenn Sie auf "Bewerbung vorbereiten" klicken, ruft unser System
-                    automatisch alle Details von der Originalquelle ab und erstellt ein individuelles, hochwertiges Anschreiben
-                    für Sie – ohne dass Sie die Stellenanzeige manuell kopieren müssen.
-                  </p>
                 </div>
               </div>
             </div>
@@ -1328,7 +1314,7 @@ const JobDetailPage = () => {
               <CardContent className="space-y-3">
                 <Button
                   onClick={handlePrepareApplication}
-                  disabled={isPreparing || !job.contact_email || !isAuthenticated || !userId}
+                  disabled={isPreparing || !isAuthenticated || !userId}
                 >
                   {isPreparing ? (
                     <>
@@ -1356,6 +1342,15 @@ const JobDetailPage = () => {
                     </>
                   )}
                 </Button>
+
+                {/* Disclaimer about automatic detail extraction */}
+                <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-3">
+                  <p className="text-xs text-blue-800 dark:text-blue-300">
+                    ✅ <strong>Für Ihre Bewerbung:</strong> Wenn Sie auf "Bewerbung vorbereiten" klicken, ruft unser System
+                    automatisch alle Details von der Originalquelle ab und erstellt ein individuelles, hochwertiges Anschreiben
+                    für Sie – ohne dass Sie die Stellenanzeige manuell kopieren müssen.
+                  </p>
+                </div>
 
                 {isPreparing ? (
                   <div className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2">
@@ -1428,18 +1423,79 @@ const JobDetailPage = () => {
                     <p className="text-sm font-medium">Anhaenge ({preparedAttachments.length})</p>
                     {preparedAttachments.map((item, index) => (
                       <div key={`${item.fileName}-${index}`} className="flex items-center justify-between gap-2 text-sm">
-                        <div className="inline-flex items-center gap-2 min-w-0">
+                        <div className="inline-flex items-center gap-2 min-w-0 flex-1">
                           <FileText className="h-4 w-4 shrink-0" />
                           <span className="truncate">{item.fileName}</span>
-                          <Badge variant="secondary">{item.source === "generated" ? "Klaro" : "Profil"}</Badge>
+                          <Badge variant="secondary" className="shrink-0">{item.source === "generated" ? "Klaro" : "Profil"}</Badge>
+                          <span className="text-xs text-muted-foreground shrink-0">{humanFileSize(item.sizeBytes)}</span>
                         </div>
-                        <span className="text-xs text-muted-foreground">{humanFileSize(item.sizeBytes)}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 shrink-0"
+                          onClick={async () => {
+                            // Download individual file
+                            try {
+                              const attachment = preparedAttachments[index];
+                              if (!attachment) return;
+
+                              // For generated files, we need to get them from the application attachments
+                              const { data: attachmentData } = await supabase
+                                .from('application_attachments')
+                                .select('file_path')
+                                .eq('application_id', applicationId!)
+                                .eq('file_name', attachment.fileName)
+                                .maybeSingle();
+
+                              if (!attachmentData?.file_path) {
+                                throw new Error('Datei nicht gefunden');
+                              }
+
+                              const { data: fileBlob, error: downloadError } = await supabase
+                                .storage
+                                .from('user-files')
+                                .download(attachmentData.file_path);
+
+                              if (downloadError || !fileBlob) {
+                                throw new Error('Download fehlgeschlagen');
+                              }
+
+                              // Create download link
+                              const url = URL.createObjectURL(fileBlob);
+                              const link = document.createElement('a');
+                              link.href = url;
+                              link.download = attachment.fileName;
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                              URL.revokeObjectURL(url);
+
+                              toast({
+                                title: 'Datei heruntergeladen',
+                                description: attachment.fileName,
+                              });
+                            } catch (error) {
+                              toast({
+                                title: 'Download fehlgeschlagen',
+                                description: error instanceof Error ? error.message : 'Unbekannter Fehler',
+                                variant: 'destructive',
+                              });
+                            }
+                          }}
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
                       </div>
                     ))}
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs text-muted-foreground pt-1 border-t">
                       Gesamtgroesse: {humanFileSize(totalAttachmentBytes)} / {humanFileSize(MAX_ATTACHMENT_BYTES)}
                     </div>
                   </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    💡 <strong>Tipp:</strong> Klicken Sie auf <Download className="h-3 w-3 inline" /> neben einzelnen Dateien für separate Downloads,
+                    oder laden Sie alle zusammengefügt herunter.
+                  </p>
 
                   <div className="flex flex-col sm:flex-row gap-3">
                     <Button
@@ -1453,17 +1509,26 @@ const JobDetailPage = () => {
                       ) : (
                         <Download className="mr-2 h-4 w-4" />
                       )}
-                      Alle als PDF herunterladen
+                      Alle zusammengefügt herunterladen
                     </Button>
                     <Button
                       onClick={handleSendApplication}
-                      disabled={isSending || !subject.trim() || !messageText.trim()}
+                      disabled={isSending || !subject.trim() || !messageText.trim() || !job.contact_email}
                       className="flex-1"
                     >
                       {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                      Bewerbung jetzt senden
+                      {job.contact_email ? "Bewerbung jetzt senden" : "Keine E-Mail verfügbar"}
                     </Button>
                   </div>
+
+                  {!job.contact_email && (
+                    <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3">
+                      <p className="text-xs text-amber-800 dark:text-amber-300">
+                        ⚠️ <strong>Hinweis:</strong> Diese Stelle hat keine Kontakt-E-Mail hinterlegt. Sie können Ihre Bewerbung
+                        trotzdem vorbereiten und als PDF herunterladen, aber nicht direkt über Klaro versenden.
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ) : null}
