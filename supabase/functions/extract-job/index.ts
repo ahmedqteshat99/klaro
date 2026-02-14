@@ -6,7 +6,9 @@ import { enforceRateLimit, RATE_LIMITS, RateLimitError, rateLimitResponse } from
 const normalizeUrl = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) return "";
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
+  if (trimmed.startsWith("https://")) return trimmed;
+  // Users often paste `http://...` links; upgrade to HTTPS to satisfy SSRF protections.
+  if (trimmed.startsWith("http://")) return `https://${trimmed.slice("http://".length)}`;
   return `https://${trimmed}`;
 };
 

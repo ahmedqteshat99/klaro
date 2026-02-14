@@ -5,9 +5,21 @@ import type { Profile, WorkExperience, EducationEntry, PracticalExperience, Cert
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+const EDGE_AUTH_EXPIRY_MARGIN_SECONDS = 120;
+
+const redirectToAuth = () => {
+  if (typeof window === "undefined") return;
+  if (window.location.pathname.startsWith("/auth")) return;
+
+  const next = `${window.location.pathname}${window.location.search}${window.location.hash ?? ""}`;
+  const url = new URL("/auth", window.location.origin);
+  url.searchParams.set("next", next);
+  window.location.assign(url.toString());
+};
+
 /**
  * Ensure a valid (non-expired) user session exists before calling an edge function.
- * If the access token is expired or expiring within 30 s, forces a refresh.
+ * If the access token is expired or expiring soon, forces a refresh.
  * Throws a German-language error when no session can be obtained so callers
  * surface a meaningful message instead of the cryptic "missing sub claim".
  */
@@ -21,7 +33,7 @@ async function ensureFreshSession(): Promise<void> {
   const expiresAt = session.expires_at; // unix seconds
   const now = Math.floor(Date.now() / 1000);
 
-  if (expiresAt && expiresAt - now < 30) {
+  if (!expiresAt || expiresAt - now < EDGE_AUTH_EXPIRY_MARGIN_SECONDS) {
     const { error } = await supabase.auth.refreshSession();
     if (error) {
       throw new Error("Sitzung abgelaufen. Bitte melden Sie sich erneut an.");
@@ -29,58 +41,46 @@ async function ensureFreshSession(): Promise<void> {
   }
 }
 
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) return {};
-  return { Authorization: `Bearer ${session.access_token}` };
-}
-
 async function invokeEdgeFunction<T>(
   name: string,
-  body?: unknown
+  body?: unknown,
+  retry = true
 ): Promise<{ data?: T; error?: string; status: number }> {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     return { error: "Supabase ist nicht konfiguriert.", status: 500 };
   }
 
-  const authHeaders = await getAuthHeaders();
-  if (!authHeaders.Authorization) {
-    return { error: "Nicht angemeldet. Bitte melden Sie sich erneut an.", status: 401 };
-  }
+  try {
+    const { data, error } = await supabase.functions.invoke<T>(name, { body });
 
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/${name}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      ...authHeaders
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
-
-  const text = await response.text();
-  let parsed: unknown = null;
-  if (text) {
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      parsed = null;
+    if (!error) {
+      return { data: data as T, status: 200 };
     }
+
+    const status = (error as { context?: { status?: number } })?.context?.status ?? 500;
+
+    if (status === 401 && retry) {
+      console.warn("Edge Function returned 401. Attempting session refresh...");
+
+      // Force a refresh of the session and retry once with the new access token.
+      const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshedSession?.access_token) {
+        console.error("Session refresh failed during 401 retry:", refreshError);
+        return { error: "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.", status: 401 };
+      }
+
+      return invokeEdgeFunction<T>(name, body, false);
+    }
+
+    if (status === 401) {
+      return { error: "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.", status: 401 };
+    }
+
+    return { error: getInvokeErrorMessage(error), status };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unbekannter Fehler";
+    return { error: message, status: 500 };
   }
-
-  if (!response.ok) {
-    const parsedError =
-      typeof parsed === "object" && parsed !== null && "error" in parsed
-        ? (parsed as { error?: string }).error
-        : undefined;
-
-    return {
-      error: parsedError || text || response.statusText,
-      status: response.status
-    };
-  }
-
-  return { data: parsed as T, status: response.status };
 }
 
 /** Extract server error message from Edge Function invoke error (4xx/5xx response body). */
@@ -89,9 +89,12 @@ function getInvokeErrorMessage(error: unknown): string {
   const body = err?.context?.body;
   if (body) {
     try {
-      const parsed = JSON.parse(body) as { error?: string };
+      const parsed = JSON.parse(body) as { error?: string; message?: string };
       if (typeof parsed?.error === "string" && parsed.error.trim()) {
         return parsed.error;
+      }
+      if (typeof parsed?.message === "string" && parsed.message.trim()) {
+        return parsed.message;
       }
     } catch {
       // ignore parse failure

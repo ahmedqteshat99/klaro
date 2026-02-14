@@ -1000,16 +1000,16 @@ const InboxPage = () => {
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 {selectedApplication.message_text?.trim() || selectedApplication.subject?.trim() ? (
                   <div className="flex w-full justify-end">
-                    <div className="max-w-[85%] rounded-2xl rounded-br-md bg-primary px-4 py-3 text-primary-foreground">
+                    <div className="max-w-[85%] rounded-2xl rounded-br-md bg-[#007AFF] px-4 py-3 text-white shadow-sm dark:bg-[#0A84FF]">
                       {selectedApplication.subject ? (
-                        <p className="mb-1 text-sm font-medium text-primary-foreground">
+                        <p className="mb-1 text-sm font-medium text-white">
                           {selectedApplication.subject}
                         </p>
                       ) : null}
-                      <p className="whitespace-pre-line text-sm leading-relaxed text-primary-foreground/95">
+                      <p className="whitespace-pre-line text-sm leading-relaxed text-white/95">
                         {selectedApplication.message_text?.trim() || "(Kein Textinhalt)"}
                       </p>
-                      <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-primary-foreground/60">
+                      <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-white/70">
                         <span>
                           {formatDateTime(
                             selectedApplication.submitted_at ??
@@ -1054,25 +1054,25 @@ const InboxPage = () => {
                   const isUnreadInbound = !isOutbound && !message.is_read;
 
                   return (
-                    <div key={entry.key} className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}>
+                    <div key={entry.key} className={`flex w-full ${isOutbound ? "justify-end" : "justify-start"}`}>
                       <div
                         className={`max-w-[85%] rounded-2xl px-4 py-3 ${
                           isOutbound
-                            ? "rounded-br-md bg-primary text-primary-foreground"
+                            ? "rounded-br-md bg-[#007AFF] text-white shadow-sm dark:bg-[#0A84FF]"
                             : isUnreadInbound
-                              ? "rounded-bl-md border border-primary/40 bg-primary/5"
-                              : "rounded-bl-md border border-border bg-card"
+                              ? "rounded-bl-md bg-[#E9E9EB] text-foreground shadow-sm ring-1 ring-primary/20 dark:bg-[#2C2C2E] dark:text-white"
+                              : "rounded-bl-md bg-[#E9E9EB] text-foreground shadow-sm dark:bg-[#2C2C2E] dark:text-white"
                         }`}
                       >
                         {message.subject ? (
-                          <p className={`mb-1 text-sm font-medium ${isOutbound ? "text-primary-foreground" : "text-foreground"}`}>
+                          <p className={`mb-1 text-sm font-medium ${isOutbound ? "text-white" : "text-foreground dark:text-white"}`}>
                             {message.subject}
                           </p>
                         ) : null}
 
                         <p
                           className={`whitespace-pre-line text-sm leading-relaxed ${
-                            isOutbound ? "text-primary-foreground/95" : "text-foreground"
+                            isOutbound ? "text-white/95" : "text-foreground dark:text-white"
                           }`}
                         >
                           {messageParts.visibleText || "(Kein Textinhalt)"}
@@ -1107,7 +1107,7 @@ const InboxPage = () => {
 
                         <div
                           className={`mt-2 flex items-center justify-between gap-2 text-[11px] ${
-                            isOutbound ? "text-primary-foreground/60" : "text-muted-foreground"
+                            isOutbound ? "text-white/70" : "text-muted-foreground"
                           }`}
                         >
                           <span>{formatDateTime(message.created_at)}</span>

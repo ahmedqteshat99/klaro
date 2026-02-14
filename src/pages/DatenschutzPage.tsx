@@ -149,14 +149,21 @@ const DatenschutzPage = () => {
               <li><strong>DPA:</strong> <a href="https://www.mailgun.com/legal/dpa/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Mailgun Data Processing Agreement</a></li>
             </ul>
 
-            <h3 className="text-lg font-semibold mb-3 mt-6">Firecrawl (Web-Scraping für Stellenangebote)</h3>
+            <h3 className="text-lg font-semibold mb-3 mt-6">Firecrawl (Stellenanzeigen-Extraktion für Anschreiben)</h3>
             <ul className="list-disc pl-6 text-muted-foreground space-y-2 mb-4">
-              <li><strong>Zweck:</strong> Extraktion von Stellenangeboten von öffentlich zugänglichen Krankenhaus-Websites zur Bereitstellung aktueller Jobangebote</li>
-              <li><strong>Übermittelte Daten:</strong> Nur URLs von öffentlichen Stellenanzeigen (keine personenbezogenen Nutzerdaten)</li>
+              <li><strong>Zweck:</strong> Wenn Sie eine Stellenanzeigen-URL eingeben, nutzen wir Firecrawl, um Informationen zu extrahieren und Ihr Anschreiben zu personalisieren</li>
+              <li><strong>Nutzerinitiiert:</strong> Die Extraktion erfolgt nur auf Ihre ausdrückliche Anfrage (Sie fügen die URL ein und bestätigen die Nutzung)</li>
+              <li><strong>Temporäre Verarbeitung:</strong> Extrahierte Stellendaten werden nur zur Anschreiben-Generierung verwendet und nicht dauerhaft in unserer Datenbank gespeichert</li>
+              <li><strong>Übermittelte Daten:</strong> Nur die von Ihnen eingegebene URL (keine personenbezogenen Nutzerdaten)</li>
               <li><strong>Standort:</strong> USA</li>
-              <li><strong>Rechtsgrundlage:</strong> Berechtigtes Interesse (Art. 6 Abs. 1 lit. f DSGVO) zur Bereitstellung aktueller Stellenangebote</li>
+              <li><strong>Rechtsgrundlage:</strong> Ihre Einwilligung (Art. 6 Abs. 1 lit. a DSGVO) durch Bestätigung der Nutzung</li>
               <li><strong>Datenschutz:</strong> <a href="https://firecrawl.dev/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Firecrawl Privacy Policy</a></li>
             </ul>
+            <p className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-950/30 p-3 rounded-md border border-blue-200 dark:border-blue-800 mt-2">
+              <strong>Hinweis:</strong> Sie sind selbst dafür verantwortlich sicherzustellen, dass Sie berechtigt sind,
+              die Stellenanzeige für Ihre Bewerbung zu verwenden. Klaro speichert die Daten nicht dauerhaft und
+              verwendet sie ausschließlich zur Unterstützung Ihrer persönlichen Bewerbung.
+            </p>
 
             <p className="text-muted-foreground mt-4 text-sm">
               Alle Auftragsverarbeiter wurden sorgfältig ausgewählt und sind vertraglich verpflichtet,

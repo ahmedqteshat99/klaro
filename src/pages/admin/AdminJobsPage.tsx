@@ -330,9 +330,9 @@ const AdminJobsPage = () => {
     const response = editingJobId
       ? await supabase.from("jobs").update(commonPayload).eq("id", editingJobId)
       : await supabase.from("jobs").insert({
-          ...(commonPayload as TablesInsert<"jobs">),
-          created_by: userId,
-        });
+        ...(commonPayload as TablesInsert<"jobs">),
+        created_by: userId,
+      });
 
     setIsSaving(false);
 
@@ -432,18 +432,17 @@ const AdminJobsPage = () => {
         </CardHeader>
         <CardContent>
           <form className="grid gap-4" onSubmit={handleSubmit}>
-            <Alert className="mb-2">
-              <Info className="h-4 w-4" />
-              <AlertTitle>Job-Import vorübergehend deaktiviert</AlertTitle>
+            <Alert className="mb-2 border-yellow-500/50 bg-yellow-50/10 dark:bg-yellow-900/10">
+              <Info className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+              <AlertTitle>Hinweis zum Urheberrecht</AlertTitle>
               <AlertDescription>
-                Aus rechtlichen Gründen (Urheberrecht, Datenbankrechte) ist der automatische
-                Job-Import vorübergehend nicht verfügbar. Bitte erstellen Sie Stellenangebote
-                manuell oder warten Sie auf direkte Partnerschaften mit Krankenhäusern.
+                Bitte beachten Sie beim Import von externen Anzeigen das Urheberrecht.
+                Nutzen Sie diese Funktion verantwortungsvoll (z.B. nur Kernfakten importieren).
               </AlertDescription>
             </Alert>
 
-            {/* Job import section - HIDDEN for legal compliance */}
-            {false && (
+            {/* Job import section */}
+            {(
               <div className="rounded-lg border border-dashed p-4 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="space-y-1">

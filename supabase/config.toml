@@ -1,22 +1,22 @@
 project_id = "sfmgdvjwmoxoeqmcarbv"
 
 [functions.generate-cv]
-verify_jwt = true
+verify_jwt = false
 
 [functions.generate-anschreiben]
-verify_jwt = true
+verify_jwt = false
 
 [functions.extract-job]
-verify_jwt = true
+verify_jwt = false
 
 [functions.delete-account]
-verify_jwt = true
+verify_jwt = false
 
 [functions.parse-cv]
-verify_jwt = true
+verify_jwt = false
 
 [functions.admin-delete-user]
-verify_jwt = true
+verify_jwt = false
 
 [functions.mailgun-inbound]
 verify_jwt = false
@@ -25,10 +25,10 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.send-application-email]
-verify_jwt = true
+verify_jwt = false
 
 [functions.reply-application-email]
-verify_jwt = true
+verify_jwt = false
 
 [functions.lifecycle-campaign-runner]
 verify_jwt = false
