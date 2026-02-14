@@ -71,3 +71,13 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+
+## SEO and sitemap
+
+- Generate sitemap (including published jobs): `npm run sitemap:generate`
+- Production build runs sitemap generation automatically: `npm run build`
+- Launch checklist: `docs/phase-5-launch-checklist.md`
+- Growth ops checklist: `docs/phase-6-growth-ops.md`
+- Conversion optimization checklist: `docs/phase-7-conversion-optimization.md`
+- Lifecycle growth checklist: `docs/phase-8-lifecycle-growth.md`
+- Operations + scheduling checklist: `docs/phase-9-operations-and-scheduling.md`

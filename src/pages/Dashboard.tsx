@@ -1,114 +1,101 @@
-import { useEffect, useState, lazy, Suspense } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { isOnboardingDone, checkOnboardingFromDB } from "@/pages/OnboardingPage";
 import { useProfile } from "@/hooks/useProfile";
-import { useDocumentVersions } from "@/hooks/useDocumentVersions";
-import { generateCV, generateAnschreiben, deleteAccount } from "@/lib/api/generation";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { useToast } from "@/hooks/use-toast";
-import { User, LogOut, Loader2, Trash2, Settings, FileText } from "lucide-react";
-import type { User as SupabaseUser, Session } from "@supabase/supabase-js";
-
-const JobExtractionForm = lazy(() => import("@/components/generation/JobExtractionForm"));
-const DocumentPreview = lazy(() => import("@/components/generation/DocumentPreview"));
-const DocumentVersionsList = lazy(() => import("@/components/generation/DocumentVersionsList"));
-import BrandLogo from "@/components/BrandLogo";
-import { logEvent, touchLastSeen } from "@/lib/app-events";
 import { useUserFileUrl } from "@/hooks/useUserFileUrl";
+import { getMissingFirstApplyFields } from "@/lib/first-apply";
+import { logEvent, touchLastSeen } from "@/lib/app-events";
+import { useToast } from "@/hooks/use-toast";
+import type { Session } from "@supabase/supabase-js";
+import BrandLogo from "@/components/BrandLogo";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  ArrowRight,
+  Loader2,
+  LogOut,
+} from "lucide-react";
 
-interface JobData {
-  krankenhaus: string | null;
-  standort: string | null;
-  fachabteilung: string | null;
-  position: string | null;
-  ansprechpartner: string | null;
-  anforderungen: string | null;
-}
+type HubSectionId = "cv_profile" | "anschreiben" | "inbox" | "documents" | "jobs";
+type HubSectionState = "done" | "in_progress" | "todo";
 
-const formatGermanDate = (date: Date) =>
-  new Intl.DateTimeFormat("de-DE", {
-    timeZone: "Europe/Berlin",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
-
-const applyAnschreibenDate = (html: string, createdAt?: string | null) => {
-  if (!createdAt) return html;
-  const dateStr = formatGermanDate(new Date(createdAt));
-  if (html.includes("{{DATE}}")) {
-    return html.replaceAll("{{DATE}}", dateStr);
-  }
-
-  const rightAlignedParagraph = /(<p[^>]*text-align\s*:\s*right[^>]*>)([^<]*)(<\/p>)/i;
-  const match = html.match(rightAlignedParagraph);
-  if (match) {
-    const hasDate = /\b\d{1,2}\.\d{1,2}\.\d{4}\b/.test(match[2]);
-    if (hasDate || match[2].trim().length === 0) {
-      return html.replace(rightAlignedParagraph, `$1${dateStr}$3`);
-    }
-  }
-
-  return html.replace(/\b\d{1,2}\.\d{1,2}\.\d{4}\b/, dateStr);
+type HubMetrics = {
+  cvCount: number;
+  anschreibenCount: number;
+  applicationsCount: number;
+  unreadInboxCount: number;
+  docsCount: number;
+  docsByType: string[];
+  jobsCount: number;
 };
 
-const Dashboard = () => {
-  const [user, setUser] = useState<SupabaseUser | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [cvHtml, setCvHtml] = useState<string | null>(null);
-  const [anschreibenHtml, setAnschreibenHtml] = useState<string | null>(null);
-  const [isGeneratingCV, setIsGeneratingCV] = useState(false);
-  const [isGeneratingAnschreiben, setIsGeneratingAnschreiben] = useState(false);
-  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
-  const [jobData, setJobData] = useState<JobData | null>(null);
-  const [jobUrl, setJobUrl] = useState("");
-  const [documentRefreshTrigger, setDocumentRefreshTrigger] = useState(0);
+interface HubSection {
+  id: HubSectionId;
+  title: string;
+  to: string;
+  metric: string;
+  state: HubSectionState;
+  emoji: string;
+}
 
+const REQUIRED_DOC_TYPES = [
+  { key: "approbation", label: "Approbation" },
+  { key: "language_certificate", label: "Sprachzertifikat" },
+  { key: "zeugnis", label: "Zeugnis" },
+] as const;
+
+const Dashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { saveDocument, getLatestDocument } = useDocumentVersions();
 
-  const {
-    profile,
-    workExperiences,
-    educationEntries,
-    practicalExperiences,
-    certifications,
-    publications,
-    isLoading: isProfileLoading,
-    userId
-  } = useProfile();
+  const [session, setSession] = useState<Session | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isMetricsLoading, setIsMetricsLoading] = useState(true);
+  const [metrics, setMetrics] = useState<HubMetrics>({
+    cvCount: 0,
+    anschreibenCount: 0,
+    applicationsCount: 0,
+    unreadInboxCount: 0,
+    docsCount: 0,
+    docsByType: [],
+    jobsCount: 0,
+  });
+
+  const { profile, isLoading: isProfileLoading, userId } = useProfile();
   const { url: profilePhotoUrl } = useUserFileUrl(profile?.foto_url);
-
+  const hubViewLoggedRef = useRef(false);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setIsLoading(false);
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+      setSession(nextSession);
+      setIsAuthLoading(false);
 
-      if (!session) {
+      if (!nextSession) {
         navigate("/auth");
-      } else if (!isOnboardingDone(session.user.id)) {
-        const done = await checkOnboardingFromDB(session.user.id);
+        return;
+      }
+
+      if (!isOnboardingDone(nextSession.user.id)) {
+        const done = await checkOnboardingFromDB(nextSession.user.id);
         if (!done) navigate("/onboarding");
       }
     });
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setIsLoading(false);
+    supabase.auth.getSession().then(async ({ data: { session: initialSession } }) => {
+      setSession(initialSession);
+      setIsAuthLoading(false);
 
-      if (!session) {
+      if (!initialSession) {
         navigate("/auth");
-      } else if (!isOnboardingDone(session.user.id)) {
-        const done = await checkOnboardingFromDB(session.user.id);
+        return;
+      }
+
+      if (!isOnboardingDone(initialSession.user.id)) {
+        const done = await checkOnboardingFromDB(initialSession.user.id);
         if (!done) navigate("/onboarding");
       }
     });
@@ -116,168 +103,190 @@ const Dashboard = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  // Load latest documents on mount
-  useEffect(() => {
-    const loadLatestDocuments = async () => {
-      if (!userId) return;
+  const loadHubMetrics = useCallback(async (uid: string) => {
+    setIsMetricsLoading(true);
 
-      try {
-        const [latestCv, latestAnschreiben] = await Promise.all([
-          getLatestDocument(userId, "CV"),
-          getLatestDocument(userId, "Anschreiben")
-        ]);
+    const [versionsRes, docsRes, appsCountRes, unreadCountRes, jobsCountRes] = await Promise.all([
+      supabase
+        .from("document_versions")
+        .select("typ")
+        .eq("user_id", uid)
+        .in("typ", ["CV", "Anschreiben"])
+        .limit(120),
+      supabase.from("user_documents").select("doc_type").eq("user_id", uid),
+      supabase.from("applications").select("id", { head: true, count: "exact" }).eq("user_id", uid),
+      supabase
+        .from("application_messages")
+        .select("id", { head: true, count: "exact" })
+        .eq("user_id", uid)
+        .eq("direction", "inbound")
+        .eq("is_read", false),
+      supabase.from("jobs").select("id", { head: true, count: "exact" }).eq("is_published", true),
+    ]);
 
-        if (latestCv?.html_content) {
-          setCvHtml(latestCv.html_content);
-        }
-        if (latestAnschreiben?.html_content) {
-          setAnschreibenHtml(applyAnschreibenDate(latestAnschreiben.html_content, latestAnschreiben.created_at));
-        }
-      } catch (error) {
-        console.error("Error loading latest documents:", error);
-      }
-    };
+    if (versionsRes.error || docsRes.error || appsCountRes.error || unreadCountRes.error || jobsCountRes.error) {
+      console.warn("loadHubMetrics error", {
+        versions: versionsRes.error?.message,
+        docs: docsRes.error?.message,
+        apps: appsCountRes.error?.message,
+        unread: unreadCountRes.error?.message,
+        jobs: jobsCountRes.error?.message,
+      });
+    }
 
-    loadLatestDocuments();
-  }, [userId, getLatestDocument]);
+    const versionRows = versionsRes.data ?? [];
+    setMetrics({
+      cvCount: versionRows.filter((item) => item.typ === "CV").length,
+      anschreibenCount: versionRows.filter((item) => item.typ === "Anschreiben").length,
+      applicationsCount: appsCountRes.count ?? 0,
+      unreadInboxCount: unreadCountRes.count ?? 0,
+      docsCount: docsRes.data?.length ?? 0,
+      docsByType: Array.from(new Set((docsRes.data ?? []).map((doc) => doc.doc_type))),
+      jobsCount: jobsCountRes.count ?? 0,
+    });
+    setIsMetricsLoading(false);
+  }, []);
 
   useEffect(() => {
     if (!userId) return;
+    void loadHubMetrics(userId);
     void touchLastSeen(userId);
-  }, [userId]);
+  }, [loadHubMetrics, userId]);
 
-  const handleGenerateCV = async () => {
-    if (!profile?.vorname || !profile?.nachname) {
-      toast({
-        title: "Profil unvollständig",
-        description: "Bitte geben Sie mindestens Ihren Namen ein.",
-        variant: "destructive"
-      });
-      return;
-    }
+  const missingProfileFields = useMemo(
+    () => getMissingFirstApplyFields(profile, session?.user?.email),
+    [profile, session?.user?.email]
+  );
 
-    setIsGeneratingCV(true);
-    try {
-      const result = await generateCV({
-        profile,
-        workExperiences,
-        educationEntries,
-        practicalExperiences,
-        certifications,
-        publications
-      });
+  const missingDocLabels = useMemo(() => {
+    const available = new Set(metrics.docsByType);
+    return REQUIRED_DOC_TYPES.filter((doc) => !available.has(doc.key)).map((doc) => doc.label);
+  }, [metrics.docsByType]);
 
-      if (result.success && result.html) {
-        setCvHtml(result.html);
+  const sectionStates = useMemo(() => {
+    const profileReady = missingProfileFields.length === 0;
 
-        // Auto-save to database
-        if (userId) {
-          const saveResult = await saveDocument({
-            userId,
-            typ: "CV",
-            htmlContent: result.html,
-            showFoto: true,
-            showSignatur: true
-          });
+    const cvProfileState: HubSectionState =
+      profileReady && metrics.cvCount > 0 ? "done" : profileReady || metrics.cvCount > 0 ? "in_progress" : "todo";
 
-          if (saveResult.success) {
-            setDocumentRefreshTrigger((prev) => prev + 1);
-          }
-        }
+    const anschreibenState: HubSectionState = metrics.anschreibenCount > 0 ? "done" : "todo";
 
-        void logEvent("generate", { docType: "CV" }, userId);
-        void touchLastSeen(userId);
-      } else {
-        toast({
-          title: "Fehler",
-          description: result.error || "Lebenslauf konnte nicht erstellt werden.",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      console.error("Generate CV error:", error);
-      toast({
-        title: "Fehler",
-        description: "Ein unerwarteter Fehler ist aufgetreten.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsGeneratingCV(false);
-    }
-  };
+    const inboxState: HubSectionState =
+      metrics.applicationsCount === 0
+        ? "todo"
+        : metrics.unreadInboxCount > 0
+          ? "in_progress"
+          : "done";
 
-  const handleGenerateAnschreiben = async () => {
-    if (!profile?.vorname || !profile?.nachname) {
-      toast({
-        title: "Profil unvollständig",
-        description: "Bitte geben Sie mindestens Ihren Namen ein.",
-        variant: "destructive"
-      });
-      return;
-    }
+    const documentsState: HubSectionState =
+      missingDocLabels.length === 0 && metrics.docsCount > 0
+        ? "done"
+        : metrics.docsCount > 0
+          ? "in_progress"
+          : "todo";
 
-    if (!jobData?.krankenhaus && !jobData?.fachabteilung) {
-      toast({
-        title: "Stellenanzeige fehlt",
-        description: "Bitte fügen Sie Informationen zur Stelle hinzu.",
-        variant: "destructive"
-      });
-      return;
-    }
+    const jobsState: HubSectionState =
+      metrics.applicationsCount > 0 ? "done" : metrics.jobsCount > 0 ? "in_progress" : "todo";
 
-    setIsGeneratingAnschreiben(true);
-    try {
-      const result = await generateAnschreiben({
-        profile,
-        workExperiences,
-        educationEntries,
-        practicalExperiences,
-        certifications,
-        publications,
-        jobData
-      });
+    return {
+      cv_profile: cvProfileState,
+      anschreiben: anschreibenState,
+      inbox: inboxState,
+      documents: documentsState,
+      jobs: jobsState,
+    } satisfies Record<HubSectionId, HubSectionState>;
+  }, [metrics.anschreibenCount, metrics.applicationsCount, metrics.cvCount, metrics.docsCount, metrics.jobsCount, metrics.unreadInboxCount, missingDocLabels.length, missingProfileFields.length]);
 
-      if (result.success && result.html) {
-        setAnschreibenHtml(result.html);
+  const sections = useMemo<HubSection[]>(() => {
+    return [
+      {
+        id: "cv_profile",
+        title: "CV & Profile",
+        to: "/profil?focus=cv-profile",
+        metric: metrics.cvCount > 0 ? `${metrics.cvCount} CV-Versionen` : "Starten",
+        state: sectionStates.cv_profile,
+        emoji: "👤",
+      },
+      {
+        id: "anschreiben",
+        title: "Anschreiben",
+        to: "/anschreiben",
+        metric: metrics.anschreibenCount > 0 ? `${metrics.anschreibenCount} gespeichert` : "Neu erstellen",
+        state: sectionStates.anschreiben,
+        emoji: "✍️",
+      },
+      {
+        id: "inbox",
+        title: "Inbox",
+        to: "/inbox",
+        metric: metrics.unreadInboxCount > 0 ? `${metrics.unreadInboxCount} ungelesen` : "Alles aktuell",
+        state: sectionStates.inbox,
+        emoji: "📥",
+      },
+      {
+        id: "documents",
+        title: "Unterlagen",
+        to: "/unterlagen",
+        metric: `${metrics.docsCount} hochgeladen`,
+        state: sectionStates.documents,
+        emoji: "📄",
+      },
+      {
+        id: "jobs",
+        title: "Jobsbörse",
+        to: "/jobs",
+        metric: `${metrics.jobsCount} offen`,
+        state: sectionStates.jobs,
+        emoji: "💼",
+      },
+    ];
+  }, [metrics.anschreibenCount, metrics.docsCount, metrics.jobsCount, metrics.unreadInboxCount, sectionStates]);
 
-        // Auto-save to database with hospital metadata
-        if (userId) {
-          const saveResult = await saveDocument({
-            userId,
-            typ: "Anschreiben",
-            htmlContent: result.html,
-            hospitalName: jobData?.krankenhaus,
-            departmentOrSpecialty: jobData?.fachabteilung,
-            positionTitle: jobData?.position,
-            jobUrl: jobUrl || undefined,
-            showFoto: false,
-            showSignatur: true
-          });
+  const completion = useMemo(() => {
+    const done = sections.filter((section) => section.state === "done").length;
+    const inProgress = sections.filter((section) => section.state === "in_progress").length;
+    const total = sections.length;
+    const percent = Math.round((done / total) * 100);
+    return { done, inProgress, total, percent };
+  }, [sections]);
 
-          if (saveResult.success) {
-            setDocumentRefreshTrigger((prev) => prev + 1);
-          }
-        }
+  useEffect(() => {
+    if (!userId || isMetricsLoading || isProfileLoading || hubViewLoggedRef.current) return;
 
-        void logEvent("generate", { docType: "ANSCHREIBEN" }, userId);
-        void touchLastSeen(userId);
-      } else {
-        toast({
-          title: "Fehler",
-          description: result.error || "Anschreiben konnte nicht erstellt werden.",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      console.error("Generate Anschreiben error:", error);
-      toast({
-        title: "Fehler",
-        description: "Ein unerwarteter Fehler ist aufgetreten.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsGeneratingAnschreiben(false);
-    }
+    hubViewLoggedRef.current = true;
+    void logEvent(
+      "dashboard_hub_view",
+      {
+        completed_sections: completion.done,
+        in_progress_sections: completion.inProgress,
+        total_sections: completion.total,
+        progress_percent: completion.percent,
+      },
+      userId
+    );
+
+    void logEvent(
+      "dashboard_progress_snapshot",
+      {
+        progress_percent: completion.percent,
+        missing_profile_fields: missingProfileFields,
+        missing_doc_labels: missingDocLabels,
+        unread_inbox: metrics.unreadInboxCount,
+      },
+      userId
+    );
+  }, [completion.done, completion.inProgress, completion.percent, completion.total, isMetricsLoading, isProfileLoading, metrics.unreadInboxCount, missingDocLabels, missingProfileFields, userId]);
+
+  const handleSectionClick = (section: HubSection) => {
+    void logEvent(
+      "dashboard_circle_click",
+      {
+        section_id: section.id,
+        destination: section.to,
+        section_state: section.state,
+      },
+      userId
+    );
   };
 
   const handleLogout = async () => {
@@ -288,63 +297,13 @@ const Dashboard = () => {
         description: "Abmeldung fehlgeschlagen.",
         variant: "destructive",
       });
-    } else {
-      toast({
-        title: "Erfolgreich abgemeldet",
-        description: "Auf Wiedersehen!",
-      });
-      navigate("/");
+      return;
     }
+
+    navigate("/");
   };
 
-  const handleDeleteAccount = async () => {
-    setIsDeletingAccount(true);
-    try {
-      const result = await deleteAccount();
-
-      if (result.success) {
-        toast({
-          title: "Konto gelöscht",
-          description: "Ihr Konto und alle Daten wurden gelöscht."
-        });
-        await supabase.auth.signOut();
-        navigate("/", { state: { accountDeleted: true } });
-      } else {
-        toast({
-          title: "Fehler",
-          description: result.error || "Konto konnte nicht gelöscht werden.",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      console.error("Delete account error:", error);
-      toast({
-        title: "Fehler",
-        description: "Ein unerwarteter Fehler ist aufgetreten.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsDeletingAccount(false);
-    }
-  };
-
-  const handleLoadDocument = (html: string, type: "cv" | "anschreiben", createdAt?: string | null) => {
-    if (type === "cv") {
-      setCvHtml(html);
-    } else {
-      setAnschreibenHtml(applyAnschreibenDate(html, createdAt));
-    }
-    toast({
-      title: "Dokument geladen",
-      description: `${type === "cv" ? "Lebenslauf" : "Anschreiben"} wurde in die Vorschau geladen.`
-    });
-  };
-
-  const handleDocumentSaved = () => {
-    setDocumentRefreshTrigger((prev) => prev + 1);
-  };
-
-  if (isLoading || isProfileLoading) {
+  if (isAuthLoading || isProfileLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -352,43 +311,29 @@ const Dashboard = () => {
     );
   }
 
-  const SectionFallback = ({ title }: { title: string }) => (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="text-sm text-muted-foreground">
-        Lädt…
-      </CardContent>
-    </Card>
-  );
-
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation */}
       <nav className="glass-nav fixed top-0 left-0 right-0 z-50">
-        <div className="container mx-auto px-4 py-3 sm:px-6 sm:py-4 flex items-center justify-between">
+        <div className="mx-auto w-full max-w-[1120px] px-4 py-3 sm:px-6 sm:py-4 flex items-center justify-between">
           <Link to="/dashboard" className="flex items-center gap-3">
             <BrandLogo />
           </Link>
-          <div className="flex items-center gap-4">
-            {/* Avatar and Greeting */}
-            <div className="hidden md:flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="hidden md:flex items-center gap-3 pr-1">
               <Avatar className="h-9 w-9">
                 <AvatarImage src={profilePhotoUrl || undefined} alt={profile?.vorname || "User"} />
                 <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
-                  {profile?.vorname?.[0]}{profile?.nachname?.[0]}
+                  {profile?.vorname?.[0]}
+                  {profile?.nachname?.[0]}
                 </AvatarFallback>
               </Avatar>
-              <span className="text-sm font-medium text-foreground">
-                Hallo, {profile?.vorname || "User"}!
-              </span>
+              <span className="text-sm font-medium">{profile?.vorname || "Dashboard"}</span>
             </div>
             <Button asChild variant="ghost" size="sm" className="h-10 px-3 sm:h-9 sm:px-4">
-              <Link to="/profil">
-                <User className="h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">Profil</span>
-              </Link>
+              <Link to="/jobs">Jobs</Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm" className="h-10 px-3 sm:h-9 sm:px-4">
+              <Link to="/inbox">Inbox</Link>
             </Button>
             <Button variant="ghost" size="sm" onClick={handleLogout} className="h-10 px-3 sm:h-9 sm:px-4">
               <LogOut className="h-4 w-4 sm:mr-2" />
@@ -398,155 +343,52 @@ const Dashboard = () => {
         </div>
       </nav>
 
-      <div className="container mx-auto px-4 sm:px-6 pt-20 sm:pt-24 pb-8">
-        {/* Welcome Section */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2 tracking-tight">
-            Hallo{profile?.vorname ? `, ${profile.vorname}` : ""}.
-          </h1>
-        </div>
+      <div className="mx-auto w-full max-w-[1120px] px-4 sm:px-6 pt-20 sm:pt-24 pb-10 space-y-5">
+        <Card className="apple-surface-strong border-border/60">
+          <CardContent className="p-5 sm:p-6">
+            <div className="space-y-1.5">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Dashboard</p>
+              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
+                Hallo{profile?.vorname ? `, ${profile.vorname}` : ""}
+              </h1>
+            </div>
+          </CardContent>
+        </Card>
 
-        {/* Main Dashboard Layout */}
-        <div className="space-y-6">
-            {/* Profile Status Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <User className="h-5 w-5 text-primary" />
-                  </div>
-                  Ihr Profil
-                </CardTitle>
-                <CardDescription>
-                  {profile?.vorname && profile?.nachname
-                    ? `${profile.vorname} ${profile.nachname}`
-                    : "Profil unvollständig"
-                  }
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Button asChild variant="outline" className="w-full">
-                  <Link to="/profil">
-                    <Settings className="mr-2 h-4 w-4" />
-                    Profil bearbeiten
+        <div className="dashboard-circle-grid">
+          {isMetricsLoading
+            ? Array.from({ length: 5 }).map((_, index) => (
+                <div key={index} className="dashboard-orbit-card dashboard-orbit-skeleton" aria-hidden="true" />
+              ))
+            : sections.map((section) => {
+                return (
+                  <Link
+                    key={section.id}
+                    to={section.to}
+                    onClick={() => handleSectionClick(section)}
+                    className="dashboard-orbit-card apple-focus-ring"
+                  >
+                    <div className="dashboard-orbit-head">
+                      <div className="dashboard-orbit-icon-wrap">
+                        <span className="dashboard-orbit-emoji" role="img" aria-label={section.title}>
+                          {section.emoji}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="dashboard-orbit-body">
+                      <p className="dashboard-orbit-title">{section.title}</p>
+                      <p className="dashboard-orbit-metric">{section.metric}</p>
+                    </div>
+
+                    <div className="dashboard-orbit-footer">
+                      <span>Öffnen</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </div>
                   </Link>
-                </Button>
-                <Button
-                  onClick={handleGenerateCV}
-                  disabled={isGeneratingCV}
-                  className="w-full"
-                >
-                  {isGeneratingCV ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generiere...
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="mr-2 h-4 w-4" />
-                      Lebenslauf generieren
-                    </>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Job Extraction */}
-            <Suspense fallback={<SectionFallback title="Stellenanzeige" />}>
-              <JobExtractionForm
-                onJobDataExtracted={setJobData}
-                jobData={jobData}
-                setJobData={setJobData}
-                onGenerateAnschreiben={handleGenerateAnschreiben}
-                isGeneratingAnschreiben={isGeneratingAnschreiben}
-                jobUrl={jobUrl}
-                setJobUrl={setJobUrl}
-              />
-            </Suspense>
-
-            {/* Document Versions */}
-            <Suspense fallback={<SectionFallback title="Meine Dokumente" />}>
-              <DocumentVersionsList
-                onLoadDocument={handleLoadDocument}
-                userId={userId}
-                refreshTrigger={documentRefreshTrigger}
-              />
-            </Suspense>
-
-            {/* Preview */}
-            <Suspense
-              fallback={
-                <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
-                  Lädt Vorschau…
-                </div>
-              }
-            >
-              <DocumentPreview
-                cvHtml={cvHtml}
-                anschreibenHtml={anschreibenHtml}
-                profile={profile}
-                isGeneratingCV={isGeneratingCV}
-                isGeneratingAnschreiben={isGeneratingAnschreiben}
-                onGenerateCV={handleGenerateCV}
-                onGenerateAnschreiben={handleGenerateAnschreiben}
-                canGenerateAnschreiben={!!(jobData?.krankenhaus || jobData?.fachabteilung)}
-                jobData={jobData}
-                jobUrl={jobUrl}
-                userId={userId}
-                onDocumentSaved={handleDocumentSaved}
-              />
-            </Suspense>
-
-            {/* Danger Zone */}
-            <Card className="border-destructive/30">
-              <CardHeader>
-                <CardTitle className="text-destructive flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-destructive/10 flex items-center justify-center">
-                    <Trash2 className="h-5 w-5 text-destructive" />
-                  </div>
-                  DSGVO - Datenkontrolle
-                </CardTitle>
-                <CardDescription>
-                  Konto und Daten löschen
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="destructive" className="w-full">
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Account & Daten löschen
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Sind Sie sicher?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Diese Aktion kann nicht rückgängig gemacht werden. Ihr Konto und alle gespeicherten
-                        Daten (Profil, Dokumente, Fotos) werden permanent gelöscht.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={handleDeleteAccount}
-                        disabled={isDeletingAccount}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      >
-                        {isDeletingAccount ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="mr-2 h-4 w-4" />
-                        )}
-                        Endgültig löschen
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </CardContent>
-            </Card>
+                );
+              })}
         </div>
-
       </div>
     </div>
   );

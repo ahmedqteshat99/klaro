@@ -5,6 +5,9 @@ const AppFooter = () => {
     <footer className="border-t border-border/50 py-6 mt-10">
       <div className="container mx-auto px-4 sm:px-6 text-xs text-muted-foreground flex flex-col md:flex-row items-center justify-between gap-3">
         <div className="flex items-center gap-4">
+          <Link to="/agb" className="hover:text-foreground transition-colors">
+            AGB
+          </Link>
           <Link to="/datenschutz" className="hover:text-foreground transition-colors">
             Datenschutz
           </Link>

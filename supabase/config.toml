@@ -1,19 +1,34 @@
 project_id = "sfmgdvjwmoxoeqmcarbv"
 
 [functions.generate-cv]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-anschreiben]
-verify_jwt = false
+verify_jwt = true
 
 [functions.extract-job]
-verify_jwt = false
+verify_jwt = true
 
 [functions.delete-account]
-verify_jwt = false
+verify_jwt = true
 
 [functions.parse-cv]
-verify_jwt = false
+verify_jwt = true
 
 [functions.admin-delete-user]
 verify_jwt = true
+
+[functions.mailgun-inbound]
+verify_jwt = false
+
+[functions.mailgun-route-sync]
+verify_jwt = true
+
+[functions.send-application-email]
+verify_jwt = true
+
+[functions.reply-application-email]
+verify_jwt = true
+
+[functions.lifecycle-campaign-runner]
+verify_jwt = false

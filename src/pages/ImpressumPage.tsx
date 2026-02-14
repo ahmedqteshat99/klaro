@@ -27,7 +27,7 @@ const ImpressumPage = () => {
 
         <div className="prose prose-lg max-w-none text-foreground">
           <section className="mb-8">
-            <h2 className="text-xl font-semibold mb-4">Angaben gemäß § 5 DDG</h2>
+            <h2 className="text-xl font-semibold mb-4">Angaben gemäß § 5 TMG</h2>
             <p className="text-muted-foreground">
               Privatperson (nicht-kommerziell)<br />
               Name: Ahmed Quteishat<br />

@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useState, useEffect, useMemo } from "react";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { isOnboardingDone, checkOnboardingFromDB } from "@/pages/OnboardingPage";
 import { Button } from "@/components/ui/button";
@@ -13,10 +13,17 @@ import { z } from "zod";
 import AppFooter from "@/components/AppFooter";
 import BrandLogo from "@/components/BrandLogo";
 import { logEvent, touchLastSeen } from "@/lib/app-events";
+import { getAttributionMeta } from "@/lib/attribution";
+import { sanitizeNextPath, withNextParam } from "@/lib/navigation-intent";
 
 // Validation schemas
 const emailSchema = z.string().email("Bitte geben Sie eine gültige E-Mail-Adresse ein.");
-const passwordSchema = z.string().min(6, "Das Passwort muss mindestens 6 Zeichen haben.");
+const passwordSchema = z.string()
+  .min(12, "Das Passwort muss mindestens 12 Zeichen haben.")
+  .regex(/[A-Z]/, "Das Passwort muss mindestens einen Großbuchstaben enthalten.")
+  .regex(/[a-z]/, "Das Passwort muss mindestens einen Kleinbuchstaben enthalten.")
+  .regex(/[0-9]/, "Das Passwort muss mindestens eine Ziffer enthalten.")
+  .regex(/[^A-Za-z0-9]/, "Das Passwort muss mindestens ein Sonderzeichen enthalten.");
 const nameSchema = z.string().min(2, "Der Name muss mindestens 2 Zeichen haben.");
 
 const AuthPage = () => {
@@ -27,37 +34,47 @@ const AuthPage = () => {
   const [vorname, setVorname] = useState("");
   const [nachname, setNachname] = useState("");
   const [dsgvoConsent, setDsgvoConsent] = useState(false);
+  const [agbConsent, setAgbConsent] = useState(false);
+  const [medicalDataConsent, setMedicalDataConsent] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const nextPath = useMemo(
+    () => sanitizeNextPath(new URLSearchParams(location.search).get("next")),
+    [location.search]
+  );
+  const postAuthTarget = nextPath ?? "/dashboard";
+  const onboardingTarget = withNextParam("/onboarding", nextPath);
+
   const envSiteUrl = import.meta.env.VITE_PUBLIC_SITE_URL;
   const appBaseUrl =
     envSiteUrl && envSiteUrl.trim().length > 0
       ? envSiteUrl.trim().replace(/\/+$/, "")
       : window.location.origin;
-  const authRedirectUrl = `${appBaseUrl}/auth`;
+  const authRedirectUrl = withNextParam(`${appBaseUrl}/auth`, nextPath);
 
   // Check if user is already logged in
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_IN" && session?.user) {
-        await logEvent("login", undefined, session.user.id);
+        await logEvent("login", getAttributionMeta() ?? undefined, session.user.id);
         await touchLastSeen(session.user.id);
       }
 
       if (event === "SIGNED_UP" && session?.user) {
-        await logEvent("signup", undefined, session.user.id);
+        await logEvent("signup", getAttributionMeta() ?? undefined, session.user.id);
         await touchLastSeen(session.user.id);
       }
 
       if (session) {
         const userId = session.user.id;
         if (isOnboardingDone(userId)) {
-          navigate("/dashboard");
+          navigate(postAuthTarget, { replace: true });
         } else {
           const done = await checkOnboardingFromDB(userId);
-          navigate(done ? "/dashboard" : "/onboarding");
+          navigate(done ? postAuthTarget : onboardingTarget, { replace: true });
         }
       }
     });
@@ -66,16 +83,16 @@ const AuthPage = () => {
       if (session) {
         const userId = session.user.id;
         if (isOnboardingDone(userId)) {
-          navigate("/dashboard");
+          navigate(postAuthTarget, { replace: true });
         } else {
           const done = await checkOnboardingFromDB(userId);
-          navigate(done ? "/dashboard" : "/onboarding");
+          navigate(done ? postAuthTarget : onboardingTarget, { replace: true });
         }
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, onboardingTarget, postAuthTarget]);
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -115,6 +132,14 @@ const AuthPage = () => {
 
       if (!dsgvoConsent) {
         newErrors.dsgvo = "Sie müssen der Datenschutzerklärung zustimmen.";
+      }
+
+      if (!agbConsent) {
+        newErrors.agb = "Sie müssen den AGB zustimmen.";
+      }
+
+      if (!medicalDataConsent) {
+        newErrors.medicalData = "Sie müssen der Verarbeitung Ihrer medizinischen Berufsdaten zustimmen.";
       }
     }
 
@@ -173,6 +198,8 @@ const AuthPage = () => {
               dsgvo_consent: dsgvoConsent,
               dsgvo_consent_date: new Date().toISOString(),
               consentAt: new Date().toISOString(),
+              medical_data_consent: medicalDataConsent,
+              medical_data_consent_date: new Date().toISOString(),
             },
           },
         });
@@ -378,32 +405,83 @@ const AuthPage = () => {
                 </div>
 
                 {!isLogin && (
-                  <div className="space-y-2">
-                    <div className="flex items-start space-x-3">
-                      <Checkbox
-                        id="dsgvo"
-                        checked={dsgvoConsent}
-                        onCheckedChange={(checked) => setDsgvoConsent(checked as boolean)}
-                        disabled={isLoading}
-                        className="mt-0.5"
-                      />
-                      <label
-                        htmlFor="dsgvo"
-                        className="text-sm text-muted-foreground leading-relaxed peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                      >
-                        Ich habe die{" "}
-                        <Link to="/datenschutz" className="text-primary hover:underline">
-                          Datenschutzerklärung
-                        </Link>{" "}
-                        gelesen und stimme der Verarbeitung meiner Daten zu.
-                      </label>
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <div className="flex items-start space-x-3">
+                        <Checkbox
+                          id="agb"
+                          checked={agbConsent}
+                          onCheckedChange={(checked) => setAgbConsent(checked as boolean)}
+                          disabled={isLoading}
+                          className="mt-0.5"
+                        />
+                        <label
+                          htmlFor="agb"
+                          className="text-sm text-muted-foreground leading-relaxed peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                        >
+                          Ich habe die{" "}
+                          <Link to="/agb" className="text-primary hover:underline">
+                            Allgemeinen Geschäftsbedingungen (AGB)
+                          </Link>{" "}
+                          gelesen und akzeptiere diese.
+                        </label>
+                      </div>
+                      {errors.agb && (
+                        <p className="text-sm text-destructive">{errors.agb}</p>
+                      )}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-2">
+
+                    <div className="space-y-2">
+                      <div className="flex items-start space-x-3">
+                        <Checkbox
+                          id="dsgvo"
+                          checked={dsgvoConsent}
+                          onCheckedChange={(checked) => setDsgvoConsent(checked as boolean)}
+                          disabled={isLoading}
+                          className="mt-0.5"
+                        />
+                        <label
+                          htmlFor="dsgvo"
+                          className="text-sm text-muted-foreground leading-relaxed peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                        >
+                          Ich habe die{" "}
+                          <Link to="/datenschutz" className="text-primary hover:underline">
+                            Datenschutzerklärung
+                          </Link>{" "}
+                          gelesen und stimme der Verarbeitung meiner Daten zu.
+                        </label>
+                      </div>
+                      {errors.dsgvo && (
+                        <p className="text-sm text-destructive">{errors.dsgvo}</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-start space-x-3">
+                        <Checkbox
+                          id="medical-data"
+                          checked={medicalDataConsent}
+                          onCheckedChange={(checked) => setMedicalDataConsent(checked as boolean)}
+                          disabled={isLoading}
+                          className="mt-0.5"
+                        />
+                        <label
+                          htmlFor="medical-data"
+                          className="text-sm text-muted-foreground leading-relaxed peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                        >
+                          Ich willige <strong>ausdrücklich</strong> ein, dass meine medizinischen Berufsdaten
+                          (Fachrichtung, Facharzt-Status, Ausbildungsinhalte) zur Erstellung meiner
+                          Bewerbungsunterlagen verarbeitet werden (DSGVO Art. 9 Abs. 2 lit. a).
+                        </label>
+                      </div>
+                      {errors.medicalData && (
+                        <p className="text-sm text-destructive">{errors.medicalData}</p>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">
                       Privates MVP. Daten nur für Lebenslauf/Anschreiben.
                     </p>
-                    {errors.dsgvo && (
-                      <p className="text-sm text-destructive">{errors.dsgvo}</p>
-                    )}
                   </div>
                 )}
 

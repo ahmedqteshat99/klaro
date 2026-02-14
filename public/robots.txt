@@ -1,2 +1,10 @@
 User-agent: *
-Disallow: /
+Allow: /
+Disallow: /auth
+Disallow: /dashboard
+Disallow: /onboarding
+Disallow: /profil
+Disallow: /inbox
+Disallow: /admin
+
+Sitemap: https://klaro.tools/sitemap.xml

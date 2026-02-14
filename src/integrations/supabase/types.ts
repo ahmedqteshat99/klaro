@@ -73,13 +73,15 @@ export type Database = {
       }
       application_messages: {
         Row: {
-          application_id: string
+          application_id: string | null
           created_at: string | null
           direction: string
           headers: Json | null
           html_body: string | null
           id: string
           is_read: boolean
+          match_confidence: string | null
+          match_signals: Json | null
           message_id: string | null
           payload: Json | null
           provider_message_id: string | null
@@ -88,15 +90,18 @@ export type Database = {
           sender: string | null
           subject: string | null
           text_body: string | null
+          user_id: string | null
         }
         Insert: {
-          application_id: string
+          application_id?: string | null
           created_at?: string | null
           direction: string
           headers?: Json | null
           html_body?: string | null
           id?: string
           is_read?: boolean
+          match_confidence?: string | null
+          match_signals?: Json | null
           message_id?: string | null
           payload?: Json | null
           provider_message_id?: string | null
@@ -105,15 +110,18 @@ export type Database = {
           sender?: string | null
           subject?: string | null
           text_body?: string | null
+          user_id?: string | null
         }
         Update: {
-          application_id?: string
+          application_id?: string | null
           created_at?: string | null
           direction?: string
           headers?: Json | null
           html_body?: string | null
           id?: string
           is_read?: boolean
+          match_confidence?: string | null
+          match_signals?: Json | null
           message_id?: string | null
           payload?: Json | null
           provider_message_id?: string | null
@@ -122,6 +130,7 @@ export type Database = {
           sender?: string | null
           subject?: string | null
           text_body?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -478,6 +487,54 @@ export type Database = {
         }
         Relationships: []
       }
+      lifecycle_email_logs: {
+        Row: {
+          campaign_type: string
+          created_at: string
+          dedupe_key: string
+          error_message: string | null
+          id: string
+          meta: Json | null
+          provider_message_id: string | null
+          recipient_email: string
+          sent_at: string | null
+          status: string
+          subject: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          campaign_type: string
+          created_at?: string
+          dedupe_key: string
+          error_message?: string | null
+          id?: string
+          meta?: Json | null
+          provider_message_id?: string | null
+          recipient_email: string
+          sent_at?: string | null
+          status?: string
+          subject: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          campaign_type?: string
+          created_at?: string
+          dedupe_key?: string
+          error_message?: string | null
+          id?: string
+          meta?: Json | null
+          provider_message_id?: string | null
+          recipient_email?: string
+          sent_at?: string | null
+          status?: string
+          subject?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       practical_experiences: {
         Row: {
           beschreibung: string | null
@@ -534,6 +591,7 @@ export type Database = {
           geburtsdatum: string | null
           id: string
           interessen: string | null
+          klaro_email: string | null
           last_seen_at: string | null
           medizinische_kenntnisse: string[] | null
           nachname: string
@@ -567,6 +625,7 @@ export type Database = {
           geburtsdatum?: string | null
           id?: string
           interessen?: string | null
+          klaro_email?: string | null
           last_seen_at?: string | null
           medizinische_kenntnisse?: string[] | null
           nachname: string
@@ -600,6 +659,7 @@ export type Database = {
           geburtsdatum?: string | null
           id?: string
           interessen?: string | null
+          klaro_email?: string | null
           last_seen_at?: string | null
           medizinische_kenntnisse?: string[] | null
           nachname?: string
@@ -616,6 +676,37 @@ export type Database = {
           user_id?: string
           visibility_status?: string | null
           vorname?: string
+        }
+        Relationships: []
+      }
+      user_email_aliases: {
+        Row: {
+          alias: string
+          created_at: string | null
+          deactivated_at: string | null
+          domain: string
+          full_address: string | null
+          id: string
+          is_active: boolean
+          user_id: string
+        }
+        Insert: {
+          alias: string
+          created_at?: string | null
+          deactivated_at?: string | null
+          domain?: string
+          id?: string
+          is_active?: boolean
+          user_id: string
+        }
+        Update: {
+          alias?: string
+          created_at?: string | null
+          deactivated_at?: string | null
+          domain?: string
+          id?: string
+          is_active?: boolean
+          user_id?: string
         }
         Relationships: []
       }
@@ -696,6 +787,42 @@ export type Database = {
           titel?: string
           typ?: string | null
           updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_notification_preferences: {
+        Row: {
+          created_at: string
+          job_alerts_enabled: boolean
+          last_job_alert_at: string | null
+          last_onboarding_nudge_at: string | null
+          last_reactivation_email_at: string | null
+          onboarding_nudges_enabled: boolean
+          reactivation_emails_enabled: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          job_alerts_enabled?: boolean
+          last_job_alert_at?: string | null
+          last_onboarding_nudge_at?: string | null
+          last_reactivation_email_at?: string | null
+          onboarding_nudges_enabled?: boolean
+          reactivation_emails_enabled?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          job_alerts_enabled?: boolean
+          last_job_alert_at?: string | null
+          last_onboarding_nudge_at?: string | null
+          last_reactivation_email_at?: string | null
+          onboarding_nudges_enabled?: boolean
+          reactivation_emails_enabled?: boolean
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
