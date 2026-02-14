@@ -777,13 +777,16 @@ const JobDetailPage = () => {
       );
       const defaultHtml = toEmailHtml(defaultText);
 
+      // Use placeholder email if job has no contact_email (allows PDF download without sending)
+      const recipientEmail = job.contact_email || "no-reply@klaro.tools";
+
       const { data: applicationRow, error: applicationError } = await supabase
         .from("applications")
         .insert({
           user_id: userId,
           job_id: job.id,
           status: "draft",
-          recipient_email: job.contact_email,
+          recipient_email: recipientEmail,
           subject: defaultSubject,
           message_text: defaultText,
           message_html: defaultHtml,
