@@ -3,8 +3,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { Link2, Loader2, Edit3, Search, FileEdit, AlertCircle } from "lucide-react";
+import { Link2, Loader2, Edit3, Search, FileEdit, AlertCircle, Sparkles } from "lucide-react";
 import { extractJobData } from "@/lib/api/generation";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -46,7 +47,6 @@ const jobFields: Array<{ key: keyof JobData; label: string }> = [
   { key: "anforderungen", label: "Anforderungen" }
 ];
 
-
 const JobExtractionForm = ({
   onJobDataExtracted,
   jobData,
@@ -57,6 +57,7 @@ const JobExtractionForm = ({
   setJobUrl
 }: JobExtractionFormProps) => {
   const [isExtracting, setIsExtracting] = useState(false);
+  const [legalConsent, setLegalConsent] = useState(false); // Default to false
   const [showManualForm, setShowManualForm] = useState(false);
   const [extractionFailed, setExtractionFailed] = useState(false);
   const [manualText, setManualText] = useState("");
@@ -184,42 +185,55 @@ const JobExtractionForm = ({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* URL Input with Extract button - HIDDEN for legal compliance */}
-        {false && (
-          <div className="space-y-2">
-            <Label htmlFor="jobUrl">Stellenanzeigen-URL</Label>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Input
-                id="jobUrl"
-                type="url"
-                inputMode="url"
-                autoComplete="url"
-                value={jobUrl}
-                onChange={(e) => setJobUrl(e.target.value)}
-                placeholder="https://stellenanzeige.de/arzt-stelle..."
-                disabled={isExtracting}
-              />
-              <Button
-                onClick={handleExtract}
-                disabled={isExtracting || !jobUrl.trim()}
-                className="shrink-0 bg-neutral-900 text-white hover:bg-neutral-800 w-full sm:w-auto"
-              >
-                {isExtracting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <>
-                    Anschreiben generieren
-                    <img
-                      src="https://raw.githubusercontent.com/lobehub/lobe-icons/refs/heads/master/packages/static-png/dark/claude-color.png"
-                      alt="Claude"
-                      className="h-4 w-4"
-                    />
-                  </>
-                )}
-              </Button>
-            </div>
+        <div className="bg-muted/30 p-3 rounded-md border border-border/50 mb-4">
+          <div className="flex items-start gap-2">
+            <Checkbox
+              id="legal-consent"
+              checked={legalConsent}
+              onCheckedChange={(checked) => setLegalConsent(checked as boolean)}
+            />
+            <Label htmlFor="legal-consent" className="text-xs text-muted-foreground leading-normal cursor-pointer">
+              Ich bestätige, dass ich berechtigt bin, diese Stellenanzeige für meine <strong>persönliche Bewerbung</strong> zu verwenden.
+              Mir ist bewusst, dass Klaro die Daten nur <strong>temporär verarbeitet</strong> und nicht dauerhaft speichert.
+              (Automatisches Auslesen via Firecrawl/AI).
+            </Label>
           </div>
-        )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="jobUrl">Stellenanzeigen-URL</Label>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Input
+              id="jobUrl"
+              type="url"
+              inputMode="url"
+              autoComplete="url"
+              value={jobUrl}
+              onChange={(e) => setJobUrl(e.target.value)}
+              placeholder="https://stellenanzeige.de/arzt-stelle..."
+              disabled={isExtracting}
+            />
+            <Button
+              onClick={handleExtract}
+              disabled={isExtracting || !jobUrl.trim() || !legalConsent}
+              className="shrink-0 bg-neutral-900 text-white hover:bg-neutral-800 w-full sm:w-auto"
+            >
+              {isExtracting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  Daten abrufen
+                  <Sparkles className="h-4 w-4 ml-2" aria-hidden="true" />
+                </>
+              )}
+            </Button>
+          </div>
+          {!legalConsent && jobUrl.length > 0 && (
+            <p className="text-xs text-destructive animate-pulse">
+              Bitte bestätigen Sie oben die private Nutzung.
+            </p>
+          )}
+        </div>
 
         {!showManualForm && (
           <Button variant="link" onClick={handleManualEntry} className="px-0">
@@ -241,38 +255,36 @@ const JobExtractionForm = ({
 
         {showManualForm && (
           <div className="space-y-4 pt-4 border-t">
-            {/* Text extraction - HIDDEN for legal compliance */}
-            {false && extractionFailed && (
-              <div className="space-y-2">
-                <Label htmlFor="manualText">Stellenanzeigen-Text (optional)</Label>
-                <Textarea
-                  id="manualText"
-                  value={manualText}
-                  onChange={(e) => setManualText(e.target.value)}
-                  placeholder="Fügen Sie hier den gesamten Text der Stellenanzeige ein..."
-                  rows={4}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleExtractFromText}
-                  disabled={isExtracting || !manualText.trim()}
-                  className="w-full"
-                >
-                  {isExtracting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Analysiere Text...
-                    </>
-                  ) : (
-                    <>
-                      <Search className="mr-2 h-4 w-4" />
-                      Text analysieren
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
+            {/* Text extraction enabled */}
+            <div className="space-y-2">
+              <Label htmlFor="manualText">Stellenanzeigen-Text (optional)</Label>
+              <Textarea
+                id="manualText"
+                value={manualText}
+                onChange={(e) => setManualText(e.target.value)}
+                placeholder="Fügen Sie hier den gesamten Text der Stellenanzeige ein..."
+                rows={4}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleExtractFromText}
+                disabled={isExtracting || !manualText.trim() || !legalConsent}
+                className="w-full"
+              >
+                {isExtracting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Analysiere Text...
+                  </>
+                ) : (
+                  <>
+                    <Search className="mr-2 h-4 w-4" />
+                    Text analysieren
+                  </>
+                )}
+              </Button>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">

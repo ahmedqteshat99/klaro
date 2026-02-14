@@ -18,7 +18,10 @@ import { sanitizeNextPath, withNextParam } from "@/lib/navigation-intent";
 
 // Validation schemas
 const emailSchema = z.string().email("Bitte geben Sie eine gültige E-Mail-Adresse ein.");
-const passwordSchema = z.string()
+// Keep login permissive so legacy users can still sign in with older passwords.
+// Enforce strong passwords only for new sign-ups.
+const loginPasswordSchema = z.string().min(6, "Das Passwort muss mindestens 6 Zeichen haben.");
+const signupPasswordSchema = z.string()
   .min(12, "Das Passwort muss mindestens 12 Zeichen haben.")
   .regex(/[A-Z]/, "Das Passwort muss mindestens einen Großbuchstaben enthalten.")
   .regex(/[a-z]/, "Das Passwort muss mindestens einen Kleinbuchstaben enthalten.")
@@ -105,7 +108,7 @@ const AuthPage = () => {
     }
 
     try {
-      passwordSchema.parse(password);
+      (isLogin ? loginPasswordSchema : signupPasswordSchema).parse(password);
     } catch (e) {
       if (e instanceof z.ZodError) {
         newErrors.password = e.errors[0].message;

@@ -1,10 +1,12 @@
 import { Loader2 } from "lucide-react";
+import { Navigate, useLocation } from "react-router-dom";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import AdminForbidden from "@/pages/AdminForbidden";
 
 const AdminRoute = () => {
-  const { isAdmin, isLoading } = useIsAdmin();
+  const { isAdmin, isLoading, userId } = useIsAdmin();
+  const location = useLocation();
 
   if (isLoading) {
     return (
@@ -15,6 +17,10 @@ const AdminRoute = () => {
   }
 
   if (!isAdmin) {
+    if (!userId) {
+      const next = `${location.pathname}${location.search}${location.hash ?? ""}`;
+      return <Navigate to={`/auth?next=${encodeURIComponent(next)}`} replace />;
+    }
     return <AdminForbidden />;
   }
 

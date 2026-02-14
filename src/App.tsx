@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -6,13 +6,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { captureAttributionFromLocation } from "@/lib/attribution";
 import { initializeKlaro } from "@/lib/cookie-consent";
-import { supabase } from "@/integrations/supabase/client";
 import AdminRoute from "./components/admin/AdminRoute";
 import "klaro/dist/klaro.css";
 import "@/styles/cookie-banner.css";
 
 const LandingPage = lazy(() => import("./pages/LandingPage"));
-const ComingSoonPage = lazy(() => import("./pages/ComingSoonPage"));
 const AuthPage = lazy(() => import("./pages/AuthPage"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -47,57 +45,6 @@ const AttributionTracker = () => {
   return null;
 };
 
-const MaintenanceDashboardRoute = () => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAllowed, setIsAllowed] = useState(false);
-  const allowedEmails = useMemo(
-    () =>
-      (import.meta.env.VITE_MAINTENANCE_ALLOWED_EMAILS ?? "")
-        .split(",")
-        .map((email: string) => email.trim().toLowerCase())
-        .filter(Boolean),
-    []
-  );
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const resolveAccess = (email?: string | null) => {
-      if (!isMounted) return;
-      const normalizedEmail = email?.trim().toLowerCase() ?? "";
-      setIsAllowed(Boolean(normalizedEmail) && allowedEmails.includes(normalizedEmail));
-      setIsLoading(false);
-    };
-
-    supabase.auth
-      .getSession()
-      .then(({ data: { session } }) => resolveAccess(session?.user?.email));
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      resolveAccess(session?.user?.email);
-    });
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
-  }, [allowedEmails]);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-sm text-muted-foreground">Lädt…</p>
-      </div>
-    );
-  }
-
-  if (!isAllowed) {
-    return <ComingSoonPage />;
-  }
-
-  return <Dashboard />;
-};
-
 const App = () => {
   // Initialize cookie consent on mount
   useEffect(() => {
@@ -119,11 +66,11 @@ const App = () => {
             }
           >
             <Routes>
-              <Route path="/" element={<ComingSoonPage />} />
+              <Route path="/" element={<LandingPage />} />
               <Route path="/landing" element={<LandingPage />} />
               <Route path="/auth" element={<AuthPage />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
-              <Route path="/dashboard" element={<MaintenanceDashboardRoute />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/onboarding" element={<OnboardingPage />} />
               <Route path="/profil" element={<ProfilPage />} />
               <Route path="/unterlagen" element={<UnterlagenPage />} />

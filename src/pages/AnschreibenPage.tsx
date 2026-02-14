@@ -27,6 +27,7 @@ import {
   Loader2,
   PenTool,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 
 interface ComposerJobData {
@@ -297,6 +298,35 @@ const AnschreibenPage = () => {
     });
   };
 
+  const handleDeleteVersion = async (versionId: string) => {
+    if (!userId) return;
+
+    try {
+      const { error } = await supabase
+        .from('document_versions')
+        .delete()
+        .eq('id', versionId)
+        .eq('user_id', userId); // Security: only delete own versions
+
+      if (error) throw error;
+
+      toast({
+        title: "Version gelöscht",
+        description: "Die Anschreiben-Version wurde erfolgreich entfernt.",
+      });
+
+      // Reload versions list
+      await loadVersions();
+    } catch (error) {
+      console.error('Delete version error:', error);
+      toast({
+        variant: "destructive",
+        title: "Fehler",
+        description: "Version konnte nicht gelöscht werden.",
+      });
+    }
+  };
+
   const handleExportPdf = async () => {
     if (!anschreibenHtml) return;
 
@@ -409,14 +439,23 @@ const AnschreibenPage = () => {
                             ) : null}
                           </div>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleLoadVersion(doc)}
-                          className="shrink-0"
-                        >
-                          Laden
-                        </Button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleLoadVersion(doc)}
+                          >
+                            Laden
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteVersion(doc.id)}
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
