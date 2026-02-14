@@ -34,7 +34,6 @@ const AuthPage = () => {
   const [vorname, setVorname] = useState("");
   const [nachname, setNachname] = useState("");
   const [dsgvoConsent, setDsgvoConsent] = useState(false);
-  const [agbConsent, setAgbConsent] = useState(false);
   const [medicalDataConsent, setMedicalDataConsent] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -131,11 +130,7 @@ const AuthPage = () => {
       }
 
       if (!dsgvoConsent) {
-        newErrors.dsgvo = "Sie müssen der Datenschutzerklärung zustimmen.";
-      }
-
-      if (!agbConsent) {
-        newErrors.agb = "Sie müssen den AGB zustimmen.";
+        newErrors.dsgvo = "Sie müssen den Bedingungen zustimmen.";
       }
 
       if (!medicalDataConsent) {
@@ -158,7 +153,7 @@ const AuthPage = () => {
 
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data: { session }, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
@@ -183,15 +178,22 @@ const AuthPage = () => {
               variant: "destructive",
             });
           }
+        } else if (session?.user && !session.user.email_confirmed_at) {
+          // Check if email is verified (additional security check)
+          toast({
+            variant: "destructive",
+            title: "E-Mail nicht bestätigt",
+            description: "Bitte bestätigen Sie Ihre E-Mail-Adresse, bevor Sie sich anmelden. Prüfen Sie Ihren Posteingang.",
+            duration: 8000,
+          });
+          await supabase.auth.signOut(); // Force logout
         }
       } else {
-        const redirectUrl = authRedirectUrl;
-
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            emailRedirectTo: redirectUrl,
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
             data: {
               vorname,
               nachname,
@@ -218,19 +220,15 @@ const AuthPage = () => {
               variant: "destructive",
             });
           }
-        } else if (data.session) {
-          // User is auto-confirmed and logged in
-          toast({
-            title: "Willkommen!",
-            description: "Sie wurden erfolgreich registriert und angemeldet.",
-          });
-          // Redirect handled by onAuthStateChange
         } else {
-          // User needs email verification
+          // ALWAYS require email verification (don't check data.session)
           toast({
             title: "Registrierung erfolgreich!",
-            description: "Bitte prüfen Sie Ihre E-Mails und bestätigen Sie Ihre Registrierung.",
+            description: "Bitte prüfen Sie Ihre E-Mails und bestätigen Sie Ihre Adresse, bevor Sie sich anmelden.",
+            duration: 10000,
           });
+          // Redirect to login page (not auto-login)
+          setIsLogin(true);
         }
       }
     } catch (error) {
@@ -271,8 +269,6 @@ const AuthPage = () => {
       setIsLoading(false);
     }
   };
-
-
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -405,32 +401,7 @@ const AuthPage = () => {
                 </div>
 
                 {!isLogin && (
-                  <div className="space-y-3">
-                    <div className="space-y-2">
-                      <div className="flex items-start space-x-3">
-                        <Checkbox
-                          id="agb"
-                          checked={agbConsent}
-                          onCheckedChange={(checked) => setAgbConsent(checked as boolean)}
-                          disabled={isLoading}
-                          className="mt-0.5"
-                        />
-                        <label
-                          htmlFor="agb"
-                          className="text-sm text-muted-foreground leading-relaxed peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                        >
-                          Ich habe die{" "}
-                          <Link to="/agb" className="text-primary hover:underline">
-                            Allgemeinen Geschäftsbedingungen (AGB)
-                          </Link>{" "}
-                          gelesen und akzeptiere diese.
-                        </label>
-                      </div>
-                      {errors.agb && (
-                        <p className="text-sm text-destructive">{errors.agb}</p>
-                      )}
-                    </div>
-
+                  <>
                     <div className="space-y-2">
                       <div className="flex items-start space-x-3">
                         <Checkbox
@@ -445,10 +416,14 @@ const AuthPage = () => {
                           className="text-sm text-muted-foreground leading-relaxed peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                         >
                           Ich habe die{" "}
-                          <Link to="/datenschutz" className="text-primary hover:underline">
+                          <Link to="/datenschutz" className="text-primary hover:underline" target="_blank">
                             Datenschutzerklärung
                           </Link>{" "}
-                          gelesen und stimme der Verarbeitung meiner Daten zu.
+                          und{" "}
+                          <Link to="/agb" className="text-primary hover:underline" target="_blank">
+                            AGB
+                          </Link>{" "}
+                          gelesen und stimme diesen zu.
                         </label>
                       </div>
                       {errors.dsgvo && (
@@ -470,8 +445,7 @@ const AuthPage = () => {
                           className="text-sm text-muted-foreground leading-relaxed peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                         >
                           Ich willige <strong>ausdrücklich</strong> ein, dass meine medizinischen Berufsdaten
-                          (Fachrichtung, Facharzt-Status, Ausbildungsinhalte) zur Erstellung meiner
-                          Bewerbungsunterlagen verarbeitet werden (DSGVO Art. 9 Abs. 2 lit. a).
+                          zur Erstellung meiner Bewerbungsunterlagen verarbeitet werden (DSGVO Art. 9).
                         </label>
                       </div>
                       {errors.medicalData && (
@@ -479,10 +453,10 @@ const AuthPage = () => {
                       )}
                     </div>
 
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground mt-2">
                       Privates MVP. Daten nur für Lebenslauf/Anschreiben.
                     </p>
-                  </div>
+                  </>
                 )}
 
                 <Button type="submit" className="w-full h-12" disabled={isLoading}>
@@ -490,6 +464,44 @@ const AuthPage = () => {
                   {isLogin ? "Anmelden" : "Registrieren"}
                 </Button>
               </form>
+
+              {isLogin && (
+                <div className="text-center mt-4">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!email) {
+                        toast({
+                          title: "E-Mail-Adresse erforderlich",
+                          description: "Bitte geben Sie Ihre E-Mail-Adresse ein.",
+                          variant: "destructive"
+                        });
+                        return;
+                      }
+                      const { error } = await supabase.auth.resend({
+                        type: 'signup',
+                        email: email,
+                      });
+                      if (error) {
+                        toast({
+                          variant: "destructive",
+                          title: "Fehler",
+                          description: error.message
+                        });
+                      } else {
+                        toast({
+                          title: "Bestätigungs-E-Mail erneut gesendet",
+                          description: "Prüfen Sie Ihren Posteingang."
+                        });
+                      }
+                    }}
+                    className="text-sm text-primary hover:underline"
+                    disabled={isLoading}
+                  >
+                    Bestätigungs-E-Mail erneut senden
+                  </button>
+                </div>
+              )}
 
               <div className="text-center text-sm">
                 <span className="text-muted-foreground">

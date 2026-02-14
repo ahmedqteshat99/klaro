@@ -184,40 +184,42 @@ const JobExtractionForm = ({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* URL Input with Extract button */}
-        <div className="space-y-2">
-          <Label htmlFor="jobUrl">Stellenanzeigen-URL</Label>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <Input
-              id="jobUrl"
-              type="url"
-              inputMode="url"
-              autoComplete="url"
-              value={jobUrl}
-              onChange={(e) => setJobUrl(e.target.value)}
-              placeholder="https://stellenanzeige.de/arzt-stelle..."
-              disabled={isExtracting}
-            />
-            <Button
-              onClick={handleExtract}
-              disabled={isExtracting || !jobUrl.trim()}
-              className="shrink-0 bg-neutral-900 text-white hover:bg-neutral-800 w-full sm:w-auto"
-            >
-              {isExtracting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  Anschreiben generieren
-                  <img
-                    src="https://raw.githubusercontent.com/lobehub/lobe-icons/refs/heads/master/packages/static-png/dark/claude-color.png"
-                    alt="Claude"
-                    className="h-4 w-4"
-                  />
-                </>
-              )}
-            </Button>
+        {/* URL Input with Extract button - HIDDEN for legal compliance */}
+        {false && (
+          <div className="space-y-2">
+            <Label htmlFor="jobUrl">Stellenanzeigen-URL</Label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Input
+                id="jobUrl"
+                type="url"
+                inputMode="url"
+                autoComplete="url"
+                value={jobUrl}
+                onChange={(e) => setJobUrl(e.target.value)}
+                placeholder="https://stellenanzeige.de/arzt-stelle..."
+                disabled={isExtracting}
+              />
+              <Button
+                onClick={handleExtract}
+                disabled={isExtracting || !jobUrl.trim()}
+                className="shrink-0 bg-neutral-900 text-white hover:bg-neutral-800 w-full sm:w-auto"
+              >
+                {isExtracting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    Anschreiben generieren
+                    <img
+                      src="https://raw.githubusercontent.com/lobehub/lobe-icons/refs/heads/master/packages/static-png/dark/claude-color.png"
+                      alt="Claude"
+                      className="h-4 w-4"
+                    />
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
 
         {!showManualForm && (
           <Button variant="link" onClick={handleManualEntry} className="px-0">
@@ -239,7 +241,8 @@ const JobExtractionForm = ({
 
         {showManualForm && (
           <div className="space-y-4 pt-4 border-t">
-            {extractionFailed && (
+            {/* Text extraction - HIDDEN for legal compliance */}
+            {false && extractionFailed && (
               <div className="space-y-2">
                 <Label htmlFor="manualText">Stellenanzeigen-Text (optional)</Label>
                 <Textarea

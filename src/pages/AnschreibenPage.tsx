@@ -487,6 +487,16 @@ const AnschreibenPage = () => {
         open={showAiConsentModal}
         onConsent={handleAiConsentGranted}
         onDecline={handleAiConsentDeclined}
+        onUseManualMode={() => {
+          setShowAiConsentModal(false);
+          setPendingGeneration(false);
+          toast({
+            title: "Alternative: Anschreiben manuell erstellen",
+            description: "Sie werden zu 'Unterlagen' weitergeleitet, wo Sie Ihr Anschreiben hochladen können.",
+          });
+          // Redirect to Unterlagen page with focus on Anschreiben upload
+          navigate('/unterlagen?tab=anschreiben');
+        }}
       />
     </div>
   );
