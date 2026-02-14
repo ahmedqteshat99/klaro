@@ -1,9 +1,11 @@
 import { useState, useEffect, lazy, Suspense } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useProfile } from "@/hooks/useProfile";
 import { useDocumentVersions } from "@/hooks/useDocumentVersions";
 import { generateCV, generateAnschreiben } from "@/lib/api/generation";
+import { getMissingFirstApplyFields, hasMinimumFirstApplyProfile } from "@/lib/first-apply";
+import type { TablesInsert } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -12,8 +14,9 @@ import {
     ChevronRight, SkipForward, Loader2, CheckCircle2, ArrowLeft
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
-import { logEvent, touchLastSeen } from "@/lib/app-events";
+import { logEvent, logFunnelEvent, touchLastSeen } from "@/lib/app-events";
 import { useUserFileUrl } from "@/hooks/useUserFileUrl";
+import { sanitizeNextPath, withNextParam } from "@/lib/navigation-intent";
 
 const CvImportCard = lazy(() => import("@/components/profile/CvImportCard"));
 const PhotoUpload = lazy(() => import("@/components/profile/PhotoUpload"));
@@ -110,10 +113,17 @@ const OnboardingPage = () => {
         anforderungen: string | null;
     } | null>(null);
     const [jobUrl, setJobUrl] = useState("");
+    const [sessionEmail, setSessionEmail] = useState<string | null>(null);
+    const [sessionFirstName, setSessionFirstName] = useState<string | null>(null);
+    const [sessionLastName, setSessionLastName] = useState<string | null>(null);
+    const [isAutoFilling, setIsAutoFilling] = useState(false);
 
+    const location = useLocation();
     const navigate = useNavigate();
     const { toast } = useToast();
     const { saveDocument } = useDocumentVersions();
+    const nextPath = sanitizeNextPath(new URLSearchParams(location.search).get("next"));
+    const isFirstApplyFlow = Boolean(nextPath?.startsWith("/jobs/") && nextPath.includes("action=apply"));
 
     const {
         profile,
@@ -147,11 +157,51 @@ const OnboardingPage = () => {
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (!session) {
-                navigate("/auth");
+                navigate(withNextParam("/auth", nextPath), { replace: true });
+            } else {
+                setSessionEmail(session.user.email ?? null);
+                setSessionFirstName((session.user.user_metadata?.vorname as string | undefined) ?? null);
+                setSessionLastName((session.user.user_metadata?.nachname as string | undefined) ?? null);
             }
             setIsLoading(false);
         });
-    }, [navigate]);
+    }, [navigate, nextPath]);
+
+    useEffect(() => {
+        if (!isFirstApplyFlow || !userId || isProfileLoading || isAutoFilling) return;
+
+        const maybePrefill = async () => {
+            const updates: Pick<TablesInsert<"profiles">, "vorname" | "nachname" | "email"> = {};
+            if (!profile?.vorname && sessionFirstName) updates.vorname = sessionFirstName;
+            if (!profile?.nachname && sessionLastName) updates.nachname = sessionLastName;
+            if (!profile?.email && sessionEmail) updates.email = sessionEmail;
+            if (Object.keys(updates).length === 0) return;
+
+            setIsAutoFilling(true);
+            const { error } = await supabase
+                .from("profiles")
+                .upsert({ user_id: userId, ...updates }, { onConflict: "user_id" });
+
+            if (!error) {
+                updateLocalProfile(updates);
+            }
+            setIsAutoFilling(false);
+        };
+
+        void maybePrefill();
+    }, [
+        isAutoFilling,
+        isFirstApplyFlow,
+        isProfileLoading,
+        profile?.email,
+        profile?.nachname,
+        profile?.vorname,
+        sessionEmail,
+        sessionFirstName,
+        sessionLastName,
+        updateLocalProfile,
+        userId,
+    ]);
 
     const handleNext = () => {
         if (step < TOTAL_STEPS) {
@@ -170,9 +220,31 @@ const OnboardingPage = () => {
     };
 
     const finishOnboarding = async () => {
+        if (isFirstApplyFlow && !hasMinimumFirstApplyProfile(profile, sessionEmail)) {
+            const missing = getMissingFirstApplyFields(profile, sessionEmail);
+            toast({
+                title: "Basisdaten fehlen",
+                description: `Bitte ergänzen Sie zuerst: ${missing.join(", ")}.`,
+                variant: "destructive",
+            });
+            setStep(1);
+            return;
+        }
         await completeOnboarding(userId);
-        navigate("/dashboard");
+        void logFunnelEvent(
+            "onboarding_complete",
+            {
+                source: isFirstApplyFlow ? "first_apply_flow" : "standard",
+                next_path: nextPath ?? "/dashboard",
+            },
+            userId
+        );
+        navigate(nextPath ?? "/dashboard");
     };
+
+    const missingFirstApplyFields = getMissingFirstApplyFields(profile, sessionEmail);
+    const hasMinimumFields = missingFirstApplyFields.length === 0;
+    const firstApplyProgress = hasMinimumFields ? 2 : 1;
 
     const handleGenerateCV = async () => {
         if (!profile?.vorname || !profile?.nachname) {
@@ -392,6 +464,46 @@ const OnboardingPage = () => {
                             {STEPS[step - 1].subtitle}
                         </p>
                     </div>
+
+                    {isFirstApplyFlow ? (
+                        <Card className="mb-6 border-primary/30 bg-primary/5">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-base">Schnell zur ersten Bewerbung</CardTitle>
+                                <CardDescription>
+                                    Schritt {firstApplyProgress}/3: Nur Basisdaten sind Pflicht. Alles andere können Sie später ergänzen.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3 text-sm">
+                                <div className="h-2 w-full rounded-full bg-muted">
+                                    <div
+                                        className="h-2 rounded-full bg-primary transition-all"
+                                        style={{ width: `${(firstApplyProgress / 3) * 100}%` }}
+                                    />
+                                </div>
+                                <p>
+                                    Fehlende Pflichtfelder:{" "}
+                                    {missingFirstApplyFields.length > 0 ? missingFirstApplyFields.join(", ") : "keine"}
+                                </p>
+                                <p className="text-muted-foreground">
+                                    Ihre Daten werden sicher gespeichert. Sie prüfen die Bewerbung vor dem Versand und können alles jederzeit ändern.
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                    <Button
+                                        type="button"
+                                        onClick={finishOnboarding}
+                                        disabled={!hasMinimumFields}
+                                    >
+                                        Zur Bewerbung zurück (Schritt 3/3)
+                                    </Button>
+                                    {!hasMinimumFields ? (
+                                        <Button type="button" variant="outline" onClick={() => setStep(1)}>
+                                            Basisdaten ergänzen
+                                        </Button>
+                                    ) : null}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    ) : null}
 
                     {/* Step Body */}
                     <Suspense fallback={

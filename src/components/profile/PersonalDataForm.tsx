@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/DatePicker";
-import { Save, User } from "lucide-react";
+import { Copy, Save, User } from "lucide-react";
 import type { Profile } from "@/hooks/useProfile";
 
 interface PersonalDataFormProps {
@@ -181,6 +181,33 @@ const PersonalDataForm = ({ profile, onSave, isLoading }: PersonalDataFormProps)
             />
           </div>
         </div>
+
+        {profile?.klaro_email ? (
+          <div className="space-y-2">
+            <Label>Klaro E-Mail (wird im Lebenslauf verwendet)</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                value={profile.klaro_email}
+                readOnly
+                className="bg-muted"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => {
+                  void navigator.clipboard.writeText(profile.klaro_email!);
+                }}
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Diese E-Mail wird automatisch in Ihrem Lebenslauf angezeigt, damit Krankenhaus-Antworten in Ihrer Inbox landen.
+            </p>
+          </div>
+        ) : null}
 
         <div className="flex justify-end pt-2">
           <Button onClick={handleSave} disabled={isSaving || isLoading} className="w-full sm:w-auto">

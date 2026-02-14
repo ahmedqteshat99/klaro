@@ -1,6 +1,22 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+const isLocalDevOrigin = (origin: string) => {
+  try {
+    const parsed = new URL(origin);
+    if (!["http:", "https:"].includes(parsed.protocol)) return false;
+    const host = parsed.hostname.toLowerCase();
+    if (host === "localhost" || host === "127.0.0.1" || host === "::1" || host.endsWith(".local")) {
+      return true;
+    }
+    if (/^10\./.test(host) || /^192\.168\./.test(host)) return true;
+    if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(host)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+};
+
 const corsHeaders = (req: Request) => {
   const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
     .split(",")
@@ -9,7 +25,9 @@ const corsHeaders = (req: Request) => {
   const origin = req.headers.get("Origin") ?? "";
   const allowOrigin = !origin
     ? "*"
-    : allowedOrigins.length === 0 || allowedOrigins.includes(origin)
+    : origin === "null"
+      ? "*"
+      : allowedOrigins.length === 0 || allowedOrigins.includes(origin) || isLocalDevOrigin(origin)
       ? origin
       : "null";
 
@@ -20,6 +38,11 @@ const corsHeaders = (req: Request) => {
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     Vary: "Origin",
   };
+};
+
+const normalizeEmailAddress = (value: string | null | undefined) => {
+  const normalized = (value ?? "").trim().toLowerCase();
+  return normalized.length > 0 ? normalized : null;
 };
 
 serve(async (req) => {
@@ -52,11 +75,55 @@ serve(async (req) => {
       });
     }
 
-    const { profile, workExperiences, educationEntries, practicalExperiences, certifications, publications, jobData } = await req.json();
+    const {
+      profile: incomingProfile,
+      workExperiences,
+      educationEntries,
+      practicalExperiences,
+      certifications,
+      publications,
+      jobData,
+    } = await req.json();
+    let profile = incomingProfile;
 
     const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
     if (!ANTHROPIC_API_KEY) {
       throw new Error('ANTHROPIC_API_KEY is not configured');
+    }
+
+    const personalEmail = normalizeEmailAddress(profile?.email);
+    let klaroEmail = normalizeEmailAddress(profile?.klaro_email);
+
+    if (!klaroEmail) {
+      const { data: provisionedEmail, error: provisionError } = await supabaseClient.rpc(
+        "provision_user_alias",
+        {
+          p_user_id: userData.user.id,
+          p_vorname: profile?.vorname ?? "",
+          p_nachname: profile?.nachname ?? "",
+        }
+      );
+
+      if (!provisionError && typeof provisionedEmail === "string") {
+        klaroEmail = normalizeEmailAddress(provisionedEmail);
+      }
+
+      if (!klaroEmail) {
+        const { data: refreshedProfile } = await supabaseClient
+          .from("profiles")
+          .select("klaro_email")
+          .eq("user_id", userData.user.id)
+          .maybeSingle();
+        klaroEmail = normalizeEmailAddress(refreshedProfile?.klaro_email);
+      }
+    }
+
+    if (!klaroEmail) {
+      throw new Error("Klaro E-Mail konnte nicht erstellt werden.");
+    }
+
+    if (profile) {
+      profile = { ...profile, klaro_email: klaroEmail };
     }
 
     // Build applicant context
@@ -66,7 +133,7 @@ serve(async (req) => {
       applicantInfo.push(`BEWERBER:
 - Name: ${profile.vorname} ${profile.nachname}
 - Stadt: ${profile.stadt || 'nicht angegeben'}
-- E-Mail: ${profile.email || 'nicht angegeben'}
+- E-Mail: ${klaroEmail}
 - Telefon: ${profile.telefon || 'nicht angegeben'}
 - Fachrichtung: ${profile.fachrichtung || 'nicht angegeben'}
 - Approbationsstatus: ${profile.approbationsstatus || 'nicht angegeben'}
@@ -122,6 +189,7 @@ REGELN:
 9. Erlaubte Tags: p, strong, br, div
 10. Struktur: Briefkopf (zweispaltig), Betreff (fett), Anrede, Einleitung, Hauptteil (Motivation, Qualifikationen), Schluss, Grußformel
 11. Länge: ca. 250-350 Wörter
+12. Verwende als Absender-E-Mail exakt die Klaro-E-Mail aus den Bewerberdaten.
 
 LAYOUT-ANWEISUNGEN:
 - Briefkopf als zweispaltiges Layout mit Flexbox:
@@ -197,6 +265,10 @@ Beginne DIREKT mit dem HTML-Output.`;
       finalHtml = finalHtml.replaceAll("{{DATE}}", generatedDate);
     } else {
       finalHtml = finalHtml.replace(/\b\d{1,2}\.\d{1,2}\.\d{4}\b/, generatedDate);
+    }
+
+    if (personalEmail && personalEmail !== klaroEmail) {
+      finalHtml = finalHtml.split(personalEmail).join(klaroEmail);
     }
 
     return new Response(JSON.stringify({ success: true, html: finalHtml }), {

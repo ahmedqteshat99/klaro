@@ -1,9 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
+import { rememberCtaClick } from "@/lib/attribution";
+import {
+  getLandingHeroCtaConfig,
+  LANDING_HERO_CTA_EXPERIMENT_ID,
+} from "@/lib/experiments";
 import AppFooter from "@/components/AppFooter";
 import DisclaimerBanner from "@/components/DisclaimerBanner";
 import BrandLogo from "@/components/BrandLogo";
@@ -33,6 +38,7 @@ const LandingPage = () => {
   const navigate = useNavigate();
   const [showDeletedNotice, setShowDeletedNotice] = useState(false);
   const [userCount, setUserCount] = useState(0);
+  const landingHeroCta = useMemo(() => getLandingHeroCtaConfig(), []);
 
   useEffect(() => {
     const state = location.state as { accountDeleted?: boolean } | null;
@@ -136,6 +142,15 @@ const LandingPage = () => {
     },
   ];
 
+  const rememberLandingCta = (source: string, destination: string) => {
+    rememberCtaClick({
+      source,
+      destination,
+      experimentId: LANDING_HERO_CTA_EXPERIMENT_ID,
+      variant: landingHeroCta.variant,
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Navigation */}
@@ -177,22 +192,57 @@ const LandingPage = () => {
               Privates MVP
             </div>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-6 tracking-tighter animate-fade-in">
-              Bewerben in Deutschland.
+              {landingHeroCta.heroTitlePrimary}
               <br />
-              <span className="text-primary">Klar. Professionell.</span>
+              <span className="text-primary">{landingHeroCta.heroTitleAccent}</span>
             </h1>
             <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed animate-fade-in">
-              Lebenslauf und Anschreiben im korrekten deutschen Aufbau – nur aus Ihren Daten.
+              {landingHeroCta.heroDescription}
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-in">
               <Button asChild size="lg" className="text-base px-8 h-14 rounded-2xl shadow-apple-lg hover-lift">
-                <Link to="/auth">
-                  Kostenlos starten
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Link>
+                {landingHeroCta.heroPrimaryTo.startsWith("#") ? (
+                  <a
+                    href={landingHeroCta.heroPrimaryTo}
+                    onClick={() =>
+                      rememberLandingCta("landing_hero_primary", landingHeroCta.heroPrimaryTo)
+                    }
+                  >
+                    {landingHeroCta.heroPrimaryLabel}
+                    <ArrowRight className="ml-2 h-5 w-5" />
+                  </a>
+                ) : (
+                  <Link
+                    to={landingHeroCta.heroPrimaryTo}
+                    onClick={() =>
+                      rememberLandingCta("landing_hero_primary", landingHeroCta.heroPrimaryTo)
+                    }
+                  >
+                    {landingHeroCta.heroPrimaryLabel}
+                    <ArrowRight className="ml-2 h-5 w-5" />
+                  </Link>
+                )}
               </Button>
               <Button asChild variant="outline" size="lg" className="text-base px-8 h-14 rounded-2xl">
-                <a href="#so-funktionierts">So funktioniert&apos;s</a>
+                {landingHeroCta.heroSecondaryTo.startsWith("#") ? (
+                  <a
+                    href={landingHeroCta.heroSecondaryTo}
+                    onClick={() =>
+                      rememberLandingCta("landing_hero_secondary", landingHeroCta.heroSecondaryTo)
+                    }
+                  >
+                    {landingHeroCta.heroSecondaryLabel}
+                  </a>
+                ) : (
+                  <Link
+                    to={landingHeroCta.heroSecondaryTo}
+                    onClick={() =>
+                      rememberLandingCta("landing_hero_secondary", landingHeroCta.heroSecondaryTo)
+                    }
+                  >
+                    {landingHeroCta.heroSecondaryLabel}
+                  </Link>
+                )}
               </Button>
             </div>
             <DisclaimerBanner className="mt-8 max-w-2xl mx-auto text-left" />
@@ -537,11 +587,14 @@ const LandingPage = () => {
           <ScrollSection animation="scroll-scale-in">
             <div className="max-w-4xl mx-auto rounded-3xl gradient-primary p-12 md:p-16 text-center shadow-apple-xl">
               <h2 className="text-3xl md:text-4xl font-bold text-primary-foreground mb-4 tracking-tight">
-                Bereit für eine Bewerbung, die klar wirkt?
+                {landingHeroCta.finalCtaTitle}
               </h2>
               <Button asChild size="lg" variant="secondary" className="text-base px-8 h-14 rounded-2xl shadow-apple-lg hover-lift">
-                <Link to="/auth">
-                  Kostenlos registrieren
+                <Link
+                  to={landingHeroCta.finalCtaTo}
+                  onClick={() => rememberLandingCta("landing_bottom_cta", landingHeroCta.finalCtaTo)}
+                >
+                  {landingHeroCta.finalCtaLabel}
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
               </Button>

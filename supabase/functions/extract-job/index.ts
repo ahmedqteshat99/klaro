@@ -22,6 +22,84 @@ const corsHeaders = (req: Request) => {
   };
 };
 
+const normalizeUrl = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
+  return `https://${trimmed}`;
+};
+
+/**
+ * Validates URL to prevent SSRF (Server-Side Request Forgery) attacks
+ * Blocks private IPs and enforces HTTPS
+ */
+const isValidJobUrl = (urlString: string): { valid: boolean; error?: string } => {
+  if (!urlString || urlString.trim().length === 0) {
+    return { valid: false, error: "URL ist leer" };
+  }
+
+  try {
+    const parsed = new URL(urlString);
+
+    // Only allow HTTPS (block HTTP and other protocols)
+    if (parsed.protocol !== 'https:') {
+      return { valid: false, error: "Nur HTTPS-URLs sind erlaubt" };
+    }
+
+    const hostname = parsed.hostname.toLowerCase();
+
+    // Block localhost
+    if (hostname === 'localhost' || hostname === '::1') {
+      return { valid: false, error: "Localhost-URLs sind nicht erlaubt" };
+    }
+
+    // Block private IP ranges (IPv4)
+    if (
+      hostname.startsWith('127.') ||          // Loopback
+      hostname.startsWith('10.') ||           // Private Class A
+      hostname.startsWith('192.168.') ||      // Private Class C
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)  // Private Class B (172.16.0.0 - 172.31.255.255)
+    ) {
+      return { valid: false, error: "Private IP-Adressen sind nicht erlaubt" };
+    }
+
+    // Block link-local addresses
+    if (hostname.startsWith('169.254.')) {
+      return { valid: false, error: "Link-local-Adressen sind nicht erlaubt" };
+    }
+
+    // Block metadata service (AWS, GCP, Azure)
+    if (hostname.includes('169.254.169.254') || hostname.includes('metadata')) {
+      return { valid: false, error: "Metadata-Service-URLs sind nicht erlaubt" };
+    }
+
+    return { valid: true };
+  } catch {
+    return { valid: false, error: "Ungültige URL" };
+  }
+};
+
+const toNullableString = (value: unknown): string | null => {
+  if (typeof value !== "string") return null;
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length > 0 ? normalized : null;
+};
+
+const toTags = (value: unknown): string[] | null => {
+  const list = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/[;,]/g)
+      : [];
+
+  const normalized = list
+    .map((entry) => (typeof entry === "string" ? entry.replace(/\s+/g, " ").trim() : ""))
+    .filter(Boolean)
+    .slice(0, 10);
+
+  return normalized.length > 0 ? normalized : null;
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders(req) });
@@ -69,6 +147,21 @@ serve(async (req) => {
     }
 
     let pageContent = rawText?.trim() || '';
+    const normalizedInputUrl = typeof url === 'string' ? normalizeUrl(url) : '';
+
+    // Validate URL for SSRF protection (if URL is provided)
+    if (normalizedInputUrl && !rawText) {
+      const urlValidation = isValidJobUrl(normalizedInputUrl);
+      if (!urlValidation.valid) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `Ungültige URL: ${urlValidation.error}. Bitte verwenden Sie eine öffentliche HTTPS-URL.`
+          }),
+          { status: 400, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } }
+        );
+      }
+    }
 
     if (!pageContent) {
       if (!FIRECRAWL_API_KEY) {
@@ -82,12 +175,6 @@ serve(async (req) => {
         );
       }
 
-      // Format URL
-      let formattedUrl = url.trim();
-      if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
-        formattedUrl = `https://${formattedUrl}`;
-      }
-
       // Scrape the job posting
       const scrapeResponse = await fetch('https://api.firecrawl.dev/v1/scrape', {
         method: 'POST',
@@ -96,7 +183,7 @@ serve(async (req) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          url: formattedUrl,
+          url: normalizedInputUrl,
           formats: ['markdown'],
           onlyMainContent: true,
         }),
@@ -124,13 +211,28 @@ serve(async (req) => {
   "fachabteilung": "Abteilung/Fachbereich",
   "position": "Stellenbezeichnung",
   "ansprechpartner": "Name des Ansprechpartners (Chefarzt, Prof., HR etc.)",
-  "anforderungen": "Kurze Zusammenfassung der wichtigsten Anforderungen (max 3 Sätze)"
+  "anforderungen": "Kurze Zusammenfassung der wichtigsten Anforderungen",
+  "title": "Stellenbezeichnung für Admin-Form",
+  "hospital_name": "Name des Krankenhauses/der Klinik",
+  "department": "Abteilung/Fachbereich",
+  "location": "Stadt/Ort",
+  "description": "Zusammenfassung der Aufgabe/Stelle",
+  "requirements": "Zusammenfassung der Anforderungen",
+  "contact_name": "Ansprechpartner",
+  "contact_email": "Kontakt-E-Mail",
+  "apply_url": "Direkter Bewerbungs-/Anzeigen-Link",
+  "tags": ["Kurze Tags, z.B. Innere Medizin, Vollzeit"]
 }
 
 Wenn ein Feld nicht gefunden werden kann, setze es auf null.
+Nutze bei "tags" ein Array mit maximal 6 Einträgen.
+Antworte ausschließlich mit validem JSON.
+
+QUELLE:
+${normalizedInputUrl || "keine URL angegeben"}
 
 STELLENANZEIGE:
-    ${pageContent.substring(0, 8000)}`;
+    ${pageContent.substring(0, 10000)}`;
 
     const aiResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -178,7 +280,27 @@ STELLENANZEIGE:
       );
     }
 
-    const hasAnyValue = Object.values(jobData || {}).some((value) => {
+    const normalizedData = {
+      krankenhaus: toNullableString(jobData?.krankenhaus ?? jobData?.hospital_name),
+      standort: toNullableString(jobData?.standort ?? jobData?.location),
+      fachabteilung: toNullableString(jobData?.fachabteilung ?? jobData?.department),
+      position: toNullableString(jobData?.position ?? jobData?.title),
+      ansprechpartner: toNullableString(jobData?.ansprechpartner ?? jobData?.contact_name),
+      anforderungen: toNullableString(jobData?.anforderungen ?? jobData?.requirements),
+      title: toNullableString(jobData?.title ?? jobData?.position),
+      hospital_name: toNullableString(jobData?.hospital_name ?? jobData?.krankenhaus),
+      department: toNullableString(jobData?.department ?? jobData?.fachabteilung),
+      location: toNullableString(jobData?.location ?? jobData?.standort),
+      description: toNullableString(jobData?.description),
+      requirements: toNullableString(jobData?.requirements ?? jobData?.anforderungen),
+      contact_name: toNullableString(jobData?.contact_name ?? jobData?.ansprechpartner),
+      contact_email: toNullableString(jobData?.contact_email),
+      apply_url: toNullableString(jobData?.apply_url ?? normalizedInputUrl),
+      tags: toTags(jobData?.tags),
+    };
+
+    const hasAnyValue = Object.values(normalizedData).some((value) => {
+      if (Array.isArray(value)) return value.length > 0;
       if (value === null || value === undefined) return false;
       return String(value).trim().length > 0;
     });
@@ -195,7 +317,7 @@ STELLENANZEIGE:
 
     return new Response(JSON.stringify({ 
       success: true, 
-      data: jobData,
+      data: normalizedData,
       rawContent: pageContent.substring(0, 2000)
     }), {
       headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },

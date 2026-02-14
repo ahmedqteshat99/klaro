@@ -13,11 +13,7 @@ export interface ServerPdfParams {
     fileName?: string;
 }
 
-/**
- * Download a PDF from the server-side Puppeteer service.
- * Sends the HTML content + options, receives a PDF binary, and triggers a file download.
- */
-export async function downloadPdfFromServer({
+async function requestPdfBlob({
     type,
     htmlContent,
     showFoto,
@@ -25,8 +21,7 @@ export async function downloadPdfFromServer({
     showSignatur,
     signaturUrl,
     stadt,
-    fileName,
-}: ServerPdfParams): Promise<void> {
+}: ServerPdfParams): Promise<Blob> {
     if (!PDF_SERVICE_URL) {
         throw new Error("PDF Service URL is not configured (VITE_PDF_SERVICE_URL)");
     }
@@ -39,22 +34,29 @@ export async function downloadPdfFromServer({
         throw new Error("Nicht angemeldet. Bitte melden Sie sich erneut an.");
     }
 
-    const response = await fetch(`${PDF_SERVICE_URL}/generate-pdf`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-            type,
-            htmlContent,
-            showFoto,
-            fotoUrl,
-            showSignatur,
-            signaturUrl,
-            stadt,
-        }),
-    });
+    let response: Response;
+    try {
+        response = await fetch(`${PDF_SERVICE_URL}/generate-pdf`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+                type,
+                htmlContent,
+                showFoto,
+                fotoUrl,
+                showSignatur,
+                signaturUrl,
+                stadt,
+            }),
+        });
+    } catch {
+        throw new Error(
+            `PDF-Service nicht erreichbar (${PDF_SERVICE_URL}). Bitte URL/Deployment pruefen.`
+        );
+    }
 
     if (!response.ok) {
         let errorMsg = "PDF-Erstellung fehlgeschlagen.";
@@ -67,13 +69,25 @@ export async function downloadPdfFromServer({
         throw new Error(errorMsg);
     }
 
+    return response.blob();
+}
+
+export async function generatePdfBlobFromServer(params: ServerPdfParams): Promise<Blob> {
+    return requestPdfBlob(params);
+}
+
+/**
+ * Download a PDF from the server-side Puppeteer service.
+ * Sends the HTML content + options, receives a PDF binary, and triggers a file download.
+ */
+export async function downloadPdfFromServer(params: ServerPdfParams): Promise<void> {
     // Convert response to blob and trigger download
-    const blob = await response.blob();
+    const blob = await requestPdfBlob(params);
     const url = URL.createObjectURL(blob);
 
     const defaultFileName =
-        type === "cv" ? "Lebenslauf.pdf" : "Anschreiben.pdf";
-    const finalName = fileName || defaultFileName;
+        params.type === "cv" ? "Lebenslauf.pdf" : "Anschreiben.pdf";
+    const finalName = params.fileName || defaultFileName;
 
     // Use an anchor element to trigger the download.
     // On iOS Safari the `download` attribute is ignored — the PDF opens

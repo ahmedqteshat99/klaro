@@ -1,11 +1,13 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { LayoutDashboard, Users } from "lucide-react";
+import { BriefcaseBusiness, LayoutDashboard, Shield, Users } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/admin/jobs", label: "Jobs", icon: BriefcaseBusiness, end: false },
   { to: "/admin/users", label: "Benutzer", icon: Users, end: false },
+  { to: "/admin/data-subjects", label: "DSGVO-Rechte", icon: Shield, end: false },
 ];
 
 const AdminLayout = () => {

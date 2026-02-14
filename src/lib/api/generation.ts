@@ -59,7 +59,7 @@ async function invokeEdgeFunction<T>(
   });
 
   const text = await response.text();
-  let parsed: any = null;
+  let parsed: unknown = null;
   if (text) {
     try {
       parsed = JSON.parse(text);
@@ -69,8 +69,13 @@ async function invokeEdgeFunction<T>(
   }
 
   if (!response.ok) {
+    const parsedError =
+      typeof parsed === "object" && parsed !== null && "error" in parsed
+        ? (parsed as { error?: string }).error
+        : undefined;
+
     return {
-      error: parsed?.error || text || response.statusText,
+      error: parsedError || text || response.statusText,
       status: response.status
     };
   }
@@ -104,13 +109,23 @@ interface GenerateCVParams {
   publications: Publication[];
 }
 
-interface JobData {
+export interface JobData {
   krankenhaus: string | null;
   standort: string | null;
   fachabteilung: string | null;
   position: string | null;
   ansprechpartner: string | null;
   anforderungen: string | null;
+  title?: string | null;
+  hospital_name?: string | null;
+  department?: string | null;
+  location?: string | null;
+  description?: string | null;
+  requirements?: string | null;
+  contact_name?: string | null;
+  contact_email?: string | null;
+  apply_url?: string | null;
+  tags?: string[] | string | null;
 }
 
 interface GenerateAnschreibenParams extends GenerateCVParams {

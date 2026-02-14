@@ -1,12 +1,32 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
+import { getAttributionMeta } from "@/lib/attribution";
 
 export type AppEventType =
   | "signup"
   | "login"
   | "generate"
   | "export"
-  | "slow_endpoint";
+  | "slow_endpoint"
+  | "dashboard_hub_view"
+  | "dashboard_circle_click"
+  | "dashboard_progress_snapshot"
+  | "onboarding_complete"
+  | "funnel_apply_click"
+  | "funnel_prepare_start"
+  | "funnel_prepare_success"
+  | "funnel_prepare_failed"
+  | "funnel_send_success"
+  | "funnel_send_failed"
+  | "funnel_reply_success"
+  | "funnel_reply_failed"
+  | "inbox_thread_open"
+  | "inbox_follow_up_prefill"
+  | "inbox_mark_done"
+  | "inbox_mark_reopen"
+  | "inbox_reply_send_attempt"
+  | "inbox_reply_draft_saved"
+  | "inbox_realtime_event";
 
 export const logEvent = async (
   type: AppEventType,
@@ -48,6 +68,50 @@ export const logSlowEndpoint = async (
     },
     userId
   );
+};
+
+const mergeMetaWithAttribution = (meta?: Json): Json | undefined => {
+  const attribution = getAttributionMeta();
+  if (!attribution) return meta;
+  if (!meta) return attribution;
+
+  if (
+    typeof attribution === "object" &&
+    attribution !== null &&
+    !Array.isArray(attribution) &&
+    typeof meta === "object" &&
+    meta !== null &&
+    !Array.isArray(meta)
+  ) {
+    return {
+      ...attribution,
+      ...meta,
+    } as Json;
+  }
+
+  return {
+    attribution,
+    meta,
+  } as Json;
+};
+
+export const logFunnelEvent = async (
+  type: Extract<
+    AppEventType,
+    | "onboarding_complete"
+    | "funnel_apply_click"
+    | "funnel_prepare_start"
+    | "funnel_prepare_success"
+    | "funnel_prepare_failed"
+    | "funnel_send_success"
+    | "funnel_send_failed"
+    | "funnel_reply_success"
+    | "funnel_reply_failed"
+  >,
+  meta?: Json,
+  userId?: string | null
+) => {
+  return logEvent(type, mergeMetaWithAttribution(meta), userId);
 };
 
 export const touchLastSeen = async (userId?: string | null) => {
