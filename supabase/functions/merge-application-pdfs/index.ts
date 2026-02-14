@@ -90,39 +90,110 @@ serve(async (req) => {
 
     // Create a new PDF document for merging
     const mergedPdf = await PDFDocument.create();
+    const processingErrors: string[] = [];
+    let successfulMerges = 0;
+
+    console.log(`Starting merge of ${attachments.length} attachments for application ${applicationId}`);
 
     // Download and merge each PDF in order
-    for (const attachment of attachments) {
+    for (let i = 0; i < attachments.length; i++) {
+      const attachment = attachments[i];
       try {
+        console.log(`Processing attachment ${i + 1}/${attachments.length}: ${attachment.file_name || attachment.file_path}`);
+
         const { data: pdfBlob, error: downloadError } = await supabaseClient
           .storage
           .from('user-files')
           .download(attachment.file_path);
 
         if (downloadError || !pdfBlob) {
-          console.error(`Failed to download ${attachment.file_path}:`, downloadError);
+          const errorMsg = `Failed to download ${attachment.file_name}: ${downloadError?.message || 'No data'}`;
+          console.error(errorMsg);
+          processingErrors.push(errorMsg);
           continue;
         }
 
         // Convert blob to ArrayBuffer
         const pdfArrayBuffer = await pdfBlob.arrayBuffer();
 
-        // Load the PDF
-        const pdf = await PDFDocument.load(pdfArrayBuffer);
+        if (pdfArrayBuffer.byteLength === 0) {
+          const errorMsg = `File ${attachment.file_name} is empty`;
+          console.error(errorMsg);
+          processingErrors.push(errorMsg);
+          continue;
+        }
+
+        console.log(`Loading PDF (${pdfArrayBuffer.byteLength} bytes): ${attachment.file_name}`);
+
+        // Load the PDF with error handling
+        const pdf = await PDFDocument.load(pdfArrayBuffer, {
+          ignoreEncryption: true,
+          updateMetadata: false
+        });
+
+        const pageCount = pdf.getPageCount();
+        console.log(`PDF loaded: ${pageCount} pages`);
+
+        if (pageCount === 0) {
+          const errorMsg = `File ${attachment.file_name} has no pages`;
+          console.error(errorMsg);
+          processingErrors.push(errorMsg);
+          continue;
+        }
 
         // Copy all pages from this PDF to the merged PDF
-        const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+        const pageIndices = Array.from({ length: pageCount }, (_, i) => i);
+        const copiedPages = await mergedPdf.copyPages(pdf, pageIndices);
+
         copiedPages.forEach((page) => {
           mergedPdf.addPage(page);
         });
+
+        successfulMerges++;
+        console.log(`Successfully merged ${attachment.file_name} (${pageCount} pages)`);
       } catch (error) {
-        console.error(`Error processing ${attachment.file_path}:`, error);
+        const errorMsg = `Error processing ${attachment.file_name}: ${error instanceof Error ? error.message : String(error)}`;
+        console.error(errorMsg);
+        processingErrors.push(errorMsg);
         // Continue with other attachments even if one fails
       }
     }
 
-    // Save the merged PDF
-    const mergedPdfBytes = await mergedPdf.save();
+    console.log(`Merge complete: ${successfulMerges}/${attachments.length} files merged successfully`);
+
+    if (successfulMerges === 0) {
+      return new Response(JSON.stringify({
+        error: 'Keine PDFs konnten zusammengeführt werden',
+        details: processingErrors,
+      }), {
+        status: 500,
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (processingErrors.length > 0) {
+      console.warn('Some files had errors:', processingErrors);
+    }
+
+    // Save the merged PDF with options to preserve quality
+    console.log('Saving merged PDF...');
+    const mergedPdfBytes = await mergedPdf.save({
+      useObjectStreams: false, // Better compatibility
+      addDefaultPage: false,
+      objectsPerTick: 50,
+    });
+
+    console.log(`Merged PDF size: ${mergedPdfBytes.length} bytes`);
+
+    if (mergedPdfBytes.length === 0) {
+      return new Response(JSON.stringify({
+        error: 'Generierte PDF ist leer',
+        details: processingErrors,
+      }), {
+        status: 500,
+        headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+      });
+    }
 
     // Generate filename: nachname_hospitalname.pdf
     const sanitizeFileName = (str: string) =>
@@ -136,19 +207,28 @@ serve(async (req) => {
       ? `${filenameParts.join('_')}.pdf`
       : `Bewerbung_${applicationId.slice(0, 8)}.pdf`;
 
+    console.log(`Returning merged PDF: ${filename}`);
+
     // Return the merged PDF as a blob
     return new Response(mergedPdfBytes, {
       headers: {
         ...corsHeaders(req),
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Length': String(mergedPdfBytes.length),
       },
     });
 
   } catch (error) {
     console.error('Merge error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unbekannter Fehler';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
+    console.error('Error stack:', errorStack);
+
     return new Response(JSON.stringify({
-      error: error instanceof Error ? error.message : 'Unbekannter Fehler beim Zusammenführen'
+      error: errorMessage,
+      details: errorStack ? errorStack.split('\n').slice(0, 3).join('\n') : undefined,
     }), {
       status: 500,
       headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
