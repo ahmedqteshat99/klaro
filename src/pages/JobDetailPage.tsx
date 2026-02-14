@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { generateAnschreiben, generateCV } from "@/lib/api/generation";
 import { generatePdfBlobFromServer } from "@/lib/api/pdf-service";
-import { sendApplicationEmail } from "@/lib/api/applications";
+import { sendApplicationEmail, mergeApplicationPdfs } from "@/lib/api/applications";
 import { logFunnelEvent } from "@/lib/app-events";
 import {
   clearApplyIntent,
@@ -36,6 +36,7 @@ import {
   ChevronRight,
   Clock,
   Copy,
+  Download,
   ExternalLink,
   FileText,
   Info,
@@ -45,6 +46,7 @@ import {
   Send,
   Share2,
   Sparkles,
+  AlertCircle,
 } from "lucide-react";
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
@@ -138,6 +140,7 @@ const JobDetailPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isPreparing, setIsPreparing] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [prepareStepIndex, setPrepareStepIndex] = useState(0);
   const [prepareProgress, setPrepareProgress] = useState(0);
   const [prepareProgressTarget, setPrepareProgressTarget] = useState(0);
@@ -973,6 +976,46 @@ const JobDetailPage = () => {
     }
   };
 
+  const handleDownloadMergedPdf = async () => {
+    if (!applicationId || !job || !profile) return;
+
+    setIsDownloadingPdf(true);
+    try {
+      const result = await mergeApplicationPdfs({
+        applicationId,
+        hospitalName: job.hospital_name || undefined,
+        nachname: profile.nachname || undefined,
+      });
+
+      if (!result.success || !result.blob) {
+        throw new Error(result.error || "PDF konnte nicht erstellt werden");
+      }
+
+      // Create download link
+      const url = URL.createObjectURL(result.blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = result.filename || "Bewerbung.pdf";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "PDF heruntergeladen",
+        description: `Datei: ${result.filename}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Download fehlgeschlagen",
+        description: error instanceof Error ? error.message : "Unbekannter Fehler",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   if (isSessionLoading || isLoading || (isAuthenticated && isProfileLoading)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -1108,13 +1151,26 @@ const JobDetailPage = () => {
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
-            {job.description ? <p className="text-sm whitespace-pre-line leading-relaxed">{job.description}</p> : null}
-            {job.requirements ? (
-              <div>
-                <h3 className="text-sm font-semibold mb-2">Anforderungen</h3>
-                <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">{job.requirements}</p>
+            {/* Minimal Display Disclaimer - Copyright Protection */}
+            <div className="rounded-lg border-2 border-blue-500 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-700 p-4 space-y-2">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+                    Urheberrechtlich geschützte Stellenanzeige
+                  </p>
+                  <p className="text-sm text-blue-800 dark:text-blue-300 mt-1">
+                    Aus rechtlichen Gründen (Urheberrecht, Datenbankrechte) zeigen wir hier nur minimale Informationen.
+                    Die <strong>vollständigen Details finden Sie in der Originalanzeige</strong> über den Link unten.
+                  </p>
+                  <p className="text-sm text-blue-800 dark:text-blue-300 mt-2">
+                    ✅ <strong>Für Ihre Bewerbung:</strong> Wenn Sie auf "Bewerbung vorbereiten" klicken, ruft unser System
+                    automatisch alle Details von der Originalquelle ab und erstellt ein individuelles, hochwertiges Anschreiben
+                    für Sie – ohne dass Sie die Stellenanzeige manuell kopieren müssen.
+                  </p>
+                </div>
               </div>
-            ) : null}
+            </div>
 
             {job.tags && job.tags.length > 0 ? (
               <div className="flex flex-wrap gap-2">
@@ -1127,49 +1183,48 @@ const JobDetailPage = () => {
             ) : null}
 
             {/* Source Attribution (Fair Use Compliance) */}
-            {(job.source_url || job.source_name) ? (
-              <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-900 p-3">
+            {(job.source_url || job.source_name || job.apply_url) && (
+              <div className="rounded-lg border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 p-4">
                 <div className="flex items-start gap-2">
-                  <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
-                  <div className="flex-1 space-y-1">
-                    <p className="text-xs font-medium text-blue-900 dark:text-blue-200">
-                      Quellenangabe
+                  <ExternalLink className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                      📋 Vollständige Stellenanzeige ansehen
                     </p>
                     {job.source_name && (
-                      <p className="text-xs text-blue-800 dark:text-blue-300">
-                        Quelle: {job.source_name}
+                      <p className="text-sm text-amber-800 dark:text-amber-300">
+                        Quelle: <strong>{job.source_name}</strong>
                       </p>
                     )}
-                    {job.source_url && (
+                    {(job.source_url || job.apply_url) && (
                       <a
-                        href={job.source_url}
+                        href={job.source_url || job.apply_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                        className="inline-flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-300 hover:underline"
                       >
-                        <ExternalLink className="h-3 w-3" />
-                        Originalanzeige beim Arbeitgeber ansehen
+                        <ExternalLink className="h-4 w-4" />
+                        Jetzt Originalanzeige beim Arbeitgeber öffnen
                       </a>
                     )}
-                    <p className="text-xs text-blue-700 dark:text-blue-400 italic mt-2">
-                      ⚠️ Klaro übernimmt keine Gewähr für Aktualität und Richtigkeit der Stellenanzeige.
-                      Bitte prüfen Sie die Originalanzeige beim Arbeitgeber.
+                    <p className="text-xs text-amber-700 dark:text-amber-400 italic pt-1 border-t border-amber-200 dark:border-amber-800">
+                      ⚠️ Klaro übernimmt keine Gewähr für Aktualität und Richtigkeit. Bitte prüfen Sie alle Details direkt beim Arbeitgeber.
                     </p>
                   </div>
                 </div>
               </div>
-            ) : null}
+            )}
 
             {/* Action buttons */}
             <div className="flex flex-wrap items-center gap-2 pt-1">
-              {job.apply_url ? (
-                <Button asChild variant="outline" size="sm">
-                  <a href={job.apply_url} target="_blank" rel="noreferrer">
+              {(job.apply_url || job.source_url) && (
+                <Button asChild size="sm" className="bg-amber-600 hover:bg-amber-700">
+                  <a href={job.apply_url || job.source_url} target="_blank" rel="noreferrer">
                     <ExternalLink className="mr-2 h-4 w-4" />
-                    Stellenanzeige ansehen
+                    Originalanzeige ansehen
                   </a>
                 </Button>
-              ) : null}
+              )}
               {job.contact_email ? (
                 <Button asChild variant="outline" size="sm">
                   <a href={`mailto:${job.contact_email}`}>
@@ -1386,10 +1441,29 @@ const JobDetailPage = () => {
                     </div>
                   </div>
 
-                  <Button onClick={handleSendApplication} disabled={isSending || !subject.trim() || !messageText.trim()}>
-                    {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                    Bewerbung jetzt senden
-                  </Button>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <Button
+                      onClick={handleDownloadMergedPdf}
+                      disabled={isDownloadingPdf}
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      {isDownloadingPdf ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Download className="mr-2 h-4 w-4" />
+                      )}
+                      Alle als PDF herunterladen
+                    </Button>
+                    <Button
+                      onClick={handleSendApplication}
+                      disabled={isSending || !subject.trim() || !messageText.trim()}
+                      className="flex-1"
+                    >
+                      {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                      Bewerbung jetzt senden
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ) : null}

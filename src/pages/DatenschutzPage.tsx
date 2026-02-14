@@ -165,6 +165,21 @@ const DatenschutzPage = () => {
               verwendet sie ausschließlich zur Unterstützung Ihrer persönlichen Bewerbung.
             </p>
 
+            <h3 className="text-lg font-semibold mb-3 mt-6">Stellenbörse (Öffentliche Anzeige minimaler Stelleninformationen)</h3>
+            <ul className="list-disc pl-6 text-muted-foreground space-y-2 mb-4">
+              <li><strong>Zweck:</strong> Bereitstellung einer öffentlich zugänglichen Übersicht von Stellenangeboten ohne Login</li>
+              <li><strong>Angezeigte Daten:</strong> Nur minimale, nicht urheberrechtlich geschützte Informationen (Stellentitel, Klinikname, Standort, Tags)</li>
+              <li><strong>Urheberrechtsschutz:</strong> Vollständige Stellenbeschreibungen werden NICHT angezeigt, um Urheberrechte und Datenbankrechte der Arbeitgeber zu wahren</li>
+              <li><strong>Quellenangabe:</strong> Jede Stellenanzeige enthält einen Link zur Originalquelle beim Arbeitgeber</li>
+              <li><strong>Keine Gewähr:</strong> Klaro übernimmt keine Haftung für Aktualität, Richtigkeit oder Vollständigkeit der Stellenanzeigen. Nutzer müssen alle Details direkt beim Arbeitgeber prüfen</li>
+              <li><strong>Bewerbungsvorbereitung:</strong> Wenn Sie auf "Bewerbung vorbereiten" klicken, ruft unser System temporär die vollständigen Details von der Originalquelle ab (wie Firecrawl oben beschrieben) zur Generierung eines personalisierten Anschreibens</li>
+            </ul>
+            <p className="text-xs text-muted-foreground bg-amber-50 dark:bg-amber-950/30 p-3 rounded-md border border-amber-200 dark:border-amber-800 mt-2">
+              <strong>Rechtlicher Hinweis:</strong> Die Stellenbörse zeigt ausschließlich minimale Informationen zur Orientierung.
+              Vollständige Details und verbindliche Informationen erhalten Sie nur über die Originalanzeige beim Arbeitgeber.
+              Durch die minimale Anzeige und klare Quellenangabe wahren wir die Urheberrechte der Arbeitgeber.
+            </p>
+
             <p className="text-muted-foreground mt-4 text-sm">
               Alle Auftragsverarbeiter wurden sorgfältig ausgewählt und sind vertraglich verpflichtet,
               Ihre Daten gemäß DSGVO zu schützen. Bei Fragen zu unseren Datenverarbeitungsvereinbarungen

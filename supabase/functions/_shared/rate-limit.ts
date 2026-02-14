@@ -32,6 +32,11 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
     maxRequests: 5,
     windowMinutes: 60, // 5 requests per hour
   },
+  merge_pdfs: {
+    endpoint: "merge_pdfs",
+    maxRequests: 30,
+    windowMinutes: 60, // 30 requests per hour (more generous since it's not AI)
+  },
 };
 
 export class RateLimitError extends Error {
