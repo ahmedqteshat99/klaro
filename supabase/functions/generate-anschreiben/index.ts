@@ -1,44 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const isLocalDevOrigin = (origin: string) => {
-  try {
-    const parsed = new URL(origin);
-    if (!["http:", "https:"].includes(parsed.protocol)) return false;
-    const host = parsed.hostname.toLowerCase();
-    if (host === "localhost" || host === "127.0.0.1" || host === "::1" || host.endsWith(".local")) {
-      return true;
-    }
-    if (/^10\./.test(host) || /^192\.168\./.test(host)) return true;
-    if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(host)) return true;
-    return false;
-  } catch {
-    return false;
-  }
-};
-
-const corsHeaders = (req: Request) => {
-  const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-  const origin = req.headers.get("Origin") ?? "";
-  const allowOrigin = !origin
-    ? "*"
-    : origin === "null"
-      ? "*"
-      : allowedOrigins.length === 0 || allowedOrigins.includes(origin) || isLocalDevOrigin(origin)
-      ? origin
-      : "null";
-
-  return {
-    "Access-Control-Allow-Origin": allowOrigin,
-    "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    Vary: "Origin",
-  };
-};
+import { corsHeaders } from "../_shared/cors.ts";
+import { enforceRateLimit, RATE_LIMITS, RateLimitError, rateLimitResponse } from "../_shared/rate-limit.ts";
 
 const normalizeEmailAddress = (value: string | null | undefined) => {
   const normalized = (value ?? "").trim().toLowerCase();
@@ -73,6 +36,16 @@ serve(async (req) => {
         status: 401,
         headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
+    }
+
+    // Rate limiting check
+    try {
+      await enforceRateLimit(supabaseClient, userData.user.id, RATE_LIMITS.generate_anschreiben);
+    } catch (error) {
+      if (error instanceof RateLimitError) {
+        return rateLimitResponse(error, corsHeaders(req));
+      }
+      throw error;
     }
 
     const {

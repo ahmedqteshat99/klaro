@@ -38,6 +38,7 @@ import {
   Copy,
   ExternalLink,
   FileText,
+  Info,
   Loader2,
   Mail,
   MapPin,
@@ -1122,6 +1123,40 @@ const JobDetailPage = () => {
                     {tag}
                   </Badge>
                 ))}
+              </div>
+            ) : null}
+
+            {/* Source Attribution (Fair Use Compliance) */}
+            {(job.source_url || job.source_name) ? (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-900 p-3">
+                <div className="flex items-start gap-2">
+                  <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+                  <div className="flex-1 space-y-1">
+                    <p className="text-xs font-medium text-blue-900 dark:text-blue-200">
+                      Quellenangabe
+                    </p>
+                    {job.source_name && (
+                      <p className="text-xs text-blue-800 dark:text-blue-300">
+                        Quelle: {job.source_name}
+                      </p>
+                    )}
+                    {job.source_url && (
+                      <a
+                        href={job.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        Originalanzeige beim Arbeitgeber ansehen
+                      </a>
+                    )}
+                    <p className="text-xs text-blue-700 dark:text-blue-400 italic mt-2">
+                      ⚠️ Klaro übernimmt keine Gewähr für Aktualität und Richtigkeit der Stellenanzeige.
+                      Bitte prüfen Sie die Originalanzeige beim Arbeitgeber.
+                    </p>
+                  </div>
+                </div>
               </div>
             ) : null}
 

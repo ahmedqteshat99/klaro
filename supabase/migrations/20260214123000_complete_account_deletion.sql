@@ -119,16 +119,25 @@ CREATE TABLE IF NOT EXISTS account_deletion_log (
 ALTER TABLE account_deletion_log ENABLE ROW LEVEL SECURITY;
 
 -- Only admins can view deletion log
-CREATE POLICY "Admins can view deletion log"
-  ON account_deletion_log FOR SELECT
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM profiles
-      WHERE profiles.user_id = auth.uid()
-      AND profiles.role = 'ADMIN'
-    )
-  );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'account_deletion_log'
+    AND policyname = 'Admins can view deletion log'
+  ) THEN
+    CREATE POLICY "Admins can view deletion log"
+      ON account_deletion_log FOR SELECT
+      TO authenticated
+      USING (
+        EXISTS (
+          SELECT 1 FROM profiles
+          WHERE profiles.user_id = auth.uid()
+          AND profiles.role = 'ADMIN'
+        )
+      );
+  END IF;
+END$$;
 
 -- Grant insert to service role for logging
 GRANT INSERT ON account_deletion_log TO service_role;
