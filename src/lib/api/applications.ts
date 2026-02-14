@@ -114,3 +114,53 @@ export async function replyApplicationEmail(payload: ReplyApplicationEmailPayloa
     error: data?.error,
   };
 }
+
+interface MergeApplicationPdfsPayload {
+  applicationId: string;
+  hospitalName?: string;
+  nachname?: string;
+}
+
+export async function mergeApplicationPdfs(payload: MergeApplicationPdfsPayload): Promise<{
+  success: boolean;
+  blob?: Blob;
+  filename?: string;
+  error?: string;
+}> {
+  try {
+    await ensureFreshSession();
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Nicht angemeldet.",
+    };
+  }
+
+  const { data, error } = await supabase.functions.invoke("merge-application-pdfs", {
+    body: payload,
+    responseType: "blob",
+  });
+
+  if (error) {
+    return { success: false, error: parseFunctionError(error) };
+  }
+
+  if (!data || !(data instanceof Blob)) {
+    return { success: false, error: "Keine PDF-Daten empfangen" };
+  }
+
+  // Generate filename
+  const filenameParts = [];
+  if (payload.nachname) filenameParts.push(payload.nachname);
+  if (payload.hospitalName) filenameParts.push(payload.hospitalName);
+
+  const filename = filenameParts.length > 0
+    ? `${filenameParts.join('_')}.pdf`
+    : `Bewerbung_${payload.applicationId.slice(0, 8)}.pdf`;
+
+  return {
+    success: true,
+    blob: data,
+    filename,
+  };
+}
