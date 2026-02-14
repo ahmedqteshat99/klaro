@@ -1,26 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = (req: Request) => {
-  const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-  const origin = req.headers.get("Origin") ?? "";
-  const allowOrigin = !origin
-    ? "*"
-    : allowedOrigins.length === 0 || allowedOrigins.includes(origin)
-      ? origin
-      : "null";
-
-  return {
-    "Access-Control-Allow-Origin": allowOrigin,
-    "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    Vary: "Origin",
-  };
-};
+import { corsHeaders } from "../_shared/cors.ts";
+import { enforceRateLimit, RATE_LIMITS, RateLimitError, rateLimitResponse } from "../_shared/rate-limit.ts";
 
 const normalizeUrl = (value: string) => {
   const trimmed = value.trim();
@@ -128,6 +109,16 @@ serve(async (req) => {
         status: 401,
         headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
       });
+    }
+
+    // Rate limiting check
+    try {
+      await enforceRateLimit(supabaseClient, userData.user.id, RATE_LIMITS.extract_job);
+    } catch (error) {
+      if (error instanceof RateLimitError) {
+        return rateLimitResponse(error, corsHeaders(req));
+      }
+      throw error;
     }
 
     const { url, rawText } = await req.json();
@@ -297,6 +288,10 @@ STELLENANZEIGE:
       contact_email: toNullableString(jobData?.contact_email),
       apply_url: toNullableString(jobData?.apply_url ?? normalizedInputUrl),
       tags: toTags(jobData?.tags),
+      // Source attribution for Fair Use compliance
+      source_url: normalizedInputUrl || null,
+      source_name: toNullableString(jobData?.hospital_name ?? jobData?.krankenhaus),
+      scraped_at: new Date().toISOString(),
     };
 
     const hasAnyValue = Object.values(normalizedData).some((value) => {

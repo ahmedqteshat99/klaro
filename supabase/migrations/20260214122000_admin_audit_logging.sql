@@ -16,10 +16,10 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
 );
 
 -- Add indexes for efficient querying
-CREATE INDEX idx_admin_audit_admin_user ON admin_audit_log(admin_user_id);
-CREATE INDEX idx_admin_audit_target_user ON admin_audit_log(target_user_id);
-CREATE INDEX idx_admin_audit_created_at ON admin_audit_log(created_at DESC);
-CREATE INDEX idx_admin_audit_action ON admin_audit_log(action);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_admin_user ON admin_audit_log(admin_user_id);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_target_user ON admin_audit_log(target_user_id);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_created_at ON admin_audit_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_action ON admin_audit_log(action);
 
 -- Enable RLS
 ALTER TABLE admin_audit_log ENABLE ROW LEVEL SECURITY;
@@ -27,28 +27,55 @@ ALTER TABLE admin_audit_log ENABLE ROW LEVEL SECURITY;
 -- Step 2: RLS Policies
 
 -- Only admins can view audit logs
-CREATE POLICY "Admins can view audit logs"
-  ON admin_audit_log FOR SELECT
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM profiles
-      WHERE profiles.user_id = auth.uid()
-      AND profiles.role = 'ADMIN'
-    )
-  );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'admin_audit_log'
+    AND policyname = 'Admins can view audit logs'
+  ) THEN
+    CREATE POLICY "Admins can view audit logs"
+      ON admin_audit_log FOR SELECT
+      TO authenticated
+      USING (
+        EXISTS (
+          SELECT 1 FROM profiles
+          WHERE profiles.user_id = auth.uid()
+          AND profiles.role = 'ADMIN'
+        )
+      );
+  END IF;
+END$$;
 
 -- Service role can insert audit logs
-CREATE POLICY "Service role can insert audit logs"
-  ON admin_audit_log FOR INSERT
-  TO service_role
-  WITH CHECK (true);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'admin_audit_log'
+    AND policyname = 'Service role can insert audit logs'
+  ) THEN
+    CREATE POLICY "Service role can insert audit logs"
+      ON admin_audit_log FOR INSERT
+      TO service_role
+      WITH CHECK (true);
+  END IF;
+END$$;
 
 -- Authenticated users can insert their own audit logs
-CREATE POLICY "Admins can insert own audit logs"
-  ON admin_audit_log FOR INSERT
-  TO authenticated
-  WITH CHECK (admin_user_id = auth.uid());
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'admin_audit_log'
+    AND policyname = 'Admins can insert own audit logs'
+  ) THEN
+    CREATE POLICY "Admins can insert own audit logs"
+      ON admin_audit_log FOR INSERT
+      TO authenticated
+      WITH CHECK (admin_user_id = auth.uid());
+  END IF;
+END$$;
 
 -- Step 3: Helper function to log admin actions
 CREATE OR REPLACE FUNCTION log_admin_action(
