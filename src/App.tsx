@@ -83,15 +83,17 @@ const App = () => {
               <Route path="/datenaufbewahrung" element={<DatenaufbewahrungPage />} />
               <Route path="/impressum" element={<ImpressumPage />} />
 
+              {/* Public job listings - drives user acquisition */}
+              <Route path="/jobs" element={<JobsPage />} />
+              <Route path="/jobs/:id" element={<JobDetailPage />} />
+              <Route path="/jobs/:id/:slug" element={<JobDetailPage />} />
+
               {/* Protected routes - require authorization */}
               <Route path="/dashboard" element={<AuthorizedRoute><Dashboard /></AuthorizedRoute>} />
               <Route path="/onboarding" element={<AuthorizedRoute><OnboardingPage /></AuthorizedRoute>} />
               <Route path="/profil" element={<AuthorizedRoute><ProfilPage /></AuthorizedRoute>} />
               <Route path="/unterlagen" element={<AuthorizedRoute><UnterlagenPage /></AuthorizedRoute>} />
               <Route path="/anschreiben" element={<AuthorizedRoute><AnschreibenPage /></AuthorizedRoute>} />
-              <Route path="/jobs" element={<AuthorizedRoute><JobsPage /></AuthorizedRoute>} />
-              <Route path="/jobs/:id" element={<AuthorizedRoute><JobDetailPage /></AuthorizedRoute>} />
-              <Route path="/jobs/:id/:slug" element={<AuthorizedRoute><JobDetailPage /></AuthorizedRoute>} />
               <Route path="/inbox" element={<AuthorizedRoute><InboxPage /></AuthorizedRoute>} />
 
               {/* Admin routes - require authorization */}
