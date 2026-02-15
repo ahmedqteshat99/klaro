@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { isOnboardingDone, checkOnboardingFromDB } from '@/pages/OnboardingPage';
 import { Loader2 } from 'lucide-react';
 
 export default function AuthCallback() {
@@ -25,9 +26,18 @@ export default function AuthCallback() {
       if (session) {
         toast({
           title: "E-Mail bestätigt!",
-          description: "Sie können sich jetzt anmelden.",
+          description: "Ihr Konto wurde erfolgreich aktiviert.",
         });
-        navigate('/dashboard');
+
+        const userId = session.user.id;
+
+        // Check onboarding status — redirect accordingly
+        if (isOnboardingDone(userId)) {
+          navigate('/dashboard', { replace: true });
+        } else {
+          const doneInDB = await checkOnboardingFromDB(userId);
+          navigate(doneInDB ? '/dashboard' : '/onboarding', { replace: true });
+        }
       } else {
         navigate('/');
       }
