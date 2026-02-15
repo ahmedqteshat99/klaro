@@ -174,6 +174,8 @@ const JobDetailPage = () => {
     practicalExperiences,
     certifications,
     publications,
+    customSections,
+    customSectionEntries,
     isLoading: isProfileLoading,
     userId,
   } = useProfile();
