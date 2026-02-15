@@ -253,3 +253,34 @@ export const enhanceAnschreiben = async (
 
   return data;
 };
+
+/**
+ * Backfill AI-generated descriptions for all jobs with null/empty descriptions.
+ * Admin-only operation.
+ */
+export async function backfillJobDescriptions(): Promise<{
+  success: boolean;
+  total?: number;
+  updated?: number;
+  failed?: number;
+  errors?: string[];
+  message?: string;
+  error?: string;
+}> {
+  await ensureFreshSession();
+
+  const result = await invokeEdgeFunction<{
+    success: boolean;
+    total?: number;
+    updated?: number;
+    failed?: number;
+    errors?: string[];
+    message?: string;
+  }>("backfill-job-descriptions", {});
+
+  if (result.error) {
+    return { success: false, error: result.error };
+  }
+
+  return result.data ?? { success: false, error: "Keine Antwort vom Server" };
+}
