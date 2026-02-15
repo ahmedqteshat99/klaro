@@ -1,0 +1,30 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <circle cx="12" cy="12" r="12" fill="#E0E7FF"/>
+
+  <!-- Neck -->
+  <rect x="10" y="16" width="4" height="3" fill="#FBBF85"/>
+
+  <!-- Lab coat -->
+  <path d="M6 19 L6 24 L18 24 L18 19 L15 16 L9 16 Z" fill="#FFFFFF"/>
+  <path d="M11.5 16 L11.5 24" stroke="#D1D5DB" stroke-width="0.3"/>
+  <path d="M12.5 16 L12.5 24" stroke="#D1D5DB" stroke-width="0.3"/>
+
+  <!-- Face -->
+  <circle cx="12" cy="10" r="4.5" fill="#FBBF85"/>
+
+  <!-- Hair -->
+  <path d="M 7.5 10 Q 7.5 5.5 12 5.5 Q 16.5 5.5 16.5 10 L 16.5 11 Q 16.5 8 12 8 Q 7.5 8 7.5 11 Z" fill="#2C1810"/>
+
+  <!-- Eyes -->
+  <circle cx="10" cy="10" r="0.6" fill="#1F2937"/>
+  <circle cx="14" cy="10" r="0.6" fill="#1F2937"/>
+
+  <!-- Smile -->
+  <path d="M 10 12 Q 12 13 14 12" stroke="#1F2937" stroke-width="0.4" fill="none" stroke-linecap="round"/>
+
+  <!-- Stethoscope -->
+  <path d="M 10 19 Q 10 20 11 20 L 13 20 Q 14 20 14 19" stroke="#4F46E5" stroke-width="0.5" fill="none"/>
+  <circle cx="9.5" cy="19" r="0.6" fill="#4F46E5"/>
+  <circle cx="14.5" cy="19" r="0.6" fill="#4F46E5"/>
+</svg>
