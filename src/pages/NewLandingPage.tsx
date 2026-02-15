@@ -136,7 +136,7 @@ const NewLandingPage = () => {
       </nav>
 
       {/* Hero Section */}
-      <section className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden mesh-gradient">
+      <section className="relative pt-24 pb-12 sm:pt-32 sm:pb-20 lg:pt-48 lg:pb-32 overflow-hidden mesh-gradient">
         <AnimatedHeroBackground />
 
         <div className="container relative mx-auto px-4 sm:px-6 z-10">
@@ -151,38 +151,40 @@ const NewLandingPage = () => {
             )}
 
             <ScrollSection animation="scroll-fade-in">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/70 border border-white/40 shadow-sm text-sm font-medium mb-8">
-                <div className="flex -space-x-2 mr-2">
+              <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full bg-white/70 border border-white/40 shadow-sm text-xs sm:text-sm font-medium mb-6 sm:mb-8 max-w-full">
+                <div className="flex -space-x-2 mr-1 sm:mr-2">
                   {[1, 2, 3, 4].map(i => (
                     <img
                       key={i}
                       src={`/images/avatar-${i}.svg`}
                       alt={`Doctor ${i}`}
-                      className="h-6 w-6 rounded-full border-2 border-white"
+                      className="h-5 w-5 sm:h-6 sm:w-6 rounded-full border-2 border-white"
                     />
                   ))}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 sm:gap-2">
                   <div className="flex items-center text-yellow-500">
-                    {[...Array(5)].map((_, i) => <Star key={i} className="h-3.5 w-3.5 fill-current" />)}
+                    {[...Array(5)].map((_, i) => <Star key={i} className="h-3 w-3 sm:h-3.5 sm:w-3.5 fill-current" />)}
                   </div>
-                  <span className="text-slate-700 font-semibold">Vertraut von {userCount.toLocaleString("de-DE")} Ärzten</span>
+                  <span className="text-slate-700 font-semibold truncate">
+                    <span className="hidden xs:inline">Vertraut von </span>{userCount.toLocaleString("de-DE")} Ärzte
+                  </span>
                 </div>
               </div>
             </ScrollSection>
 
             <ScrollSection animation="scroll-fade-in" className="delay-100">
-              <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-foreground mb-8 tracking-tighter leading-[1.1] md:leading-[1.05]">
-                Schluss mit wochenlangem Bewerben<br />
+              <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-bold text-foreground mb-6 sm:mb-8 tracking-tighter leading-[1.15] sm:leading-[1.1] md:leading-[1.05]">
+                Schluss mit wochenlangem Bewerben{' '}
                 <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
                   Starten Sie innerhalb von Tagen
-                </span><br />
+                </span>{' '}
                 mit Vorstellungsgesprächen
               </h1>
             </ScrollSection>
 
             <ScrollSection animation="scroll-fade-in" className="delay-200">
-              <p className="text-lg md:text-xl text-slate-600 mb-12 max-w-3xl mx-auto leading-relaxed">
+              <p className="text-base sm:text-lg md:text-xl text-slate-600 mb-8 sm:mb-12 max-w-3xl mx-auto leading-relaxed px-2">
                 Klaro findet passende Klinikstellen, erstellt professionelle Lebensläufe & Anschreiben,
                 und bereitet eine fertige E-Mail-Bewerbung vor – Sie müssen nur noch auf "Senden" klicken.
                 Komplett kostenlos für alle Ärzte.
@@ -190,8 +192,8 @@ const NewLandingPage = () => {
             </ScrollSection>
 
             <ScrollSection animation="scroll-fade-in" className="delay-300">
-              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-6">
-                <Button asChild size="lg" className="text-base px-12 h-16 rounded-full shadow-soft-glow hover-lift bg-primary hover:bg-primary/90 text-white font-semibold">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center mb-4 sm:mb-6">
+                <Button asChild size="lg" className="text-base w-full sm:w-auto px-8 sm:px-12 h-14 sm:h-16 rounded-full shadow-soft-glow hover-lift bg-primary hover:bg-primary/90 text-white font-semibold">
                   <Link
                     to="/auth"
                     onClick={() => rememberLandingCta("landing_hero_primary", "/auth")}
@@ -201,7 +203,7 @@ const NewLandingPage = () => {
                   </Link>
                 </Button>
               </div>
-              <div className="flex items-center justify-center gap-6 text-sm text-slate-500 font-medium">
+              <div className="flex flex-col xs:flex-row items-center justify-center gap-3 xs:gap-6 text-xs sm:text-sm text-slate-500 font-medium">
                 <div className="flex items-center gap-2">
                   <CheckCircle className="h-4 w-4 text-green-500" />
                   100% kostenlos
@@ -218,22 +220,22 @@ const NewLandingPage = () => {
 
 
       {/* Document Showcases Section */}
-      <section className="py-24 bg-gradient-to-b from-white to-slate-50/50" id="leistungen">
+      <section className="py-12 md:py-24 bg-gradient-to-b from-white to-slate-50/50" id="leistungen">
         <div className="container mx-auto px-4 sm:px-6">
           <div className="max-w-6xl mx-auto">
 
             {/* Optimized CV Showcase */}
-            <ScrollSection className="mb-20">
-              <div className="grid md:grid-cols-2 gap-12 items-center">
+            <ScrollSection className="mb-12 md:mb-20">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center">
                 <div className="order-2 md:order-1">
                   <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-bold mb-6">
                     <CheckCircle className="h-4 w-4" />
                     99,8% ATS-kompatibel
                   </div>
-                  <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight">
+                  <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-4 sm:mb-6 tracking-tight">
                     Optimierter Lebenslauf
                   </h2>
-                  <p className="text-lg text-slate-600 mb-8 leading-relaxed">
+                  <p className="text-base sm:text-lg text-slate-600 mb-6 sm:mb-8 leading-relaxed">
                     Tabellarischer deutscher Lebenslauf nach medizinischem Standard.
                     Mit Foto (oben rechts), Unterschrift (unten) und allen erforderlichen
                     Abschnitten für Ihre Krankenhausbewerbung.
@@ -267,8 +269,8 @@ const NewLandingPage = () => {
             </ScrollSection>
 
             {/* Optimized Cover Letter Showcase */}
-            <ScrollSection className="mb-20">
-              <div className="grid md:grid-cols-2 gap-12 items-center">
+            <ScrollSection className="mb-12 md:mb-20">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center">
                 <div>
                   <div className="glass-card-premium p-3 rounded-[2rem] bg-white shadow-apple-xl">
                     <div className="bg-slate-50 rounded-[1.7rem] p-8 aspect-[210/297]">
@@ -282,10 +284,10 @@ const NewLandingPage = () => {
                     <CheckCircle className="h-4 w-4" />
                     99,8% Übereinstimmung
                   </div>
-                  <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight">
+                  <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-4 sm:mb-6 tracking-tight">
                     Optimiertes Anschreiben
                   </h2>
-                  <p className="text-lg text-slate-600 mb-8 leading-relaxed">
+                  <p className="text-base sm:text-lg text-slate-600 mb-6 sm:mb-8 leading-relaxed">
                     Professionell formulierte Anschreiben nach deutschem Business-Standard.
                     Personalisiert auf jedes Krankenhaus und jede Stellenausschreibung.
                   </p>
@@ -313,13 +315,13 @@ const NewLandingPage = () => {
       </section>
 
       {/* Key Metric Section */}
-      <section className="py-20 bg-gradient-to-r from-primary to-accent text-white">
+      <section className="py-12 md:py-20 bg-gradient-to-r from-primary to-accent text-white">
         <div className="container mx-auto px-4 sm:px-6 text-center">
           <ScrollSection animation="scroll-scale-in">
-            <h2 className="text-3xl md:text-5xl font-bold mb-4 tracking-tight">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-4">
               Ärzte mit Klaro erhalten 80% schneller eine Zusage
             </h2>
-            <p className="text-lg md:text-xl text-white/90 max-w-2xl mx-auto">
+            <p className="text-base sm:text-lg md:text-xl text-white/90 max-w-2xl mx-auto px-4">
               Im Durchschnitt erhalten unsere Nutzer innerhalb von 14 Tagen
               eine Einladung zum Vorstellungsgespräch
             </p>
@@ -328,19 +330,19 @@ const NewLandingPage = () => {
       </section>
 
       {/* Three-Step Process Section */}
-      <section className="py-24 bg-slate-50/50" id="funktionen">
+      <section className="py-12 md:py-24 bg-slate-50/50" id="funktionen">
         <div className="container mx-auto px-4 sm:px-6">
           <div className="max-w-6xl mx-auto">
             <ScrollSection className="text-center mb-16">
-              <h2 className="text-3xl md:text-5xl font-bold mb-6 tracking-tight">
+              <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold mb-4 sm:mb-6 tracking-tight">
                 So funktioniert Klaro
               </h2>
-              <p className="text-lg text-slate-600 max-w-2xl mx-auto">
+              <p className="text-base sm:text-lg text-slate-600 max-w-2xl mx-auto">
                 Drei einfache Schritte zu Ihrer erfolgreichen Krankenhausbewerbung
               </p>
             </ScrollSection>
 
-            <div className="grid md:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
               {[
                 {
                   step: "1",
@@ -382,9 +384,9 @@ const NewLandingPage = () => {
                 }
               ].map((step, index) => (
                 <ScrollSection key={index} className={`delay-${index * 100}`}>
-                  <div className={`glass-card-premium p-8 rounded-[2rem] bg-white h-full ${step.comingSoon ? 'opacity-75' : ''}`}>
+                  <div className={`glass-card-premium p-5 sm:p-8 rounded-[2rem] bg-white h-full ${step.comingSoon ? 'opacity-75' : ''}`}>
                     {/* Illustration */}
-                    <div className="w-full h-48 mb-6">
+                    <div className="w-full h-40 sm:h-48 mb-4 sm:mb-6">
                       {step.step === "1" && <PrepareIllustration />}
                       {step.step === "2" && <ApplyIllustration />}
                       {step.step === "3" && <ConvinceIllustration />}
@@ -443,16 +445,16 @@ const NewLandingPage = () => {
       </section>
 
       {/* Features Grid */}
-      <section className="py-24 bg-white">
+      <section className="py-12 md:py-24 bg-white">
         <div className="container mx-auto px-4 sm:px-6">
           <div className="max-w-6xl mx-auto">
             <ScrollSection className="text-center mb-16">
-              <h2 className="text-3xl md:text-5xl font-bold mb-6 tracking-tight">
+              <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold mb-4 sm:mb-6 tracking-tight">
                 Alles, was Sie für Ihre erfolgreiche Bewerbung brauchen
               </h2>
             </ScrollSection>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {[
                 {
                   icon: <FileText className="h-6 w-6" />,
@@ -486,7 +488,7 @@ const NewLandingPage = () => {
                 }
               ].map((feature, index) => (
                 <ScrollSection key={index} className={`delay-${index * 50}`}>
-                  <div className="glass-card-premium p-6 rounded-2xl bg-slate-50/50 h-full hover-lift group">
+                  <div className="glass-card-premium p-4 sm:p-6 rounded-2xl bg-slate-50/50 h-full hover-lift group">
                     <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary mb-4 group-hover:scale-110 transition-transform">
                       {feature.icon}
                     </div>
@@ -501,19 +503,19 @@ const NewLandingPage = () => {
       </section>
 
       {/* Testimonials Section */}
-      <section className="py-24 bg-slate-50/50" id="bewertungen">
+      <section className="py-12 md:py-24 bg-slate-50/50" id="bewertungen">
         <div className="container mx-auto px-4 sm:px-6">
           <div className="max-w-6xl mx-auto">
             <ScrollSection className="text-center mb-16">
-              <h2 className="text-3xl md:text-5xl font-bold mb-4 tracking-tight">
+              <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold mb-3 sm:mb-4 tracking-tight">
                 Ärzte vertrauen Klaro bei ihrer Karriere
               </h2>
-              <p className="text-lg text-slate-600">
+              <p className="text-base sm:text-lg text-slate-600">
                 Über {userCount.toLocaleString("de-DE")} Ärzte nutzen Klaro für ihre Bewerbungen
               </p>
             </ScrollSection>
 
-            <div className="grid md:grid-cols-3 gap-6 mb-12">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
               {[
                 {
                   quote: "Innerhalb von 2 Wochen hatte ich 5 Vorstellungsgespräche. Die automatische Anschreiben-Erstellung hat mir so viel Zeit gespart!",
@@ -553,7 +555,7 @@ const NewLandingPage = () => {
                 }
               ].map((testimonial, index) => (
                 <ScrollSection key={index} className={`delay-${index * 50}`}>
-                  <div className="glass-card-premium p-6 rounded-2xl bg-white h-full">
+                  <div className="glass-card-premium p-4 sm:p-6 rounded-2xl bg-white h-full">
                     <div className="flex gap-1 mb-4">
                       {[...Array(5)].map((_, i) => (
                         <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
@@ -586,19 +588,19 @@ const NewLandingPage = () => {
       </section>
 
       {/* Resume Examples Section */}
-      <section className="py-24 bg-white" id="vorlagen">
+      <section className="py-12 md:py-24 bg-white" id="vorlagen">
         <div className="container mx-auto px-4 sm:px-6">
           <div className="max-w-6xl mx-auto">
             <ScrollSection className="text-center mb-16">
-              <h2 className="text-3xl md:text-5xl font-bold mb-4 tracking-tight">
+              <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold mb-3 sm:mb-4 tracking-tight">
                 Lebenslauf-Vorlagen die überzeugen
               </h2>
-              <p className="text-lg text-slate-600">
+              <p className="text-base sm:text-lg text-slate-600">
                 Lassen Sie sich von professionellen Lebenslauf-Beispielen für verschiedene Fachrichtungen inspirieren
               </p>
             </ScrollSection>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
               {[
                 {
                   title: "Assistenzarzt Innere Medizin",
@@ -632,7 +634,7 @@ const NewLandingPage = () => {
                 }
               ].map((example, index) => (
                 <ScrollSection key={index} className={`delay-${index * 50}`}>
-                  <div className="glass-card-premium p-6 rounded-2xl bg-slate-50/50 hover-lift group cursor-pointer">
+                  <div className="glass-card-premium p-4 sm:p-6 rounded-2xl bg-slate-50/50 hover-lift group cursor-pointer">
                     <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center mb-4">
                       <Briefcase className="h-6 w-6 text-primary" />
                     </div>
@@ -664,11 +666,11 @@ const NewLandingPage = () => {
       </section>
 
       {/* FAQ Section */}
-      <section className="py-24 bg-slate-50/50">
+      <section className="py-12 md:py-24 bg-slate-50/50">
         <div className="container mx-auto px-4 sm:px-6">
           <div className="max-w-4xl mx-auto">
             <ScrollSection className="text-center mb-16">
-              <h2 className="text-3xl md:text-5xl font-bold mb-4 tracking-tight">
+              <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold mb-3 sm:mb-4 tracking-tight">
                 Häufig gestellte Fragen
               </h2>
             </ScrollSection>
@@ -697,7 +699,7 @@ const NewLandingPage = () => {
                 }
               ].map((faq, index) => (
                 <ScrollSection key={index} className={`delay-${index * 50}`}>
-                  <div className="glass-card-premium p-6 rounded-2xl bg-white">
+                  <div className="glass-card-premium p-4 sm:p-6 rounded-2xl bg-white">
                     <h3 className="text-lg font-bold mb-2">{faq.q}</h3>
                     <p className="text-slate-600 leading-relaxed">{faq.a}</p>
                   </div>
@@ -709,19 +711,19 @@ const NewLandingPage = () => {
       </section>
 
       {/* Final CTA Section */}
-      <section className="py-32 relative overflow-hidden">
+      <section className="py-16 sm:py-24 md:py-32 relative overflow-hidden">
         <div className="absolute -z-10 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-6xl aspect-square bg-gradient-to-r from-primary/20 to-accent/20 blur-[120px] rounded-full" />
         <div className="container mx-auto px-4 sm:px-6 relative z-10">
           <ScrollSection className="text-center space-y-10" animation="scroll-scale-in">
-            <h2 className="text-4xl md:text-6xl font-bold tracking-tighter max-w-4xl mx-auto">
+            <h2 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-bold tracking-tighter max-w-4xl mx-auto px-4">
               Starten Sie heute Ihre erfolgreiche Karriere
             </h2>
-            <p className="text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
+            <p className="text-base sm:text-lg md:text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed px-4">
               Schließen Sie sich über {userCount.toLocaleString("de-DE")} Ärzten an, die mit Klaro
               schneller ihre Traumstelle im Krankenhaus gefunden haben
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <Button asChild size="lg" className="rounded-full px-12 h-16 text-lg font-bold shadow-apple-xl hover-lift">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center">
+              <Button asChild size="lg" className="rounded-full w-full sm:w-auto px-8 sm:px-12 h-14 sm:h-16 text-base sm:text-lg font-bold shadow-apple-xl hover-lift">
                 <Link to="/auth">Jetzt kostenlos starten</Link>
               </Button>
             </div>
