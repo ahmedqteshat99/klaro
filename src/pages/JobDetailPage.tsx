@@ -138,7 +138,7 @@ const JobDetailPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { saveDocument } = useDocumentVersions();
+  const { saveDocument, getLatestDocument } = useDocumentVersions();
 
   const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
