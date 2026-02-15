@@ -160,7 +160,7 @@ const JobDetailPage = () => {
   const [preparedAttachments, setPreparedAttachments] = useState<AttachmentPreview[]>([]);
   const [linkCopied, setLinkCopied] = useState(false);
   const [hasHandledApplyIntent, setHasHandledApplyIntent] = useState(false);
-  const prepareApplicationRef = useRef<() => Promise<void>>(async () => {});
+  const prepareApplicationRef = useRef<() => Promise<void>>(async () => { });
 
   const {
     profile,
@@ -327,10 +327,10 @@ const JobDetailPage = () => {
   useEffect(() => {
     const canonicalUrl = job
       ? `${baseUrl}${buildJobPath({
-          id: job.id,
-          title: job.title,
-          hospitalName: job.hospital_name,
-        })}`
+        id: job.id,
+        title: job.title,
+        hospitalName: job.hospital_name,
+      })}`
       : `${baseUrl}/jobs`;
 
     if (!job) {
@@ -361,13 +361,13 @@ const JobDetailPage = () => {
       },
       jobLocation: job.location
         ? {
-            "@type": "Place",
-            address: {
-              "@type": "PostalAddress",
-              addressLocality: job.location,
-              addressCountry: "DE",
-            },
-          }
+          "@type": "Place",
+          address: {
+            "@type": "PostalAddress",
+            addressLocality: job.location,
+            addressCountry: "DE",
+          },
+        }
         : undefined,
       applicantLocationRequirements: {
         "@type": "Country",
@@ -1353,8 +1353,8 @@ const JobDetailPage = () => {
                 {/* Disclaimer about automatic detail extraction */}
                 <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-3">
                   <p className="text-xs text-blue-800 dark:text-blue-300">
-                    ✅ <strong>Für Ihre Bewerbung:</strong> Wenn Sie auf "Bewerbung vorbereiten" klicken, ruft unser System
-                    automatisch alle Details von der Originalquelle ab und erstellt ein individuelles, hochwertiges Anschreiben
+                    ✅ <strong>Für Ihre Bewerbung:</strong> Wenn Sie auf "Bewerbung vorbereiten" klicken, analysiert unser System
+                    den von Ihnen bereitgestellten Link zur Stellenanzeige und erstellt daraus ein individuelles, hochwertiges Anschreiben
                     für Sie – ohne dass Sie die Stellenanzeige manuell kopieren müssen.
                   </p>
                 </div>
@@ -1384,9 +1384,8 @@ const JobDetailPage = () => {
                       {PREPARE_LOADING_STEPS.map((step, stepIndex) => (
                         <span
                           key={step}
-                          className={`h-1.5 rounded-full transition-colors ${
-                            stepIndex <= prepareStepIndex ? "bg-primary" : "bg-primary/20"
-                          }`}
+                          className={`h-1.5 rounded-full transition-colors ${stepIndex <= prepareStepIndex ? "bg-primary" : "bg-primary/20"
+                            }`}
                         />
                       ))}
                     </div>
