@@ -1580,14 +1580,14 @@ const JobDetailPage = () => {
 
                   <Button
                     onClick={() => {
-                      const jobUrl = job.source_url || job.apply_url;
+                      const jobUrl = job.apply_url || job.source_url;
                       if (jobUrl) {
                         window.open(jobUrl, '_blank', 'noopener,noreferrer');
                       }
                     }}
-                    disabled={!job.source_url && !job.apply_url}
-                    variant="outline"
-                    className="w-full"
+                    disabled={!job.apply_url && !job.source_url}
+                    variant="default"
+                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
                   >
                     <ExternalLink className="mr-2 h-4 w-4" />
                     Direkt beim Arbeitgeber bewerben
