@@ -34,6 +34,9 @@ const AdminJobsPage = lazy(() => import("./pages/admin/AdminJobsPage"));
 const AdminUsersPage = lazy(() => import("./pages/admin/AdminUsersPage"));
 const AdminUserDetailPage = lazy(() => import("./pages/admin/AdminUserDetailPage"));
 const AdminDataSubjectPage = lazy(() => import("./pages/admin/AdminDataSubjectPage"));
+const VerifyEmailPage = lazy(() => import("./pages/VerifyEmailPage"));
+const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
+const NewLandingPage = lazy(() => import("./pages/NewLandingPage"));
 
 const queryClient = new QueryClient();
 
@@ -69,10 +72,12 @@ const App = () => {
           >
             <Routes>
               {/* Public routes */}
-              <Route path="/" element={<ComingSoonPage />} />
+              <Route path="/" element={<NewLandingPage />} />
               <Route path="/landing" element={<LandingPage />} />
               <Route path="/auth" element={<AuthPage />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/auth/verify-email" element={<VerifyEmailPage />} />
+              <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
               <Route path="/datenschutz" element={<DatenschutzPage />} />
               <Route path="/agb" element={<AgbPage />} />
               <Route path="/datenaufbewahrung" element={<DatenaufbewahrungPage />} />
