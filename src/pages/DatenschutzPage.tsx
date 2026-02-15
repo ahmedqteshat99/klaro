@@ -172,7 +172,7 @@ const DatenschutzPage = () => {
               <li><strong>Urheberrechtsschutz:</strong> Vollständige Stellenbeschreibungen werden NICHT angezeigt, um Urheberrechte und Datenbankrechte der Arbeitgeber zu wahren</li>
               <li><strong>Quellenangabe:</strong> Jede Stellenanzeige enthält einen Link zur Originalquelle beim Arbeitgeber</li>
               <li><strong>Keine Gewähr:</strong> Klaro übernimmt keine Haftung für Aktualität, Richtigkeit oder Vollständigkeit der Stellenanzeigen. Nutzer müssen alle Details direkt beim Arbeitgeber prüfen</li>
-              <li><strong>Bewerbungsvorbereitung:</strong> Wenn Sie auf "Bewerbung vorbereiten" klicken, ruft unser System temporär die vollständigen Details von der Originalquelle ab (wie Firecrawl oben beschrieben) zur Generierung eines personalisierten Anschreibens</li>
+              <li><strong>Bewerbungsvorbereitung:</strong> Wenn Sie auf "Bewerbung vorbereiten" klicken, analysiert unser System den von Ihnen bereitgestellten Link zur Stellenanzeige (wie Firecrawl oben beschrieben) und erstellt daraus ein personalisiertes Anschreiben</li>
             </ul>
             <p className="text-xs text-muted-foreground bg-amber-50 dark:bg-amber-950/30 p-3 rounded-md border border-amber-200 dark:border-amber-800 mt-2">
               <strong>Rechtlicher Hinweis:</strong> Die Stellenbörse zeigt ausschließlich minimale Informationen zur Orientierung.
