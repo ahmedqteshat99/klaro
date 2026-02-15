@@ -56,6 +56,7 @@ serve(async (req) => {
       certifications,
       publications,
       jobData,
+      userPreferences,
     } = await req.json();
     let profile = incomingProfile;
 
@@ -161,6 +162,18 @@ serve(async (req) => {
 - Ansprechpartner: ${jobData.ansprechpartner || 'nicht angegeben'}
 - Anforderungen: ${jobData.anforderungen || 'nicht angegeben'}`;
 
+    // Build user preferences section if provided
+    let userPreferencesText = '';
+    if (userPreferences && Array.isArray(userPreferences) && userPreferences.length > 0) {
+      userPreferencesText = `
+
+WICHTIG - BENUTZERPRÄFERENZEN:
+Der Benutzer hat folgende spezielle Wünsche für das Anschreiben:
+${userPreferences.map((pref, index) => `${index + 1}. ${pref}`).join('\n')}
+
+Diese Präferenzen müssen bei der Erstellung berücksichtigt werden.`;
+    }
+
     const systemPrompt = `Du bist ein professioneller deutscher Bewerbungsschreiben-Generator für Ärzte.
 
 REGELN:
@@ -175,7 +188,7 @@ REGELN:
 9. Erlaubte Tags: p, strong, br, div
 10. Struktur: Briefkopf (zweispaltig), Betreff (fett), Anrede, Einleitung, Hauptteil (Motivation, Qualifikationen), Schluss, Grußformel
 11. Länge: ca. 250-350 Wörter
-12. Verwende als Absender-E-Mail exakt die Klaro-E-Mail aus den Bewerberdaten.
+12. Verwende als Absender-E-Mail exakt die Klaro-E-Mail aus den Bewerberdaten.${userPreferencesText}
 
 LAYOUT-ANWEISUNGEN:
 - Briefkopf als zweispaltiges Layout mit Flexbox:

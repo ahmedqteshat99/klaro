@@ -179,7 +179,7 @@ const AnschreibenPage = () => {
     void touchLastSeen(userId);
   }, [userId]);
 
-  const handleGenerateAnschreiben = async () => {
+  const handleGenerateAnschreiben = async (userPreferences?: string[]) => {
     if (!profile?.vorname || !profile?.nachname) {
       toast({
         title: "Profil unvollständig",
@@ -215,6 +215,7 @@ const AnschreibenPage = () => {
         certifications,
         publications,
         jobData,
+        userPreferences,
       });
 
       if (!result.success || !result.html) {
@@ -418,7 +419,6 @@ const AnschreibenPage = () => {
               jobUrl={jobUrl}
               setJobUrl={setJobUrl}
               currentHtml={anschreibenHtml}
-              onHtmlUpdated={handleEnhancedHtmlUpdate}
             />
 
             <Card>

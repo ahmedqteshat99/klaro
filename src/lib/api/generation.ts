@@ -133,6 +133,7 @@ export interface JobData {
 
 interface GenerateAnschreibenParams extends GenerateCVParams {
   jobData: JobData;
+  userPreferences?: string[];
 }
 
 export const generateCV = async (params: GenerateCVParams): Promise<{ success: boolean; html?: string; error?: string }> => {
