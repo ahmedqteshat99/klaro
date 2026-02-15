@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.lifecycle-campaign-runner]
 verify_jwt = false
+
+[functions.merge-application-pdfs]
+verify_jwt = false

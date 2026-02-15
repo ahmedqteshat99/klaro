@@ -802,8 +802,13 @@ const JobDetailPage = () => {
       setPrepareProgressGoal(90);
 
       const basePath = `${userId}/applications/${applicationRow.id}`;
-      const cvFileName = sanitizeFileName(`Lebenslauf_${profile.nachname || "Arzt"}.pdf`);
-      const anschreibenFileName = sanitizeFileName(`Anschreiben_${profile.nachname || "Arzt"}.pdf`);
+
+      // Build filename parts for Nachname_Hospitalname pattern
+      const nachnamePart = profile.nachname || "Arzt";
+      const hospitalPart = job.hospital_name || "Stelle";
+
+      const cvFileName = sanitizeFileName(`Lebenslauf_${nachnamePart}_${hospitalPart}.pdf`);
+      const anschreibenFileName = sanitizeFileName(`Anschreiben_${nachnamePart}_${hospitalPart}.pdf`);
       const cvPath = `${basePath}/${cvFileName}`;
       const anschreibenPath = `${basePath}/${anschreibenFileName}`;
 

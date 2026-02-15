@@ -48,11 +48,20 @@ async function ensureFreshSession(): Promise<void> {
   const expiresAt = session.expires_at;
   const now = Math.floor(Date.now() / 1000);
 
-  if (expiresAt && expiresAt - now < 60) {
-    const { error } = await supabase.auth.refreshSession();
+  // Refresh if session expires in less than 5 minutes (increased buffer)
+  if (expiresAt && expiresAt - now < 300) {
+    const { data, error } = await supabase.auth.refreshSession();
     if (error) {
       throw new Error("Sitzung abgelaufen. Bitte neu anmelden.");
     }
+
+    // Verify the new session is valid
+    if (!data.session) {
+      throw new Error("Sitzung konnte nicht erneuert werden. Bitte neu anmelden.");
+    }
+
+    // Wait a moment for the new token to propagate
+    await new Promise(resolve => setTimeout(resolve, 100));
   }
 }
 
@@ -121,14 +130,40 @@ interface MergeApplicationPdfsPayload {
   nachname?: string;
 }
 
+async function getAccessToken(): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    // Try refreshing once
+    const { data: refreshData } = await supabase.auth.refreshSession();
+    if (!refreshData.session?.access_token) {
+      throw new Error("Nicht angemeldet. Bitte laden Sie die Seite neu und melden Sie sich erneut an.");
+    }
+    return refreshData.session.access_token;
+  }
+
+  // Proactively refresh if expiring within 5 minutes
+  const expiresAt = session.expires_at;
+  const now = Math.floor(Date.now() / 1000);
+  if (expiresAt && expiresAt - now < 300) {
+    const { data: refreshData } = await supabase.auth.refreshSession();
+    if (refreshData.session?.access_token) {
+      return refreshData.session.access_token;
+    }
+  }
+
+  return session.access_token;
+}
+
 export async function mergeApplicationPdfs(payload: MergeApplicationPdfsPayload): Promise<{
   success: boolean;
   blob?: Blob;
   filename?: string;
   error?: string;
 }> {
+  let accessToken: string;
   try {
-    await ensureFreshSession();
+    accessToken = await getAccessToken();
   } catch (error) {
     return {
       success: false,
@@ -136,16 +171,59 @@ export async function mergeApplicationPdfs(payload: MergeApplicationPdfsPayload)
     };
   }
 
-  const { data, error } = await supabase.functions.invoke("merge-application-pdfs", {
-    body: payload,
-    responseType: "blob",
-  });
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  const functionUrl = `${supabaseUrl}/functions/v1/merge-application-pdfs`;
 
-  if (error) {
-    return { success: false, error: parseFunctionError(error) };
+  const doFetch = async (token: string): Promise<Response> => {
+    return fetch(functionUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+        "apikey": anonKey,
+      },
+      body: JSON.stringify(payload),
+    });
+  };
+
+  let response = await doFetch(accessToken);
+
+  // If 401, refresh token and retry once
+  if (response.status === 401) {
+    try {
+      const { data: refreshData } = await supabase.auth.refreshSession();
+      if (refreshData.session?.access_token) {
+        response = await doFetch(refreshData.session.access_token);
+      }
+    } catch {
+      // refresh failed
+    }
+
+    if (response.status === 401) {
+      return {
+        success: false,
+        error: "Ihre Sitzung ist abgelaufen. Bitte laden Sie die Seite neu und melden Sie sich erneut an.",
+      };
+    }
   }
 
-  if (!data || !(data instanceof Blob)) {
+  // Handle non-2xx responses (read as JSON for error message)
+  if (!response.ok) {
+    try {
+      const errorBody = await response.json() as { error?: string; message?: string; details?: unknown };
+      return {
+        success: false,
+        error: errorBody.error || errorBody.message || `Fehler ${response.status}`,
+      };
+    } catch {
+      return { success: false, error: `Server-Fehler (${response.status})` };
+    }
+  }
+
+  // Success: read response as blob
+  const blob = await response.blob();
+  if (!blob || blob.size === 0) {
     return { success: false, error: "Keine PDF-Daten empfangen" };
   }
 
@@ -160,7 +238,7 @@ export async function mergeApplicationPdfs(payload: MergeApplicationPdfsPayload)
 
   return {
     success: true,
-    blob: data,
+    blob,
     filename,
   };
 }
