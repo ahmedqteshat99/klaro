@@ -6,13 +6,11 @@ import { useProfile } from "@/hooks/useProfile";
 import { useDocumentVersions } from "@/hooks/useDocumentVersions";
 import { useToast } from "@/hooks/use-toast";
 import { useUserFileUrl } from "@/hooks/useUserFileUrl";
-import { useAiConsent } from "@/hooks/useAiConsent";
 import { generateAnschreiben } from "@/lib/api/generation";
 import { downloadPdfFromServer } from "@/lib/api/pdf-service";
 import { logEvent, touchLastSeen } from "@/lib/app-events";
 import BrandLogo from "@/components/BrandLogo";
 import JobExtractionForm from "@/components/generation/JobExtractionForm";
-import AiConsentModal from "@/components/profile/AiConsentModal";
 import CVTemplate from "@/components/cv/CVTemplate";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -103,15 +101,11 @@ const AnschreibenPage = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [isLoadingVersions, setIsLoadingVersions] = useState(true);
   const [showSignatur, setShowSignatur] = useState(true);
-  const [showAiConsentModal, setShowAiConsentModal] = useState(false);
-  const [pendingGeneration, setPendingGeneration] = useState(false);
 
   const [jobData, setJobData] = useState<ComposerJobData | null>(null);
   const [jobUrl, setJobUrl] = useState("");
   const [anschreibenHtml, setAnschreibenHtml] = useState<string | null>(null);
   const [versions, setVersions] = useState<AnschreibenVersion[]>([]);
-
-  const { hasConsent, grantConsent } = useAiConsent();
 
   useEffect(() => {
     const {
@@ -198,13 +192,6 @@ const AnschreibenPage = () => {
       return;
     }
 
-    // Check for AI consent
-    if (!hasConsent) {
-      setPendingGeneration(true);
-      setShowAiConsentModal(true);
-      return;
-    }
-
     setIsGeneratingAnschreiben(true);
     try {
       const result = await generateAnschreiben({
@@ -267,28 +254,6 @@ const AnschreibenPage = () => {
     } finally {
       setIsGeneratingAnschreiben(false);
     }
-  };
-
-  const handleAiConsentGranted = () => {
-    grantConsent();
-    setShowAiConsentModal(false);
-
-    if (pendingGeneration) {
-      setPendingGeneration(false);
-      // Retry generation after consent
-      setTimeout(() => handleGenerateAnschreiben(), 100);
-    }
-  };
-
-  const handleAiConsentDeclined = () => {
-    setShowAiConsentModal(false);
-    setPendingGeneration(false);
-
-    toast({
-      title: "KI-Generierung abgebrochen",
-      description: "Ohne Einwilligung können wir keine KI-gestützten Texte erstellen. Sie können Ihre Einwilligung jederzeit erteilen.",
-      variant: "default",
-    });
   };
 
   const handleLoadVersion = (doc: AnschreibenVersion) => {
@@ -546,22 +511,6 @@ const AnschreibenPage = () => {
           </Card>
         </div>
       </div>
-
-      <AiConsentModal
-        open={showAiConsentModal}
-        onConsent={handleAiConsentGranted}
-        onDecline={handleAiConsentDeclined}
-        onUseManualMode={() => {
-          setShowAiConsentModal(false);
-          setPendingGeneration(false);
-          toast({
-            title: "Alternative: Anschreiben manuell erstellen",
-            description: "Sie werden zu 'Unterlagen' weitergeleitet, wo Sie Ihr Anschreiben hochladen können.",
-          });
-          // Redirect to Unterlagen page with focus on Anschreiben upload
-          navigate('/unterlagen?tab=anschreiben');
-        }}
-      />
     </div>
   );
 };
