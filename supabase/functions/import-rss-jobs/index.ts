@@ -139,39 +139,48 @@ serve(async (req) => {
     };
 
     try {
-        // ── Auth check: admin or service role ──
+        // ── Auth check: admin only ──
         const authHeader = req.headers.get("Authorization");
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
         const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY")!;
 
-        // Create admin client for database operations
-        const db = createClient(supabaseUrl, serviceRoleKey);
-
-        // Verify admin access (skip for service-role invocations like cron)
-        if (authHeader && !authHeader.includes(serviceRoleKey)) {
-            const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-                global: { headers: { Authorization: authHeader } },
+        if (!authHeader) {
+            return new Response(JSON.stringify({ error: "Nicht autorisiert" }), {
+                status: 401,
+                headers: { ...corsHeaders(req), "Content-Type": "application/json" },
             });
-            const { data: userData } = await userClient.auth.getUser();
-            if (!userData?.user) {
-                return new Response(JSON.stringify({ error: "Nicht autorisiert" }), {
-                    status: 401,
-                    headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-                });
-            }
-            const { data: roleData } = await db
-                .from("user_roles")
-                .select("role")
-                .eq("user_id", userData.user.id)
-                .single();
-            if (roleData?.role !== "admin") {
-                return new Response(JSON.stringify({ error: "Nur Admins" }), {
-                    status: 403,
-                    headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-                });
-            }
         }
+
+        // Create client with service role key but user's auth header for identity
+        const supabaseClient = createClient(supabaseUrl, serviceRoleKey, {
+            global: { headers: { Authorization: authHeader } },
+        });
+
+        const { data: userData, error: userError } = await supabaseClient.auth.getUser();
+        if (userError || !userData?.user) {
+            return new Response(JSON.stringify({ error: "Nicht autorisiert" }), {
+                status: 401,
+                headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+            });
+        }
+
+        // Check admin role
+        const { data: roleData } = await supabaseClient
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", userData.user.id)
+            .single();
+
+        if (roleData?.role !== "admin") {
+            return new Response(JSON.stringify({ error: "Nur Admins" }), {
+                status: 403,
+                headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+            });
+        }
+
+        // Create a clean service role client for DB operations (no user auth header)
+        const db = createClient(supabaseUrl, serviceRoleKey);
 
         // ── Rate limit: check last run ──
         const { data: lastRun } = await db
