@@ -23,6 +23,7 @@ const PhotoUpload = lazy(() => import("@/components/profile/PhotoUpload"));
 const SignatureCanvas = lazy(() => import("@/components/profile/SignatureCanvas"));
 const CVTemplate = lazy(() => import("@/components/cv/CVTemplate"));
 const JobExtractionForm = lazy(() => import("@/components/generation/JobExtractionForm"));
+const JobSelector = lazy(() => import("@/components/onboarding/JobSelector"));
 
 const ONBOARDING_KEY = "onboarding_done";
 const TOTAL_STEPS = 5;
@@ -113,6 +114,8 @@ const OnboardingPage = () => {
         anforderungen: string | null;
     } | null>(null);
     const [jobUrl, setJobUrl] = useState("");
+    const [jobSelectionMode, setJobSelectionMode] = useState<"list" | "manual">("list");
+    const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
     const [sessionEmail, setSessionEmail] = useState<string | null>(null);
     const [sessionFirstName, setSessionFirstName] = useState<string | null>(null);
     const [sessionLastName, setSessionLastName] = useState<string | null>(null);
@@ -380,6 +383,29 @@ const OnboardingPage = () => {
         }
     };
 
+    const handleSelectJobForGeneration = async (job: any) => {
+        setSelectedJobId(job.id);
+
+        // Auto-populate jobData from selected job
+        const populatedJobData = {
+            krankenhaus: job.hospital_name,
+            standort: job.location,
+            fachabteilung: job.department,
+            position: job.title,
+            ansprechpartner: job.contact_name,
+            anforderungen: job.requirements
+        };
+
+        setJobData(populatedJobData);
+        setJobUrl(job.apply_url || "");
+
+        // Trigger generation immediately
+        await handleGenerateAnschreiben();
+
+        // Reset selected job ID after generation completes
+        setSelectedJobId(null);
+    };
+
     if (isLoading || isProfileLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-background">
@@ -630,15 +656,48 @@ const OnboardingPage = () => {
                             <div className="space-y-6">
                                 {!anschreibenHtml ? (
                                     <>
-                                        <JobExtractionForm
-                                            onJobDataExtracted={(data) => setJobData(data)}
-                                            jobData={jobData}
-                                            setJobData={setJobData}
-                                            onGenerateAnschreiben={handleGenerateAnschreiben}
-                                            isGeneratingAnschreiben={isGeneratingAnschreiben}
-                                            jobUrl={jobUrl}
-                                            setJobUrl={setJobUrl}
-                                        />
+                                        {/* Tab selector */}
+                                        <div className="flex gap-2 p-1 bg-muted rounded-lg w-fit mx-auto">
+                                            <Button
+                                                variant={jobSelectionMode === "list" ? "default" : "ghost"}
+                                                size="sm"
+                                                onClick={() => setJobSelectionMode("list")}
+                                                className="rounded-md"
+                                            >
+                                                <Sparkles className="h-4 w-4 mr-2" />
+                                                Aus Stellenanzeigen
+                                            </Button>
+                                            <Button
+                                                variant={jobSelectionMode === "manual" ? "default" : "ghost"}
+                                                size="sm"
+                                                onClick={() => setJobSelectionMode("manual")}
+                                                className="rounded-md"
+                                            >
+                                                <FileEdit className="h-4 w-4 mr-2" />
+                                                Manuell eingeben
+                                            </Button>
+                                        </div>
+
+                                        {/* Conditional rendering based on selection mode */}
+                                        {jobSelectionMode === "list" ? (
+                                            <Suspense fallback={<div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+                                                <JobSelector
+                                                    onSelectJob={handleSelectJobForGeneration}
+                                                    isGenerating={isGeneratingAnschreiben}
+                                                    generatingJobId={selectedJobId}
+                                                />
+                                            </Suspense>
+                                        ) : (
+                                            <JobExtractionForm
+                                                onJobDataExtracted={(data) => setJobData(data)}
+                                                jobData={jobData}
+                                                setJobData={setJobData}
+                                                onGenerateAnschreiben={handleGenerateAnschreiben}
+                                                isGeneratingAnschreiben={isGeneratingAnschreiben}
+                                                jobUrl={jobUrl}
+                                                setJobUrl={setJobUrl}
+                                            />
+                                        )}
                                     </>
                                 ) : (
                                     <div className="space-y-4">
