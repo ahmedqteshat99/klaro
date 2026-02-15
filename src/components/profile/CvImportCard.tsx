@@ -60,6 +60,7 @@ interface CvImportCardProps {
     sectionId: string,
     data: { title: string; description?: string | null }
   ) => Promise<void>;
+  onImportComplete?: () => void;
 }
 
 const MAX_TEXT_LENGTH = 12000;
@@ -347,6 +348,11 @@ const CvImportCard = ({
       title: "Import abgeschlossen",
       description: "Alle Daten wurden automatisch gespeichert.",
     });
+
+    // Notify parent component that import is complete
+    if (onImportComplete) {
+      onImportComplete();
+    }
   };
 
   const resetInputs = () => {

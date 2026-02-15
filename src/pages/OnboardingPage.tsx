@@ -555,6 +555,7 @@ const OnboardingPage = () => {
                                     addPublication={addPublication}
                                     addCustomSection={addCustomSection}
                                     addCustomSectionEntry={addCustomSectionEntry}
+                                    onImportComplete={() => setStep(2)}
                                 />
 
                                 <Card className="border-dashed">
