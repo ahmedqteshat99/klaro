@@ -3,10 +3,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
 // ─── Configuration ───────────────────────────────────────────────
-const RSS_URL = "https://www.stellenmarkt.de/rss/smrssbf9.xml";
+const SEARCH_URL = "https://www.stellenmarkt.de/stellenangebote--Assistenzarzt";
 const FEED_SOURCE = "stellenmarkt_medizin";
-const KEYWORD = "assistenzarzt";
-const MAX_JOBS_PER_RUN = 50; // Circuit breaker
+const MAX_PAGES = 5; // Scrape up to 5 pages (~75 jobs)
+const MAX_JOBS_PER_RUN = 50;
 const EXPIRATION_GRACE_HOURS = 48;
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -15,7 +15,6 @@ function generateRunId(): string {
     return `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** Simple SHA-256 hash of a string, returned as hex. */
 async function sha256(input: string): Promise<string> {
     const data = new TextEncoder().encode(input);
     const hashBuffer = await crypto.subtle.digest("SHA-256", data);
@@ -24,10 +23,8 @@ async function sha256(input: string): Promise<string> {
         .join("");
 }
 
-/** Strip HTML tags and decode common entities from RSS content. */
 function cleanText(raw: string): string {
     return raw
-        .replace(/<!\[CDATA\[(.*?)\]\]>/gs, "$1")
         .replace(/<[^>]*>/g, " ")
         .replace(/&amp;/g, "&")
         .replace(/&lt;/g, "<")
@@ -39,53 +36,94 @@ function cleanText(raw: string): string {
         .trim();
 }
 
-interface RssItem {
+interface ScrapedJob {
     title: string;
     link: string;
-    description: string;
-    guid: string;
+    company: string;
+    location: string;
+    guid: string; // The anzeige URL as unique identifier
 }
 
-/** Parse RSS XML into structured items. */
-function parseRss(xml: string): RssItem[] {
-    const items: RssItem[] = [];
-    // Use regex-based parsing (DOMParser not available in all Deno versions)
-    const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+/** Scrape job listings from a single search results page. */
+function parseSearchPage(html: string): ScrapedJob[] {
+    const jobs: ScrapedJob[] = [];
+
+    // Match job listing blocks: <a ... href="/anzeige[ID].html" ... title="Stellenangebot [TITLE]">
+    // followed by <h2 class="h4">TITLE</h2>
+    const jobBlockRegex = /<a[^>]*href="(\/anzeige\d+\.html)"[^>]*title="Stellenangebot ([^"]*)"[^>]*>\s*<h2[^>]*>([^<]*)<\/h2>/g;
+
     let match;
+    while ((match = jobBlockRegex.exec(html)) !== null) {
+        const path = match[1];
+        const titleFromAttr = cleanText(match[2]);
+        const titleFromH2 = cleanText(match[3]);
+        const link = `https://www.stellenmarkt.de${path}`;
 
-    while ((match = itemRegex.exec(xml)) !== null) {
-        const itemXml = match[1];
+        // Use the more complete title
+        const title = titleFromAttr.length > titleFromH2.length ? titleFromAttr : titleFromH2;
 
-        const getTag = (tag: string): string => {
-            const tagRegex = new RegExp(`<${tag}>\\s*(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?\\s*</${tag}>`, "i");
-            const m = itemXml.match(tagRegex);
-            return m ? m[1].trim() : "";
-        };
+        // Skip if already seen (duplicates within page)
+        if (jobs.some((j) => j.guid === link)) continue;
 
-        const title = cleanText(getTag("title"));
-        const link = getTag("link").replace(/<!\[CDATA\[|\]\]>/g, "").trim();
-        const description = cleanText(getTag("description"));
-        const guid = getTag("guid").replace(/<!\[CDATA\[|\]\]>/g, "").trim();
+        jobs.push({
+            title,
+            link,
+            company: "",
+            location: "",
+            guid: link,
+        });
+    }
 
-        if (title && (guid || link)) {
-            items.push({ title, link, description, guid: guid || link });
+    // Now try to extract company and location for each job
+    // Company: appears in <span> or text near the job listing
+    // Location: <i class="fas fa-map-marker-alt"></i> LOCATION
+    for (const job of jobs) {
+        const anzeigePath = job.link.replace("https://www.stellenmarkt.de", "");
+        // Find the block around this listing
+        const blockStart = html.indexOf(anzeigePath);
+        if (blockStart === -1) continue;
+
+        // Get ~2000 chars of context around the listing
+        const blockEnd = Math.min(blockStart + 2000, html.length);
+        const block = html.substring(blockStart, blockEnd);
+
+        // Extract location: <i class="fas fa-map-marker-alt"></i> LOCATION
+        const locationMatch = block.match(/fa-map-marker-alt"><\/i>\s*([^<\n]+)/);
+        if (locationMatch) {
+            job.location = cleanText(locationMatch[1]);
+        }
+
+        // Extract company from title="Stellenangebote von COMPANY"
+        const companyMatch = block.match(/title="Stellenangebote von ([^"]+)"/);
+        if (companyMatch) {
+            job.company = cleanText(companyMatch[1]);
         }
     }
 
-    return items;
+    return jobs;
+}
+
+/** Check if there's a next page. */
+function hasNextPage(html: string, currentPage: number): boolean {
+    return html.includes(`page=${currentPage + 1}`);
 }
 
 /** Generate an AI summary for a job using Claude. */
 async function generateAiSummary(
-    item: RssItem,
+    job: ScrapedJob,
     apiKey: string
 ): Promise<string> {
     try {
+        const contextParts = [
+            `TITEL: ${job.title}`,
+            job.company ? `ARBEITGEBER: ${job.company}` : null,
+            job.location ? `STANDORT: ${job.location}` : null,
+        ].filter(Boolean).join("\n");
+
         const prompt = `Basierend auf dieser Stellenanzeige, schreibe eine professionelle, einladende Zusammenfassung in 2-3 Sätzen auf Deutsch.
 Beschreibe kurz: Was für eine Stelle/Klinik ist es, was sind die Hauptaufgaben, und was macht die Position attraktiv.
 
-TITEL: ${item.title}
-BESCHREIBUNG: ${item.description.substring(0, 3000)}
+${contextParts}
 
 Antworte NUR mit der Zusammenfassung, keine Anführungszeichen, keine Erklärungen.`;
 
@@ -106,15 +144,17 @@ Antworte NUR mit der Zusammenfassung, keine Anführungszeichen, keine Erklärung
 
         if (!response.ok) {
             console.error(`AI API error: ${response.status}`);
-            return item.description.substring(0, 300); // Fallback to truncated raw text
+            return `${job.title}${job.company ? ` bei ${job.company}` : ""}${job.location ? ` in ${job.location}` : ""}.`;
         }
 
         const data = await response.json();
         const text = data.content?.[0]?.text?.trim();
-        return text && text.length > 10 ? text : item.description.substring(0, 300);
+        return text && text.length > 10
+            ? text
+            : `${job.title}${job.company ? ` bei ${job.company}` : ""}${job.location ? ` in ${job.location}` : ""}.`;
     } catch (err) {
         console.error("AI summary error:", err);
-        return item.description.substring(0, 300);
+        return `${job.title}${job.company ? ` bei ${job.company}` : ""}${job.location ? ` in ${job.location}` : ""}.`;
     }
 }
 
@@ -128,13 +168,13 @@ serve(async (req) => {
     const runId = generateRunId();
     const results = {
         runId,
-        totalFeedItems: 0,
-        matchingItems: 0,
+        totalListings: 0,
         imported: 0,
         updated: 0,
         skipped: 0,
         expired: 0,
         errors: 0,
+        pagesScraped: 0,
         errorMessages: [] as string[],
     };
 
@@ -152,7 +192,6 @@ serve(async (req) => {
             });
         }
 
-        // Create client with service role key but user's auth header for identity
         const supabaseClient = createClient(supabaseUrl, serviceRoleKey, {
             global: { headers: { Authorization: authHeader } },
         });
@@ -165,7 +204,6 @@ serve(async (req) => {
             });
         }
 
-        // Check admin role (stored in profiles.role as 'ADMIN')
         const { data: roleData } = await supabaseClient
             .from("profiles")
             .select("role")
@@ -179,7 +217,6 @@ serve(async (req) => {
             });
         }
 
-        // Create a clean service role client for DB operations (no user auth header)
         const db = createClient(supabaseUrl, serviceRoleKey);
 
         // ── Rate limit: check last run ──
@@ -193,11 +230,11 @@ serve(async (req) => {
 
         if (lastRun) {
             const lastRunAge = Date.now() - new Date(lastRun.created_at).getTime();
-            if (lastRunAge < 60 * 60 * 1000) { // Less than 1 hour ago
+            if (lastRunAge < 30 * 60 * 1000) { // 30 minutes cooldown
                 return new Response(
                     JSON.stringify({
                         success: false,
-                        error: "Zu früh. Letzter Import vor weniger als 1 Stunde.",
+                        error: "Zu früh. Letzter Import vor weniger als 30 Minuten.",
                         lastRun: lastRun.created_at,
                     }),
                     { headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
@@ -209,90 +246,73 @@ serve(async (req) => {
         await db.from("job_import_logs").insert({
             run_id: runId,
             action: "run_started",
-            details: { feed_url: RSS_URL, keyword: KEYWORD },
+            details: { source: SEARCH_URL, method: "html_scrape" },
         });
 
-        // ── 1. Fetch RSS feed ──
-        console.log(`[${runId}] Fetching RSS feed...`);
-        let rssXml: string;
+        // ── 1. Scrape search results pages ──
+        console.log(`[${runId}] Scraping Assistenzarzt listings...`);
+        const allJobs: ScrapedJob[] = [];
 
-        try {
-            const rssResponse = await fetch(RSS_URL, {
-                headers: {
-                    "User-Agent": "Klaro/1.0 (https://klaro.tools; job-import-bot)",
-                    "Accept": "application/rss+xml, application/xml, text/xml",
-                },
-                signal: AbortSignal.timeout(30_000), // 30s timeout
-            });
+        for (let page = 1; page <= MAX_PAGES; page++) {
+            const url = page === 1 ? SEARCH_URL : `${SEARCH_URL}?page=${page}`;
 
-            if (!rssResponse.ok) {
-                // Retry once after 5s
-                console.warn(`[${runId}] RSS fetch failed (${rssResponse.status}), retrying...`);
-                await new Promise((r) => setTimeout(r, 5000));
-
-                const retryResponse = await fetch(RSS_URL, {
+            try {
+                const response = await fetch(url, {
                     headers: {
-                        "User-Agent": "Klaro/1.0 (https://klaro.tools; job-import-bot)",
-                        "Accept": "application/rss+xml, application/xml, text/xml",
+                        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                        "Accept-Language": "de-DE,de;q=0.9,en;q=0.5",
                     },
                     signal: AbortSignal.timeout(30_000),
                 });
 
-                if (!retryResponse.ok) {
-                    throw new Error(`RSS fetch failed after retry: ${retryResponse.status}`);
+                if (!response.ok) {
+                    console.warn(`[${runId}] Page ${page} returned ${response.status}, stopping`);
+                    break;
                 }
-                rssXml = await retryResponse.text();
-            } else {
-                rssXml = await rssResponse.text();
+
+                const html = await response.text();
+                const pageJobs = parseSearchPage(html);
+                results.pagesScraped++;
+
+                console.log(`[${runId}] Page ${page}: found ${pageJobs.length} listings`);
+
+                if (pageJobs.length === 0) break;
+
+                allJobs.push(...pageJobs);
+
+                // Check if there's a next page
+                if (!hasNextPage(html, page)) break;
+
+                // Brief delay between pages
+                if (page < MAX_PAGES) {
+                    await new Promise((r) => setTimeout(r, 1500));
+                }
+            } catch (fetchErr) {
+                const msg = fetchErr instanceof Error ? fetchErr.message : "Fetch error";
+                console.error(`[${runId}] Page ${page} error: ${msg}`);
+                await db.from("job_import_logs").insert({
+                    run_id: runId,
+                    action: "error",
+                    details: { phase: "scrape", page, error: msg },
+                });
+                break;
             }
-        } catch (fetchErr) {
-            const msg = fetchErr instanceof Error ? fetchErr.message : "Unknown fetch error";
+        }
+
+        results.totalListings = allJobs.length;
+        console.log(`[${runId}] Total: ${allJobs.length} listings from ${results.pagesScraped} pages`);
+
+        if (allJobs.length === 0) {
             await db.from("job_import_logs").insert({
                 run_id: runId,
                 action: "error",
-                details: { phase: "fetch", error: msg },
+                details: { phase: "scrape", error: "No listings found" },
             });
-            throw new Error(`RSS fetch error: ${msg}`);
+            throw new Error("Keine Stellenangebote auf der Suchseite gefunden");
         }
 
-        // ── 2. Parse RSS items ──
-        const allItems = parseRss(rssXml);
-        results.totalFeedItems = allItems.length;
-        console.log(`[${runId}] Parsed ${allItems.length} items from feed`);
-
-        if (allItems.length === 0) {
-            await db.from("job_import_logs").insert({
-                run_id: runId,
-                action: "error",
-                details: { phase: "parse", error: "No items found in RSS feed", xmlLength: rssXml.length },
-            });
-            throw new Error("No items found in RSS feed — possible parsing error");
-        }
-
-        // ── 3. Filter for keyword ──
-        const matchingItems = allItems.filter(
-            (item) =>
-                item.title.toLowerCase().includes(KEYWORD) ||
-                item.description.toLowerCase().includes(KEYWORD)
-        );
-        results.matchingItems = matchingItems.length;
-
-        // Log filtered out count
-        const filteredOutCount = allItems.length - matchingItems.length;
-        if (filteredOutCount > 0) {
-            await db.from("job_import_logs").insert({
-                run_id: runId,
-                action: "filtered_out",
-                details: { count: filteredOutCount, keyword: KEYWORD },
-            });
-        }
-
-        console.log(`[${runId}] ${matchingItems.length} items match keyword "${KEYWORD}"`);
-
-        // Circuit breaker
-        const itemsToProcess = matchingItems.slice(0, MAX_JOBS_PER_RUN);
-
-        // ── 4. Load existing RSS jobs for dedup ──
+        // ── 2. Load existing jobs for dedup ──
         const { data: existingJobs } = await db
             .from("jobs")
             .select("id, rss_guid, rss_content_hash, import_status")
@@ -300,47 +320,48 @@ serve(async (req) => {
             .not("rss_guid", "is", null);
 
         const existingByGuid = new Map(
-            (existingJobs ?? []).map((j) => [j.rss_guid, j])
+            (existingJobs ?? []).map((j: any) => [j.rss_guid, j])
         );
 
         const seenGuids = new Set<string>();
+        const itemsToProcess = allJobs.slice(0, MAX_JOBS_PER_RUN);
 
-        // ── 5. Process each matching item ──
-        for (const item of itemsToProcess) {
-            seenGuids.add(item.guid);
+        // ── 3. Process each listing ──
+        for (const job of itemsToProcess) {
+            seenGuids.add(job.guid);
 
             try {
-                const contentHash = await sha256(item.title + item.description);
-                const existing = existingByGuid.get(item.guid);
+                const contentHash = await sha256(job.title + job.company + job.location);
+                const existing = existingByGuid.get(job.guid);
 
                 if (existing) {
-                    // ── Existing job ──
-                    // Always update last_seen
+                    // Update last_seen
                     await db
                         .from("jobs")
                         .update({ rss_last_seen_at: new Date().toISOString() })
                         .eq("id", existing.id);
 
                     if (existing.rss_content_hash === contentHash) {
-                        // Content unchanged
                         results.skipped++;
                         await db.from("job_import_logs").insert({
                             run_id: runId,
                             action: "skipped",
-                            rss_guid: item.guid,
+                            rss_guid: job.guid,
                             job_id: existing.id,
-                            job_title: item.title,
+                            job_title: job.title,
                             details: { reason: "content_unchanged" },
                         });
                         continue;
                     }
 
-                    // Content changed — update description but keep approval status
-                    const newSummary = await generateAiSummary(item, anthropicKey);
+                    // Content changed
+                    const newSummary = await generateAiSummary(job, anthropicKey);
                     await db
                         .from("jobs")
                         .update({
                             description: newSummary,
+                            hospital_name: job.company || null,
+                            location: job.location || null,
                             rss_content_hash: contentHash,
                             rss_last_seen_at: new Date().toISOString(),
                         })
@@ -350,25 +371,27 @@ serve(async (req) => {
                     await db.from("job_import_logs").insert({
                         run_id: runId,
                         action: "updated",
-                        rss_guid: item.guid,
+                        rss_guid: job.guid,
                         job_id: existing.id,
-                        job_title: item.title,
+                        job_title: job.title,
                         details: { reason: "content_changed" },
                     });
-                    console.log(`[${runId}] Updated: ${item.title}`);
+                    console.log(`[${runId}] Updated: ${job.title}`);
                 } else {
-                    // ── New job ──
-                    const summary = await generateAiSummary(item, anthropicKey);
+                    // New job
+                    const summary = await generateAiSummary(job, anthropicKey);
 
                     const { data: inserted, error: insertErr } = await db
                         .from("jobs")
                         .insert({
-                            title: item.title,
+                            title: job.title,
                             description: summary,
-                            apply_url: item.link,
-                            source_url: item.link,
+                            hospital_name: job.company || null,
+                            location: job.location || null,
+                            apply_url: job.link,
+                            source_url: job.link,
                             source_name: "stellenmarkt.de",
-                            rss_guid: item.guid,
+                            rss_guid: job.guid,
                             rss_content_hash: contentHash,
                             rss_imported_at: new Date().toISOString(),
                             rss_last_seen_at: new Date().toISOString(),
@@ -381,10 +404,8 @@ serve(async (req) => {
                         .single();
 
                     if (insertErr) {
-                        // Could be a unique constraint violation (race condition)
                         if (insertErr.message?.includes("unique") || insertErr.message?.includes("duplicate")) {
                             results.skipped++;
-                            console.log(`[${runId}] Duplicate skipped: ${item.title}`);
                             continue;
                         }
                         throw insertErr;
@@ -394,64 +415,62 @@ serve(async (req) => {
                     await db.from("job_import_logs").insert({
                         run_id: runId,
                         action: "imported",
-                        rss_guid: item.guid,
+                        rss_guid: job.guid,
                         job_id: inserted?.id,
-                        job_title: item.title,
+                        job_title: job.title,
                     });
-                    console.log(`[${runId}] Imported: ${item.title}`);
+                    console.log(`[${runId}] Imported: ${job.title}`);
 
-                    // Small delay between AI calls
-                    await new Promise((r) => setTimeout(r, 400));
+                    // Delay between AI calls
+                    await new Promise((r) => setTimeout(r, 500));
                 }
             } catch (itemErr) {
                 results.errors++;
                 const msg = itemErr instanceof Error ? itemErr.message : "Unknown error";
-                results.errorMessages.push(`${item.title}: ${msg}`);
+                results.errorMessages.push(`${job.title}: ${msg}`);
                 await db.from("job_import_logs").insert({
                     run_id: runId,
                     action: "error",
-                    rss_guid: item.guid,
-                    job_title: item.title,
+                    rss_guid: job.guid,
+                    job_title: job.title,
                     details: { error: msg },
                 });
-                console.error(`[${runId}] Error processing "${item.title}":`, msg);
+                console.error(`[${runId}] Error: "${job.title}":`, msg);
             }
         }
 
-        // ── 6. Mark expired jobs ──
+        // ── 4. Mark expired jobs ──
         const expirationThreshold = new Date(
             Date.now() - EXPIRATION_GRACE_HOURS * 60 * 60 * 1000
         ).toISOString();
 
         for (const [guid, existing] of existingByGuid) {
-            if (!seenGuids.has(guid) && existing.import_status === "pending_review") {
-                // Only expire pending jobs, not published or rejected
+            if (!seenGuids.has(guid) && (existing as any).import_status === "pending_review") {
                 const { data: jobData } = await db
                     .from("jobs")
                     .select("rss_last_seen_at")
-                    .eq("id", existing.id)
+                    .eq("id", (existing as any).id)
                     .single();
 
                 if (jobData?.rss_last_seen_at && jobData.rss_last_seen_at < expirationThreshold) {
                     await db
                         .from("jobs")
                         .update({ import_status: "expired" })
-                        .eq("id", existing.id);
+                        .eq("id", (existing as any).id);
 
                     results.expired++;
                     await db.from("job_import_logs").insert({
                         run_id: runId,
                         action: "expired",
                         rss_guid: guid,
-                        job_id: existing.id,
+                        job_id: (existing as any).id,
                         details: { last_seen: jobData.rss_last_seen_at },
                     });
-                    console.log(`[${runId}] Expired: ${guid}`);
                 }
             }
         }
 
-        // ── Log run completion ──
+        // ── Log completion ──
         await db.from("job_import_logs").insert({
             run_id: runId,
             action: "run_completed",
