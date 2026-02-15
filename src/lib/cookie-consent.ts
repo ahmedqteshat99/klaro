@@ -16,35 +16,33 @@ export const klaroConfig = {
   translations: {
     de: {
       consentModal: {
-        title: "🍪 Ihre Privatsphäre ist uns wichtig",
+        title: "Datenschutz-Einstellungen",
         description:
-          "Wir nutzen Cookies und vergleichbare Technologien, um Klaro sicher und funktional zu betreiben. " +
-          "Einige Dienste sind technisch notwendig, andere helfen uns, die Plattform für Sie zu verbessern. " +
-          "Sie haben die volle Kontrolle über Ihre Daten.",
+          "Wir verwenden Cookies, um Klaro sicher und funktional zu betreiben. " +
+          "Einige sind technisch notwendig, andere helfen uns, die Plattform zu verbessern.",
         privacyPolicy: {
           name: "Datenschutzerklärung",
-          text: "Details zu unserer Datenverarbeitung finden Sie in unserer {privacyPolicy}.",
+          text: "Mehr dazu in unserer {privacyPolicy}.",
         },
       },
       consentNotice: {
         changeDescription:
-          "Unsere Datenschutzrichtlinien wurden aktualisiert. Bitte überprüfen Sie Ihre Einstellungen.",
+          "Unsere Datenschutzrichtlinien wurden aktualisiert.",
         description:
-          "Diese Website verwendet Cookies für eine optimale Nutzererfahrung. " +
-          "Wählen Sie selbst, welche Dienste Sie zulassen möchten.",
-        learnMore: "⚙️ Einstellungen",
+          "Wir verwenden Cookies für eine optimale Nutzererfahrung.",
+        learnMore: "Einstellungen",
         testing: "Test-Modus aktiv",
       },
       purposeItem: {
         service: "Dienst",
         services: "Dienste",
       },
-      ok: "✓ Alle akzeptieren",
-      save: "✓ Auswahl speichern",
+      ok: "Alle akzeptieren",
+      save: "Auswahl speichern",
       decline: "Nur Notwendige",
       close: "Schließen",
-      acceptAll: "✓ Alle akzeptieren",
-      acceptSelected: "✓ Auswahl speichern",
+      acceptAll: "Alle akzeptieren",
+      acceptSelected: "Auswahl speichern",
       service: {
         disableAll: {
           title: "Alle Dienste an-/ausschalten",

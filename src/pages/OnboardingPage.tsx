@@ -309,7 +309,9 @@ const OnboardingPage = () => {
         }
     };
 
-    const handleGenerateAnschreiben = async () => {
+    const handleGenerateAnschreiben = async (overrideJobData?: typeof jobData) => {
+        const effectiveJobData = overrideJobData ?? jobData;
+
         if (!profile?.vorname || !profile?.nachname) {
             toast({
                 title: "Profil unvollständig",
@@ -319,7 +321,7 @@ const OnboardingPage = () => {
             return;
         }
 
-        if (!jobData?.krankenhaus && !jobData?.fachabteilung) {
+        if (!effectiveJobData?.krankenhaus && !effectiveJobData?.fachabteilung) {
             toast({
                 title: "Stellenanzeige fehlt",
                 description: "Bitte fügen Sie Informationen zur Stelle hinzu.",
@@ -337,7 +339,7 @@ const OnboardingPage = () => {
                 practicalExperiences,
                 certifications,
                 publications,
-                jobData
+                jobData: effectiveJobData
             });
 
             if (result.success && result.html) {
@@ -348,9 +350,9 @@ const OnboardingPage = () => {
                         userId,
                         typ: "Anschreiben",
                         htmlContent: result.html,
-                        hospitalName: jobData?.krankenhaus,
-                        departmentOrSpecialty: jobData?.fachabteilung,
-                        positionTitle: jobData?.position,
+                        hospitalName: effectiveJobData?.krankenhaus,
+                        departmentOrSpecialty: effectiveJobData?.fachabteilung,
+                        positionTitle: effectiveJobData?.position,
                         jobUrl: jobUrl || undefined,
                         showFoto: false,
                         showSignatur: true
@@ -399,8 +401,8 @@ const OnboardingPage = () => {
         setJobData(populatedJobData);
         setJobUrl(job.apply_url || "");
 
-        // Trigger generation immediately
-        await handleGenerateAnschreiben();
+        // Pass job data directly to avoid stale state
+        await handleGenerateAnschreiben(populatedJobData);
 
         // Reset selected job ID after generation completes
         setSelectedJobId(null);
