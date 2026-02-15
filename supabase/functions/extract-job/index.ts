@@ -209,7 +209,7 @@ serve(async (req) => {
   "hospital_name": "Name des Krankenhauses/der Klinik",
   "department": "Abteilung/Fachbereich",
   "location": "Stadt/Ort",
-  "description": "Zusammenfassung der Aufgabe/Stelle",
+  "description": "2-3 Sätze Zusammenfassung der Stelle. Beschreibe kurz: Was für ein Krankenhaus ist es, was sind die Hauptaufgaben, und was macht die Stelle attraktiv. Schreibe in professionellem, einladendem Ton auf Deutsch.",
   "requirements": "Zusammenfassung der Anforderungen",
   "contact_name": "Ansprechpartner",
   "contact_email": "Kontakt-E-Mail",
@@ -219,6 +219,7 @@ serve(async (req) => {
 
 Wenn ein Feld nicht gefunden werden kann, setze es auf null.
 Nutze bei "tags" ein Array mit maximal 6 Einträgen.
+WICHTIG: Das Feld "description" MUSS eine aussagekräftige Zusammenfassung sein (2-3 Sätze), NICHT der vollständige Originaltext. Fasse die wichtigsten Aspekte der Stelle zusammen.
 Antworte ausschließlich mit validem JSON.
 
 QUELLE:
@@ -236,8 +237,8 @@ STELLENANZEIGE:
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 700,
-        system: 'Du extrahierst strukturierte Daten aus deutschen Stellenanzeigen für Ärzte. Antworte NUR mit validem JSON, keine Erklärungen.',
+        max_tokens: 900,
+        system: 'Du extrahierst strukturierte Daten aus deutschen Stellenanzeigen für Ärzte. Antworte NUR mit validem JSON, keine Erklärungen. Das Feld "description" soll eine kurze, professionelle Zusammenfassung der Stelle sein (2-3 Sätze), nicht der vollständige Originaltext.',
         messages: [
           { role: 'user', content: extractionPrompt }
         ],
@@ -252,7 +253,7 @@ STELLENANZEIGE:
 
     const aiData = await aiResponse.json();
     let extractedText = aiData.content?.[0]?.text || '{}';
-    
+
     // Clean up JSON if wrapped in markdown
     extractedText = extractedText
       .replace(/```json\n?/gi, '')
@@ -312,8 +313,8 @@ STELLENANZEIGE:
       );
     }
 
-    return new Response(JSON.stringify({ 
-      success: true, 
+    return new Response(JSON.stringify({
+      success: true,
       data: normalizedData,
       rawContent: pageContent.substring(0, 2000)
     }), {

@@ -60,6 +60,28 @@ const isExpiringSoon = (expiresAt: string | null) => {
   return expires <= fourteenDaysFromNow && expires > new Date();
 };
 
+/** Strip HTML tags, collapse whitespace, and return a clean plain-text snippet. */
+const snippetFromDescription = (raw: string | null, maxLen = 180): string | null => {
+  if (!raw) return null;
+  // Strip HTML tags, decode common entities, collapse whitespace
+  const text = raw
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!text || text.length < 10) return null;
+  if (text.length <= maxLen) return text;
+  // Truncate at last word boundary
+  const truncated = text.slice(0, maxLen);
+  const lastSpace = truncated.lastIndexOf(" ");
+  return (lastSpace > 80 ? truncated.slice(0, lastSpace) : truncated) + "…";
+};
+
 type SortOption = "newest" | "expiring" | "az";
 
 const JobsPage = () => {
@@ -388,62 +410,59 @@ const JobsPage = () => {
           {(filterOptions.locations.length > 0 ||
             filterOptions.departments.length > 0 ||
             filterOptions.tags.length > 0) && (
-            <div className="flex flex-wrap items-center gap-1.5 text-sm">
-              {filterOptions.locations.map((loc) => (
-                <button
-                  key={`loc-${loc}`}
-                  type="button"
-                  onClick={() => toggleFilter(activeLocations, loc, setActiveLocations)}
-                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs transition-colors ${
-                    activeLocations.has(loc)
+              <div className="flex flex-wrap items-center gap-1.5 text-sm">
+                {filterOptions.locations.map((loc) => (
+                  <button
+                    key={`loc-${loc}`}
+                    type="button"
+                    onClick={() => toggleFilter(activeLocations, loc, setActiveLocations)}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs transition-colors ${activeLocations.has(loc)
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-background hover:bg-muted border-border text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <MapPin className="h-3 w-3" />
-                  {loc}
-                </button>
-              ))}
-              {filterOptions.departments.map((dep) => (
-                <button
-                  key={`dep-${dep}`}
-                  type="button"
-                  onClick={() => toggleFilter(activeDepartments, dep, setActiveDepartments)}
-                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs transition-colors ${
-                    activeDepartments.has(dep)
+                      }`}
+                  >
+                    <MapPin className="h-3 w-3" />
+                    {loc}
+                  </button>
+                ))}
+                {filterOptions.departments.map((dep) => (
+                  <button
+                    key={`dep-${dep}`}
+                    type="button"
+                    onClick={() => toggleFilter(activeDepartments, dep, setActiveDepartments)}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs transition-colors ${activeDepartments.has(dep)
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-background hover:bg-muted border-border text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {dep}
-                </button>
-              ))}
-              {filterOptions.tags.map((tag) => (
-                <button
-                  key={`tag-${tag}`}
-                  type="button"
-                  onClick={() => toggleFilter(activeTags, tag, setActiveTags)}
-                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs transition-colors ${
-                    activeTags.has(tag)
+                      }`}
+                  >
+                    {dep}
+                  </button>
+                ))}
+                {filterOptions.tags.map((tag) => (
+                  <button
+                    key={`tag-${tag}`}
+                    type="button"
+                    onClick={() => toggleFilter(activeTags, tag, setActiveTags)}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs transition-colors ${activeTags.has(tag)
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-background hover:bg-muted border-border text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {tag}
-                </button>
-              ))}
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  onClick={clearAllFilters}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs text-destructive hover:bg-destructive/10 transition-colors"
-                >
-                  <X className="h-3 w-3" />
-                  Alle zurücksetzen
-                </button>
-              )}
-            </div>
-          )}
+                      }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={clearAllFilters}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs text-destructive hover:bg-destructive/10 transition-colors"
+                  >
+                    <X className="h-3 w-3" />
+                    Alle zurücksetzen
+                  </button>
+                )}
+              </div>
+            )}
         </div>
       </div>
 
@@ -555,12 +574,15 @@ const JobsPage = () => {
                       )}
                     </div>
 
-                    {/* Truncated Description */}
-                    {job.description && (
-                      <p className="text-sm text-muted-foreground line-clamp-3 mb-3">
-                        {job.description}
-                      </p>
-                    )}
+                    {/* Description Snippet */}
+                    {(() => {
+                      const snippet = snippetFromDescription(job.description);
+                      return snippet ? (
+                        <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
+                          {snippet}
+                        </p>
+                      ) : null;
+                    })()}
 
                     {/* Tags */}
                     {job.tags && job.tags.length > 0 && (
