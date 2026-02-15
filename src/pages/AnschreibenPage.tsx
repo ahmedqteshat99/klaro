@@ -14,7 +14,6 @@ import BrandLogo from "@/components/BrandLogo";
 import JobExtractionForm from "@/components/generation/JobExtractionForm";
 import AiConsentModal from "@/components/profile/AiConsentModal";
 import CVTemplate from "@/components/cv/CVTemplate";
-import AnschreibenEnhancer from "@/components/generation/AnschreibenEnhancer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -418,12 +417,8 @@ const AnschreibenPage = () => {
               isGeneratingAnschreiben={isGeneratingAnschreiben}
               jobUrl={jobUrl}
               setJobUrl={setJobUrl}
-            />
-
-            <AnschreibenEnhancer
               currentHtml={anschreibenHtml}
               onHtmlUpdated={handleEnhancedHtmlUpdate}
-              disabled={isGeneratingAnschreiben || isExporting}
             />
 
             <Card>
