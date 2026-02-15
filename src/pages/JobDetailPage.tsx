@@ -16,6 +16,7 @@ import {
 import { LANDING_HERO_CTA_EXPERIMENT_ID } from "@/lib/experiments";
 import { useDocumentVersions } from "@/hooks/useDocumentVersions";
 import { useProfile } from "@/hooks/useProfile";
+import { isCvFresh, getMostRecentProfileUpdate } from "@/lib/cv-freshness";
 import { useToast } from "@/hooks/use-toast";
 import { useUserFileUrl } from "@/hooks/useUserFileUrl";
 import { getMissingFirstApplyFields } from "@/lib/first-apply";
@@ -690,15 +691,44 @@ const JobDetailPage = () => {
 
       setPrepareProgressGoal(42);
 
-      const [cvResult, anschreibenResult] = await Promise.all([
-        generateCV({
+      // Check if we can reuse existing CV
+      let cvHtmlToUse: string | null = null;
+      let cvWasReused = false;
+      let existingCvId: string | null = null;
+
+      const existingCv = await getLatestDocument(userId, "CV");
+      setPrepareProgressGoal(48);
+
+      if (existingCv) {
+        const cvCreatedAt = new Date(existingCv.created_at);
+        const profileData = {
           profile: profileWithKlaroEmail,
           workExperiences,
           educationEntries,
           practicalExperiences,
           certifications,
           publications,
-        }),
+          customSections,
+          customSectionEntries,
+        };
+
+        if (isCvFresh(cvCreatedAt, profileData)) {
+          cvHtmlToUse = existingCv.html_content;
+          cvWasReused = true;
+          existingCvId = existingCv.id;
+          console.log('✅ Reusing existing CV from', cvCreatedAt.toISOString());
+        } else {
+          const lastProfileUpdate = getMostRecentProfileUpdate(profileData);
+          console.log('🔄 CV is stale. CV created:', cvCreatedAt.toISOString(),
+                      'Last profile update:', lastProfileUpdate?.toISOString());
+        }
+      }
+
+      setPrepareProgressGoal(52);
+
+      // Generate Anschreiben (always) and CV (if needed)
+      const generatePromises: Promise<any>[] = [
+        // Anschreiben is ALWAYS generated (job-specific)
         generateAnschreiben({
           profile: profileWithKlaroEmail,
           workExperiences,
@@ -715,9 +745,35 @@ const JobDetailPage = () => {
             anforderungen: job.requirements,
           },
         }),
-      ]);
+      ];
+
+      // Only generate CV if we don't have a fresh one
+      let cvResult: { success: boolean; html?: string; error?: string };
+      if (!cvWasReused) {
+        generatePromises.push(
+          generateCV({
+            profile: profileWithKlaroEmail,
+            workExperiences,
+            educationEntries,
+            practicalExperiences,
+            certifications,
+            publications,
+          })
+        );
+      }
+
+      const results = await Promise.all(generatePromises);
+      const anschreibenResult = results[0];
+
+      if (cvWasReused) {
+        cvResult = { success: true, html: cvHtmlToUse! };
+      } else {
+        cvResult = results[1];
+      }
+
       setPrepareProgressGoal(58);
 
+      // Existing validation continues...
       if (!cvResult.success || !cvResult.html) {
         throw new Error(cvResult.error || "Lebenslauf konnte nicht generiert werden.");
       }
@@ -726,14 +782,8 @@ const JobDetailPage = () => {
         throw new Error(anschreibenResult.error || "Anschreiben konnte nicht generiert werden.");
       }
 
-      const [cvSave, anschreibenSave] = await Promise.all([
-        saveDocument({
-          userId,
-          typ: "CV",
-          htmlContent: cvResult.html,
-          showFoto: true,
-          showSignatur: true,
-        }),
+      // Save documents (only save CV if newly generated)
+      const savePromises: Promise<any>[] = [
         saveDocument({
           userId,
           typ: "Anschreiben",
@@ -745,8 +795,40 @@ const JobDetailPage = () => {
           showFoto: false,
           showSignatur: true,
         }),
-      ]);
+      ];
+
+      let cvSave: { success: boolean; id?: string };
+      if (cvWasReused) {
+        // Use existing CV's ID
+        cvSave = { success: true, id: existingCvId! };
+      } else {
+        // Save new CV
+        savePromises.push(
+          saveDocument({
+            userId,
+            typ: "CV",
+            htmlContent: cvResult.html,
+            showFoto: true,
+            showSignatur: true,
+          })
+        );
+      }
+
+      const saveResults = await Promise.all(savePromises);
+      const anschreibenSave = saveResults[0];
+      if (!cvWasReused) {
+        cvSave = saveResults[1];
+      }
+
       setPrepareProgressGoal(66);
+
+      if (!cvSave.success || !cvSave.id) {
+        throw new Error("Lebenslauf konnte nicht gespeichert werden.");
+      }
+
+      if (!anschreibenSave.success || !anschreibenSave.id) {
+        throw new Error("Anschreiben konnte nicht gespeichert werden.");
+      }
 
       const [cvPdfBlob, anschreibenPdfBlob] = await Promise.all([
         generatePdfBlobFromServer({
@@ -897,6 +979,7 @@ const JobDetailPage = () => {
           attachment_total_bytes: totalBytes,
           selected_profile_docs_count: selectedDocuments.length,
           reused_draft: false,
+          cv_reused: cvWasReused,
         },
         userId
       );
@@ -906,7 +989,9 @@ const JobDetailPage = () => {
 
       toast({
         title: "Bewerbung vorbereitet",
-        description: "Bitte pruefen Sie Betreff/Text und senden Sie dann manuell ab.",
+        description: cvWasReused
+          ? "✅ Bestehender CV wurde wiederverwendet. Anschreiben wurde neu generiert. Bitte pruefen Sie Betreff/Text und senden Sie dann manuell ab."
+          : "CV und Anschreiben wurden neu generiert. Bitte pruefen Sie Betreff/Text und senden Sie dann manuell ab.",
       });
     } catch (error) {
       void logFunnelEvent(
