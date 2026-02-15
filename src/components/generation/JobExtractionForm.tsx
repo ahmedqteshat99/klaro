@@ -8,8 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Link2, Loader2, Edit3, Search, FileEdit, AlertCircle, Sparkles, MessageCircle, Send, Trash2 } from "lucide-react";
-import { extractJobData, enhanceAnschreiben } from "@/lib/api/generation";
+import { Link2, Loader2, Edit3, Search, FileEdit, AlertCircle, Sparkles, Send, Trash2 } from "lucide-react";
+import { extractJobData } from "@/lib/api/generation";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -22,22 +22,15 @@ interface JobData {
   anforderungen: string | null;
 }
 
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-  timestamp: Date;
-}
-
 interface JobExtractionFormProps {
   onJobDataExtracted: (data: JobData) => void;
   jobData: JobData | null;
   setJobData: (data: JobData) => void;
-  onGenerateAnschreiben?: () => void;
+  onGenerateAnschreiben?: (userPreferences?: string[]) => void;
   isGeneratingAnschreiben?: boolean;
   jobUrl: string;
   setJobUrl: (url: string) => void;
   currentHtml?: string | null;
-  onHtmlUpdated?: (html: string) => void;
 }
 
 const emptyJobData: JobData = {
@@ -67,7 +60,6 @@ const JobExtractionForm = ({
   jobUrl,
   setJobUrl,
   currentHtml,
-  onHtmlUpdated
 }: JobExtractionFormProps) => {
   const [isExtracting, setIsExtracting] = useState(false);
   const [legalConsent, setLegalConsent] = useState(false); // Default to false
@@ -76,10 +68,9 @@ const JobExtractionForm = ({
   const [manualText, setManualText] = useState("");
   const { toast } = useToast();
 
-  // Enhancer state
-  const [messages, setMessages] = useState<Message[]>([]);
+  // User preferences state (collected before generation)
+  const [userPreferences, setUserPreferences] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -193,7 +184,7 @@ const JobExtractionForm = ({
 
   const canGenerate = jobData?.krankenhaus || jobData?.fachabteilung;
 
-  // Auto-scroll to bottom when messages change
+  // Auto-scroll to bottom when preferences change
   useEffect(() => {
     if (scrollAreaRef.current) {
       const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
@@ -201,93 +192,40 @@ const JobExtractionForm = ({
         scrollContainer.scrollTop = scrollContainer.scrollHeight;
       }
     }
-  }, [messages]);
+  }, [userPreferences]);
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim() || isProcessing || !onHtmlUpdated) return;
+  const handleAddPreference = () => {
+    if (!inputValue.trim()) return;
 
-    const userMessage: Message = {
-      role: "user",
-      content: inputValue.trim(),
-      timestamp: new Date(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
+    setUserPreferences((prev) => [...prev, inputValue.trim()]);
     setInputValue("");
-    setIsProcessing(true);
-
-    try {
-      const conversationHistory = messages.map((msg) => ({
-        role: msg.role,
-        content: msg.content,
-      }));
-
-      const result = await enhanceAnschreiben({
-        currentHtml: currentHtml || null,
-        userMessage: userMessage.content,
-        conversationHistory,
-      });
-
-      if (!result.success || !result.message) {
-        throw new Error(result.error || "Konnte keine Antwort generieren");
-      }
-
-      const assistantMessage: Message = {
-        role: "assistant",
-        content: result.message,
-        timestamp: new Date(),
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
-
-      // If HTML was updated, notify parent
-      if (result.updatedHtml) {
-        onHtmlUpdated(result.updatedHtml);
-        toast({
-          title: "Anschreiben aktualisiert",
-          description: "Die Änderungen wurden in der Vorschau übernommen.",
-        });
-      }
-    } catch (error) {
-      console.error("Enhancement error:", error);
-      toast({
-        title: "Fehler",
-        description: error instanceof Error ? error.message : "Anfrage konnte nicht verarbeitet werden.",
-        variant: "destructive",
-      });
-
-      const errorMessage: Message = {
-        role: "assistant",
-        content: "Entschuldigung, es gab einen Fehler bei der Verarbeitung Ihrer Anfrage. Bitte versuchen Sie es erneut.",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsProcessing(false);
-      textareaRef.current?.focus();
-    }
+    textareaRef.current?.focus();
   };
 
-  const handleClearConversation = () => {
-    setMessages([]);
+  const handleRemovePreference = (index: number) => {
+    setUserPreferences((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleClearPreferences = () => {
+    setUserPreferences([]);
     toast({
-      title: "Konversation gelöscht",
-      description: "Der Chat-Verlauf wurde zurückgesetzt.",
+      title: "Präferenzen gelöscht",
+      description: "Alle Präferenzen wurden zurückgesetzt.",
     });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSendMessage();
+      handleAddPreference();
     }
   };
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString("de-DE", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  const handleGenerate = () => {
+    if (onGenerateAnschreiben) {
+      // Pass user preferences to the generation function
+      onGenerateAnschreiben(userPreferences.length > 0 ? userPreferences : undefined);
+    }
   };
 
   return (
@@ -470,7 +408,7 @@ const JobExtractionForm = ({
             {onGenerateAnschreiben && (
               <div className="pt-4 border-t">
                 <Button
-                  onClick={onGenerateAnschreiben}
+                  onClick={handleGenerate}
                   disabled={isGeneratingAnschreiben || !canGenerate}
                   className="w-full"
                   size="lg"
@@ -483,7 +421,9 @@ const JobExtractionForm = ({
                   ) : (
                     <>
                       <FileEdit className="mr-2 h-4 w-4" />
-                      Anschreiben generieren
+                      {userPreferences.length > 0
+                        ? `Anschreiben generieren (${userPreferences.length} Präferenz${userPreferences.length > 1 ? 'en' : ''})`
+                        : "Anschreiben generieren"}
                     </>
                   )}
                 </Button>
@@ -495,8 +435,8 @@ const JobExtractionForm = ({
               </div>
             )}
 
-            {/* AI Enhancement Section */}
-            {onHtmlUpdated && (
+            {/* AI Preferences Section - Only shown BEFORE generation */}
+            {!currentHtml && (
               <>
                 <Separator className="my-6" />
                 <div className="space-y-4">
@@ -504,19 +444,17 @@ const JobExtractionForm = ({
                     <div>
                       <h3 className="font-semibold flex items-center gap-2">
                         <Sparkles className="h-4 w-4 text-primary" />
-                        Anschreiben verbessern
+                        Anschreiben-Präferenzen (optional)
                       </h3>
                       <p className="text-sm text-muted-foreground mt-1">
-                        {currentHtml
-                          ? "Sagen Sie mir, wie ich Ihr Anschreiben verbessern soll"
-                          : "Beschreiben Sie, was Ihr Anschreiben enthalten soll"}
+                        Beschreiben Sie, wie Ihr Anschreiben gestaltet werden soll
                       </p>
                     </div>
-                    {messages.length > 0 && (
+                    {userPreferences.length > 0 && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={handleClearConversation}
+                        onClick={handleClearPreferences}
                         className="shrink-0"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -524,45 +462,43 @@ const JobExtractionForm = ({
                     )}
                   </div>
 
-                  {/* Messages Display */}
-                  {messages.length > 0 && (
-                    <ScrollArea ref={scrollAreaRef} className="h-[280px] pr-4">
-                      <div className="space-y-3">
-                        {messages.map((msg, index) => (
+                  {/* Preferences Display */}
+                  {userPreferences.length > 0 && (
+                    <ScrollArea ref={scrollAreaRef} className="h-[200px] pr-4">
+                      <div className="space-y-2">
+                        {userPreferences.map((pref, index) => (
                           <div
                             key={index}
-                            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                            className="flex items-start gap-2 rounded-lg border bg-muted/50 p-3"
                           >
-                            <div
-                              className={`max-w-[85%] rounded-lg px-3 py-2 ${
-                                msg.role === "user"
-                                  ? "bg-primary text-primary-foreground"
-                                  : "bg-muted"
-                              }`}
+                            <Badge variant="secondary" className="shrink-0 mt-0.5">
+                              {index + 1}
+                            </Badge>
+                            <p className="text-sm flex-1">{pref}</p>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemovePreference(index)}
+                              className="h-6 w-6 p-0 shrink-0"
                             >
-                              <div className="flex items-center gap-2 mb-0.5">
-                                {msg.role === "assistant" && (
-                                  <MessageCircle className="h-3 w-3 opacity-70" />
-                                )}
-                                <span className="text-xs opacity-70">{formatTime(msg.timestamp)}</span>
-                              </div>
-                              <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                            </div>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
                           </div>
                         ))}
                       </div>
                     </ScrollArea>
                   )}
 
-                  {/* Suggestions when no messages */}
-                  {messages.length === 0 && (
+                  {/* Suggestions when no preferences */}
+                  {userPreferences.length === 0 && (
                     <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground mb-2">Beispiele:</p>
+                      <p className="text-xs text-muted-foreground mb-2">Beispiele für Präferenzen:</p>
                       <div className="grid grid-cols-1 gap-2">
                         {[
-                          "Mach es formaler und professioneller",
-                          "Betone mehr meine Erfahrung in der Kardiologie",
-                          "Kürze es auf eine Seite",
+                          "Mach es sehr formal und professionell",
+                          "Betone meine Kardiologie-Erfahrung stark",
+                          "Halte es kurz - maximal eine Seite",
+                          "Erwähne meine Forschungserfahrung",
                         ].map((suggestion, index) => (
                           <Button
                             key={index}
@@ -586,32 +522,23 @@ const JobExtractionForm = ({
                   <div className="space-y-2">
                     <Textarea
                       ref={textareaRef}
-                      placeholder={
-                        currentHtml
-                          ? "z.B. 'Mach es formaler' oder 'Betone meine Kardiologie-Erfahrung'"
-                          : "z.B. 'Erstelle ein Anschreiben für eine Assistenzarztstelle in der Inneren Medizin'"
-                      }
+                      placeholder="z.B. 'Betone meine Kardiologie-Erfahrung' oder 'Halte es sehr formal' oder 'Erwähne meine Forschung'"
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      disabled={isProcessing}
                       className="min-h-[70px] resize-none text-sm"
                     />
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-muted-foreground">
-                        Enter zum Senden, Shift+Enter für neue Zeile
+                        Enter zum Hinzufügen • Präferenzen werden beim Generieren berücksichtigt
                       </p>
                       <Button
-                        onClick={handleSendMessage}
-                        disabled={isProcessing || !inputValue.trim()}
+                        onClick={handleAddPreference}
+                        disabled={!inputValue.trim()}
                         size="sm"
                       >
-                        {isProcessing ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Send className="h-4 w-4" />
-                        )}
-                        <span className="ml-2">Senden</span>
+                        <Send className="h-4 w-4" />
+                        <span className="ml-2">Hinzufügen</span>
                       </Button>
                     </div>
                   </div>
