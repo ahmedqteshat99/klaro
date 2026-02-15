@@ -58,12 +58,35 @@ export interface CvReviewProfileState {
   interessen: ProfileFieldState;
 }
 
+// Standard section keys for assignment
+export type StandardSectionKey =
+  | 'workExperiences'
+  | 'educationEntries'
+  | 'practicalExperiences'
+  | 'certifications'
+  | 'publications';
+
+// Section assignment types
+export type SectionAssignment =
+  | { type: 'standard'; sectionKey: StandardSectionKey }
+  | { type: 'custom'; sectionId: string; sectionName: string }
+  | { type: 'new'; sectionName: string };
+
+export const STANDARD_SECTION_LABELS: Record<StandardSectionKey, string> = {
+  workExperiences: 'Berufserfahrung',
+  educationEntries: 'Ausbildung & Studium',
+  practicalExperiences: 'Praktische Erfahrung',
+  certifications: 'Zertifikate',
+  publications: 'Publikationen',
+};
+
 export interface UnmatchedDataItem {
   _tempId: string;
   _enabled: boolean;
   rawText: string;
   suggestedCategory: string | null;
-  assignedSection: string | null; // section name if creating new section
+  assignedSection: string | null; // DEPRECATED - kept for backward compatibility
+  assignment?: SectionAssignment | null; // NEW - structured assignment
 }
 
 export interface CustomSectionToCreate {

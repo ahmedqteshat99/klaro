@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Stethoscope, Pencil, Trash2, Check, X } from "lucide-react";
 import type { CvReviewPracticalExperience } from "@/lib/types/cv-review";
+import EmptyStateActions from "./EmptyStateActions";
 
-interface PracticalExperienceSectionProps {
+interface PracticalExperienceSectionProps{
   items: CvReviewPracticalExperience[];
   onChange: (items: CvReviewPracticalExperience[]) => void;
 }
@@ -75,9 +76,18 @@ export function PracticalExperienceSection({ items, onChange }: PracticalExperie
       </AccordionTrigger>
       <AccordionContent>
         {items.length === 0 ? (
-          <p className="text-muted-foreground text-center py-4">
-            Keine praktische Erfahrung erkannt.
-          </p>
+          <EmptyStateActions
+            message="Keine praktische Erfahrung erkannt."
+            sectionType="practical"
+            onQuickAdd={(data) => {
+              const newItem = {
+                ...data,
+                _tempId: `prac-${Date.now()}-${Math.random()}`,
+                _enabled: true,
+              };
+              onChange([...items, newItem]);
+            }}
+          />
         ) : (
           <div className="space-y-3">
             {items.map((item) => (

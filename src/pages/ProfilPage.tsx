@@ -383,6 +383,7 @@ const ProfilPage = () => {
         <div className="mb-6">
           <CvImportCard
             profile={profile}
+            customSections={customSections}
             updateLocalProfile={updateLocalProfile}
             saveProfile={saveProfile}
             addWorkExperiencesLocal={addWorkExperiencesLocal}
