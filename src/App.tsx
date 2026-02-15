@@ -69,11 +69,10 @@ const App = () => {
           >
             <Routes>
               {/* Public routes */}
-              <Route path="/" element={<LandingPage />} />
+              <Route path="/" element={<ComingSoonPage />} />
               <Route path="/landing" element={<LandingPage />} />
               <Route path="/auth" element={<AuthPage />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
-              <Route path="/coming-soon" element={<ComingSoonPage />} />
               <Route path="/datenschutz" element={<DatenschutzPage />} />
               <Route path="/agb" element={<AgbPage />} />
               <Route path="/datenaufbewahrung" element={<DatenaufbewahrungPage />} />
