@@ -1082,55 +1082,10 @@ const JobDetailPage = () => {
   })() : false;
 
   const jobAdDisclaimers = (
-    <div className="space-y-3">
-      {/* Minimal Display Disclaimer - Copyright Protection */}
-      <div className="rounded-lg border-2 border-blue-500 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-700 p-4 space-y-2">
-        <div className="flex items-start gap-2">
-          <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">
-              Urheberrechtlich geschützte Stellenanzeige
-            </p>
-            <p className="text-sm text-blue-800 dark:text-blue-300 mt-1">
-              Aus rechtlichen Gründen (Urheberrecht, Datenbankrechte) zeigen wir hier nur minimale Informationen.
-              Die <strong>vollständigen Details finden Sie in der Originalanzeige</strong> über den Link unten.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Source Attribution (Fair Use Compliance) */}
-      {(job.source_url || job.source_name || job.apply_url) && (
-        <div className="rounded-lg border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 p-4">
-          <div className="flex items-start gap-2">
-            <ExternalLink className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-            <div className="flex-1 space-y-2">
-              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-                📋 Vollständige Stellenanzeige ansehen
-              </p>
-              {job.source_name && (
-                <p className="text-sm text-amber-800 dark:text-amber-300">
-                  Quelle: <strong>{job.source_name}</strong>
-                </p>
-              )}
-              {(job.source_url || job.apply_url) && (
-                <a
-                  href={job.source_url || job.apply_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-300 hover:underline"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  Jetzt Originalanzeige beim Arbeitgeber öffnen
-                </a>
-              )}
-              <p className="text-xs text-amber-700 dark:text-amber-400 italic pt-1 border-t border-amber-200 dark:border-amber-800">
-                ⚠️ Klaro übernimmt keine Gewähr für Aktualität und Richtigkeit. Bitte prüfen Sie alle Details direkt beim Arbeitgeber.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+    <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3">
+      <p className="text-sm text-amber-800 dark:text-amber-300">
+        ⚠️ Klaro übernimmt keine Gewähr für Aktualität und Richtigkeit. Bitte prüfen Sie alle Details direkt beim Arbeitgeber.
+      </p>
     </div>
   );
 
