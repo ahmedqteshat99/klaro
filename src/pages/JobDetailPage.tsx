@@ -1081,6 +1081,59 @@ const JobDetailPage = () => {
     return expires <= fourteenDaysFromNow && expires > new Date();
   })() : false;
 
+  const jobAdDisclaimers = (
+    <div className="space-y-3">
+      {/* Minimal Display Disclaimer - Copyright Protection */}
+      <div className="rounded-lg border-2 border-blue-500 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-700 p-4 space-y-2">
+        <div className="flex items-start gap-2">
+          <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+              Urheberrechtlich geschützte Stellenanzeige
+            </p>
+            <p className="text-sm text-blue-800 dark:text-blue-300 mt-1">
+              Aus rechtlichen Gründen (Urheberrecht, Datenbankrechte) zeigen wir hier nur minimale Informationen.
+              Die <strong>vollständigen Details finden Sie in der Originalanzeige</strong> über den Link unten.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Source Attribution (Fair Use Compliance) */}
+      {(job.source_url || job.source_name || job.apply_url) && (
+        <div className="rounded-lg border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 p-4">
+          <div className="flex items-start gap-2">
+            <ExternalLink className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+            <div className="flex-1 space-y-2">
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                📋 Vollständige Stellenanzeige ansehen
+              </p>
+              {job.source_name && (
+                <p className="text-sm text-amber-800 dark:text-amber-300">
+                  Quelle: <strong>{job.source_name}</strong>
+                </p>
+              )}
+              {(job.source_url || job.apply_url) && (
+                <a
+                  href={job.source_url || job.apply_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-300 hover:underline"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Jetzt Originalanzeige beim Arbeitgeber öffnen
+                </a>
+              )}
+              <p className="text-xs text-amber-700 dark:text-amber-400 italic pt-1 border-t border-amber-200 dark:border-amber-800">
+                ⚠️ Klaro übernimmt keine Gewähr für Aktualität und Richtigkeit. Bitte prüfen Sie alle Details direkt beim Arbeitgeber.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-background">
       <nav className="glass-nav fixed top-0 left-0 right-0 z-50">
@@ -1160,22 +1213,6 @@ const JobDetailPage = () => {
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
-            {/* Minimal Display Disclaimer - Copyright Protection */}
-            <div className="rounded-lg border-2 border-blue-500 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-700 p-4 space-y-2">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">
-                    Urheberrechtlich geschützte Stellenanzeige
-                  </p>
-                  <p className="text-sm text-blue-800 dark:text-blue-300 mt-1">
-                    Aus rechtlichen Gründen (Urheberrecht, Datenbankrechte) zeigen wir hier nur minimale Informationen.
-                    Die <strong>vollständigen Details finden Sie in der Originalanzeige</strong> über den Link unten.
-                  </p>
-                </div>
-              </div>
-            </div>
-
             {job.tags && job.tags.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {job.tags.map((tag) => (
@@ -1185,39 +1222,6 @@ const JobDetailPage = () => {
                 ))}
               </div>
             ) : null}
-
-            {/* Source Attribution (Fair Use Compliance) */}
-            {(job.source_url || job.source_name || job.apply_url) && (
-              <div className="rounded-lg border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 p-4">
-                <div className="flex items-start gap-2">
-                  <ExternalLink className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-                  <div className="flex-1 space-y-2">
-                    <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-                      📋 Vollständige Stellenanzeige ansehen
-                    </p>
-                    {job.source_name && (
-                      <p className="text-sm text-amber-800 dark:text-amber-300">
-                        Quelle: <strong>{job.source_name}</strong>
-                      </p>
-                    )}
-                    {(job.source_url || job.apply_url) && (
-                      <a
-                        href={job.source_url || job.apply_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-300 hover:underline"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                        Jetzt Originalanzeige beim Arbeitgeber öffnen
-                      </a>
-                    )}
-                    <p className="text-xs text-amber-700 dark:text-amber-400 italic pt-1 border-t border-amber-200 dark:border-amber-800">
-                      ⚠️ Klaro übernimmt keine Gewähr für Aktualität und Richtigkeit. Bitte prüfen Sie alle Details direkt beim Arbeitgeber.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Action buttons */}
             <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -1269,13 +1273,16 @@ const JobDetailPage = () => {
                 Stellen sind öffentlich sichtbar. Zum Bewerben benötigen Sie ein Konto und ein Profil.
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-wrap gap-3">
-              <Button asChild>
-                <Link to={`/auth?next=${encodeURIComponent(applyNextUrl)}`}>Registrieren & bewerben</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link to={`/auth?next=${encodeURIComponent(applyNextUrl)}`}>Anmelden</Link>
-              </Button>
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap gap-3">
+                <Button asChild>
+                  <Link to={`/auth?next=${encodeURIComponent(applyNextUrl)}`}>Registrieren & bewerben</Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link to={`/auth?next=${encodeURIComponent(applyNextUrl)}`}>Anmelden</Link>
+                </Button>
+              </div>
+              {jobAdDisclaimers}
             </CardContent>
           </Card>
         ) : (
@@ -1396,6 +1403,8 @@ const JobDetailPage = () => {
                     für Sie – ohne dass Sie die Stellenanzeige manuell kopieren müssen.
                   </p>
                 </div>
+
+                {jobAdDisclaimers}
 
                 {isPreparing ? (
                   <div className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2">
