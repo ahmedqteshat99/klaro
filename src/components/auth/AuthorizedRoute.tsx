@@ -7,41 +7,26 @@ interface AuthorizedRouteProps {
   children: React.ReactNode;
 }
 
-// Authorized email addresses
-const AUTHORIZED_EMAILS = [
-  "ahmedqteshat99@icloud.com"
-];
-
 const AuthorizedRoute = ({ children }: AuthorizedRouteProps) => {
   const [isChecking, setIsChecking] = useState(true);
-  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    const checkAuthorization = async () => {
+    const checkAuthentication = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
 
-        if (!user?.email) {
-          setIsAuthorized(false);
-          setIsChecking(false);
-          return;
-        }
-
-        // Check if user's email is in the authorized list
-        const authorized = AUTHORIZED_EMAILS.some(
-          (email) => email.toLowerCase() === user.email?.toLowerCase()
-        );
-
-        setIsAuthorized(authorized);
+        // Allow access if user is authenticated
+        setIsAuthenticated(!!user);
       } catch (error) {
-        console.error("Authorization check error:", error);
-        setIsAuthorized(false);
+        console.error("Authentication check error:", error);
+        setIsAuthenticated(false);
       } finally {
         setIsChecking(false);
       }
     };
 
-    checkAuthorization();
+    checkAuthentication();
   }, []);
 
   if (isChecking) {
@@ -52,8 +37,8 @@ const AuthorizedRoute = ({ children }: AuthorizedRouteProps) => {
     );
   }
 
-  if (!isAuthorized) {
-    return <Navigate to="/coming-soon" replace />;
+  if (!isAuthenticated) {
+    return <Navigate to="/auth" replace />;
   }
 
   return <>{children}</>;
