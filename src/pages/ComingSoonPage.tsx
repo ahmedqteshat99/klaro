@@ -2,8 +2,9 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Sparkles, Clock, ArrowRight } from "lucide-react";
+import { Clock, ArrowRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import BrandLogo from "@/components/BrandLogo";
 
 const ComingSoonPage = () => {
   const navigate = useNavigate();
@@ -14,7 +15,7 @@ const ComingSoonPage = () => {
   };
 
   useEffect(() => {
-    document.title = "Bald verfügbar - Assistenzarzt Pro";
+    document.title = "Bald verfügbar - Klaro";
   }, []);
 
   return (
@@ -23,7 +24,7 @@ const ComingSoonPage = () => {
         <CardHeader className="text-center space-y-4">
           <div className="flex justify-center">
             <div className="relative">
-              <Sparkles className="h-16 w-16 text-primary animate-pulse" />
+              <BrandLogo size={80} showText={false} />
               <Clock className="h-8 w-8 text-muted-foreground absolute -bottom-2 -right-2" />
             </div>
           </div>
@@ -31,7 +32,7 @@ const ComingSoonPage = () => {
             Bald verfügbar
           </CardTitle>
           <CardDescription className="text-lg">
-            Wir arbeiten hart daran, Assistenzarzt Pro noch besser zu machen
+            Wir arbeiten hart daran, Klaro noch besser zu machen
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -63,7 +64,7 @@ const ComingSoonPage = () => {
               Abmelden
             </Button>
             <p className="text-xs text-center text-muted-foreground">
-              Vielen Dank für Ihre Geduld und Ihr Vertrauen in Assistenzarzt Pro
+              Vielen Dank für Ihre Geduld und Ihr Vertrauen in Klaro
             </p>
           </div>
         </CardContent>
