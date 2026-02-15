@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -37,6 +38,7 @@ import {
   Clock,
   Copy,
   Download,
+  Eye,
   ExternalLink,
   FileText,
   FolderOpen,
@@ -48,6 +50,7 @@ import {
   Share2,
   Sparkles,
   Upload,
+  X,
   AlertCircle,
 } from "lucide-react";
 
@@ -160,6 +163,7 @@ const JobDetailPage = () => {
   const [preparedAttachments, setPreparedAttachments] = useState<AttachmentPreview[]>([]);
   const [linkCopied, setLinkCopied] = useState(false);
   const [hasHandledApplyIntent, setHasHandledApplyIntent] = useState(false);
+  const [previewFile, setPreviewFile] = useState<{ url: string; fileName: string } | null>(null);
   const prepareApplicationRef = useRef<() => Promise<void>>(async () => { });
 
   const {
@@ -1437,62 +1441,107 @@ const JobDetailPage = () => {
                           <Badge variant="secondary" className="shrink-0">{item.source === "generated" ? "Klaro" : "Profil"}</Badge>
                           <span className="text-xs text-muted-foreground shrink-0">{humanFileSize(item.sizeBytes)}</span>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 px-2 shrink-0"
-                          onClick={async () => {
-                            // Download individual file
-                            try {
-                              const attachment = preparedAttachments[index];
-                              if (!attachment) return;
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2"
+                            onClick={async () => {
+                              // Preview individual file
+                              try {
+                                const attachment = preparedAttachments[index];
+                                if (!attachment) return;
 
-                              // For generated files, we need to get them from the application attachments
-                              const { data: attachmentData } = await supabase
-                                .from('application_attachments')
-                                .select('file_path')
-                                .eq('application_id', applicationId!)
-                                .eq('file_name', attachment.fileName)
-                                .maybeSingle();
+                                const { data: attachmentData } = await supabase
+                                  .from('application_attachments')
+                                  .select('file_path')
+                                  .eq('application_id', applicationId!)
+                                  .eq('file_name', attachment.fileName)
+                                  .maybeSingle();
 
-                              if (!attachmentData?.file_path) {
-                                throw new Error('Datei nicht gefunden');
+                                if (!attachmentData?.file_path) {
+                                  throw new Error('Datei nicht gefunden');
+                                }
+
+                                const { data: fileBlob, error: downloadError } = await supabase
+                                  .storage
+                                  .from('user-files')
+                                  .download(attachmentData.file_path);
+
+                                if (downloadError || !fileBlob) {
+                                  throw new Error('Vorschau fehlgeschlagen');
+                                }
+
+                                const url = URL.createObjectURL(fileBlob);
+                                setPreviewFile({ url, fileName: attachment.fileName });
+                              } catch (error) {
+                                toast({
+                                  title: 'Vorschau fehlgeschlagen',
+                                  description: error instanceof Error ? error.message : 'Unbekannter Fehler',
+                                  variant: 'destructive',
+                                });
                               }
+                            }}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2"
+                            onClick={async () => {
+                              // Download individual file
+                              try {
+                                const attachment = preparedAttachments[index];
+                                if (!attachment) return;
 
-                              const { data: fileBlob, error: downloadError } = await supabase
-                                .storage
-                                .from('user-files')
-                                .download(attachmentData.file_path);
+                                // For generated files, we need to get them from the application attachments
+                                const { data: attachmentData } = await supabase
+                                  .from('application_attachments')
+                                  .select('file_path')
+                                  .eq('application_id', applicationId!)
+                                  .eq('file_name', attachment.fileName)
+                                  .maybeSingle();
 
-                              if (downloadError || !fileBlob) {
-                                throw new Error('Download fehlgeschlagen');
+                                if (!attachmentData?.file_path) {
+                                  throw new Error('Datei nicht gefunden');
+                                }
+
+                                const { data: fileBlob, error: downloadError } = await supabase
+                                  .storage
+                                  .from('user-files')
+                                  .download(attachmentData.file_path);
+
+                                if (downloadError || !fileBlob) {
+                                  throw new Error('Download fehlgeschlagen');
+                                }
+
+                                // Create download link
+                                const url = URL.createObjectURL(fileBlob);
+                                const link = document.createElement('a');
+                                link.href = url;
+                                link.download = attachment.fileName;
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                                URL.revokeObjectURL(url);
+
+                                toast({
+                                  title: 'Datei heruntergeladen',
+                                  description: attachment.fileName,
+                                });
+                              } catch (error) {
+                                toast({
+                                  title: 'Download fehlgeschlagen',
+                                  description: error instanceof Error ? error.message : 'Unbekannter Fehler',
+                                  variant: 'destructive',
+                                });
                               }
-
-                              // Create download link
-                              const url = URL.createObjectURL(fileBlob);
-                              const link = document.createElement('a');
-                              link.href = url;
-                              link.download = attachment.fileName;
-                              document.body.appendChild(link);
-                              link.click();
-                              document.body.removeChild(link);
-                              URL.revokeObjectURL(url);
-
-                              toast({
-                                title: 'Datei heruntergeladen',
-                                description: attachment.fileName,
-                              });
-                            } catch (error) {
-                              toast({
-                                title: 'Download fehlgeschlagen',
-                                description: error instanceof Error ? error.message : 'Unbekannter Fehler',
-                                variant: 'destructive',
-                              });
-                            }
-                          }}
-                        >
-                          <Download className="h-4 w-4" />
-                        </Button>
+                            }}
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                     <div className="text-xs text-muted-foreground pt-1 border-t">
@@ -1543,6 +1592,47 @@ const JobDetailPage = () => {
           </>
         )}
       </div>
+
+      {/* PDF Preview Dialog */}
+      <Dialog open={!!previewFile} onOpenChange={(open) => !open && setPreviewFile(null)}>
+        <DialogContent className="max-w-[90vw] max-h-[90vh] w-full h-full p-0">
+          <DialogHeader className="p-4 pb-2">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-lg truncate pr-8">{previewFile?.fileName}</DialogTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 absolute right-12 top-4"
+                onClick={() => {
+                  if (previewFile) {
+                    const link = document.createElement('a');
+                    link.href = previewFile.url;
+                    link.download = previewFile.fileName;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    toast({
+                      title: 'Datei heruntergeladen',
+                      description: previewFile.fileName,
+                    });
+                  }
+                }}
+              >
+                <Download className="h-4 w-4" />
+              </Button>
+            </div>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden">
+            {previewFile && (
+              <iframe
+                src={previewFile.url}
+                className="w-full h-[calc(90vh-80px)] border-0"
+                title={previewFile.fileName}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
