@@ -106,7 +106,7 @@ serve(async (req) => {
       applicantInfo.push(`BEWERBER:
 - Name: ${profile.vorname} ${profile.nachname}
 - Stadt: ${profile.stadt || 'nicht angegeben'}
-- E-Mail: ${klaroEmail}
+- E-Mail: ${personalEmail || klaroEmail}
 - Telefon: ${profile.telefon || 'nicht angegeben'}
 - Fachrichtung: ${profile.fachrichtung || 'nicht angegeben'}
 - Approbationsstatus: ${profile.approbationsstatus || 'nicht angegeben'}
@@ -240,8 +240,9 @@ Beginne DIREKT mit dem HTML-Output.`;
       finalHtml = finalHtml.replace(/\b\d{1,2}\.\d{1,2}\.\d{4}\b/, generatedDate);
     }
 
-    if (personalEmail && personalEmail !== klaroEmail) {
-      finalHtml = finalHtml.split(personalEmail).join(klaroEmail);
+    // Ensure klaro email is replaced with personal email if both exist
+    if (personalEmail && klaroEmail && personalEmail !== klaroEmail) {
+      finalHtml = finalHtml.split(klaroEmail).join(personalEmail);
     }
 
     return new Response(JSON.stringify({ success: true, html: finalHtml }), {
