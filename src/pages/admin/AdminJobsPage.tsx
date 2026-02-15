@@ -27,7 +27,7 @@ import {
   mapExtractedJobToAdminForm,
   type AdminJobFormValues,
 } from "@/lib/job-import";
-import { Check, ExternalLink, Info, Link2, Loader2, Pencil, Plus, Rss, Sparkles, Trash2, X } from "lucide-react";
+import { Check, ExternalLink, Info, Link2, LinkIcon, Loader2, Pencil, Plus, Rss, Search, Sparkles, Trash2, X } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
@@ -133,6 +133,7 @@ const AdminJobsPage = () => {
   const [lastImportSource, setLastImportSource] = useState<"url" | "text" | null>(null);
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [isRssImporting, setIsRssImporting] = useState(false);
+  const [isCheckingLinks, setIsCheckingLinks] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const loadJobs = useCallback(async () => {
@@ -492,6 +493,65 @@ const AdminJobsPage = () => {
     }
   };
 
+  const handleCheckStaleJobs = async () => {
+    setIsCheckingLinks(true);
+    try {
+      const { checkStaleJobs } = await import("@/lib/api/generation");
+      const result = await checkStaleJobs();
+
+      if (!result.success) {
+        toast({
+          title: "Link-Prüfung fehlgeschlagen",
+          description: result.error || "Unbekannter Fehler",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const parts = [];
+      if (result.checked) parts.push(`${result.checked} geprüft`);
+      if (result.active) parts.push(`${result.active} aktiv`);
+      if (result.stale) parts.push(`${result.stale} inaktiv`);
+      if (result.errors) parts.push(`${result.errors} Fehler`);
+
+      toast({
+        title: "Link-Prüfung abgeschlossen",
+        description: parts.join(", ") || "Keine Jobs zum Prüfen",
+        variant: result.stale && result.stale > 0 ? "destructive" : "default",
+      });
+
+      await loadJobs();
+    } catch (error) {
+      toast({
+        title: "Fehler",
+        description: error instanceof Error ? error.message : "Unbekannter Fehler",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCheckingLinks(false);
+    }
+  };
+
+  const handleBulkDeactivateStale = async () => {
+    const staleJobs = jobs.filter((j) => (j as any).link_status === "stale" && j.is_published);
+    if (staleJobs.length === 0) return;
+
+    let deactivated = 0;
+    for (const job of staleJobs) {
+      const { error } = await supabase
+        .from("jobs")
+        .update({ is_published: false, published_at: null })
+        .eq("id", job.id);
+      if (!error) deactivated++;
+    }
+
+    toast({
+      title: "Jobs deaktiviert",
+      description: `${deactivated} Jobs mit inaktiven Links wurden deaktiviert.`,
+    });
+    await loadJobs();
+  };
+
   const handleApproveJob = async (job: Tables<"jobs">) => {
     setBusyJobId(job.id);
     const { error } = await supabase
@@ -549,11 +609,31 @@ const AdminJobsPage = () => {
     }
   };
 
+  const getLinkStatusBadge = (job: Tables<"jobs">) => {
+    const linkStatus = (job as any).link_status as string | null;
+    switch (linkStatus) {
+      case "active":
+        return <Badge variant="outline" className="border-green-500 text-green-600 bg-green-50/50 text-xs">🟢 Aktiv</Badge>;
+      case "stale":
+        return <Badge variant="outline" className="border-red-500 text-red-600 bg-red-50/50 text-xs">🔴 Inaktiv</Badge>;
+      case "error":
+        return <Badge variant="outline" className="border-orange-500 text-orange-600 bg-orange-50/50 text-xs">⚠️ Fehler</Badge>;
+      case "unknown":
+        return <Badge variant="outline" className="border-gray-400 text-gray-500 bg-gray-50/50 text-xs">❓ Unklar</Badge>;
+      default:
+        return <Badge variant="outline" className="text-xs text-muted-foreground">⚪ Ungeprüft</Badge>;
+    }
+  };
+
   const filteredJobs = statusFilter === "all"
     ? jobs
     : statusFilter === "draft"
       ? jobs.filter((j) => !(j as any).import_status || (j as any).import_status === "manual")
-      : jobs.filter((j) => (j as any).import_status === statusFilter);
+      : statusFilter === "stale_links"
+        ? jobs.filter((j) => (j as any).link_status === "stale")
+        : jobs.filter((j) => (j as any).import_status === statusFilter);
+
+  const staleCount = jobs.filter((j) => (j as any).link_status === "stale" && j.is_published).length;
 
   return (
     <div className="space-y-6">
@@ -563,6 +643,24 @@ const AdminJobsPage = () => {
           <p className="text-sm text-muted-foreground">Stellen erstellen, aktualisieren und veröffentlichen.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleCheckStaleJobs}
+            disabled={isCheckingLinks}
+          >
+            {isCheckingLinks ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Prüfe Links...
+              </>
+            ) : (
+              <>
+                <Search className="mr-2 h-4 w-4" />
+                Links prüfen
+              </>
+            )}
+          </Button>
           <Button
             type="button"
             variant="secondary"
@@ -867,8 +965,20 @@ const AdminJobsPage = () => {
                 <SelectItem value="rejected">Abgelehnt</SelectItem>
                 <SelectItem value="expired">Abgelaufen</SelectItem>
                 <SelectItem value="draft">Manuell/Entwurf</SelectItem>
+                <SelectItem value="stale_links">🔴 Inaktive Links</SelectItem>
               </SelectContent>
             </Select>
+            {statusFilter === "stale_links" && staleCount > 0 && (
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={handleBulkDeactivateStale}
+              >
+                <X className="mr-1 h-3.5 w-3.5" />
+                Alle deaktivieren ({staleCount})
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -884,6 +994,7 @@ const AdminJobsPage = () => {
                     <TableHead>Titel</TableHead>
                     <TableHead>Quelle</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Link</TableHead>
                     <TableHead>Veröffentlicht</TableHead>
                     <TableHead>Aktionen</TableHead>
                   </TableRow>
@@ -912,6 +1023,7 @@ const AdminJobsPage = () => {
                           )}
                         </TableCell>
                         <TableCell>{getStatusBadge(job)}</TableCell>
+                        <TableCell>{getLinkStatusBadge(job)}</TableCell>
                         <TableCell>{formatDateTime(job.published_at)}</TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1.5">
