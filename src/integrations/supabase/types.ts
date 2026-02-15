@@ -578,6 +578,7 @@ export type Database = {
         Row: {
           approbationsstatus: string | null
           berufserfahrung_jahre: number | null
+          berufserfahrung_monate: number | null
           created_at: string | null
           cv_text: string | null
           deutschniveau: string | null
@@ -612,6 +613,7 @@ export type Database = {
         Insert: {
           approbationsstatus?: string | null
           berufserfahrung_jahre?: number | null
+          berufserfahrung_monate?: number | null
           created_at?: string | null
           cv_text?: string | null
           deutschniveau?: string | null
@@ -646,6 +648,7 @@ export type Database = {
         Update: {
           approbationsstatus?: string | null
           berufserfahrung_jahre?: number | null
+          berufserfahrung_monate?: number | null
           created_at?: string | null
           cv_text?: string | null
           deutschniveau?: string | null

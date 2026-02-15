@@ -103,6 +103,19 @@ serve(async (req) => {
     const applicantInfo: string[] = [];
 
     if (profile) {
+      const jahre = profile.berufserfahrung_jahre || 0;
+      const monate = profile.berufserfahrung_monate || 0;
+      let erfahrungText = '';
+      if (jahre > 0 && monate > 0) {
+        erfahrungText = `${jahre} Jahre ${monate} Monate`;
+      } else if (jahre > 0) {
+        erfahrungText = `${jahre} Jahre`;
+      } else if (monate > 0) {
+        erfahrungText = `${monate} Monate`;
+      } else {
+        erfahrungText = '0 Jahre';
+      }
+
       applicantInfo.push(`BEWERBER:
 - Name: ${profile.vorname} ${profile.nachname}
 - Stadt: ${profile.stadt || 'nicht angegeben'}
@@ -111,7 +124,7 @@ serve(async (req) => {
 - Fachrichtung: ${profile.fachrichtung || 'nicht angegeben'}
 - Approbationsstatus: ${profile.approbationsstatus || 'nicht angegeben'}
 - Deutschniveau: ${profile.deutschniveau || 'nicht angegeben'}
-- Berufserfahrung: ${profile.berufserfahrung_jahre || 0} Jahre
+- Berufserfahrung: ${erfahrungText}
 - Medizinische Kenntnisse: ${(profile.medizinische_kenntnisse || []).join(', ') || 'keine'}
 - Interessen: ${profile.interessen || 'keine'}`);
     }
