@@ -219,22 +219,22 @@ serve(async (req) => {
 
         const db = createClient(supabaseUrl, serviceRoleKey);
 
-        // ── Rate limit: check last run ──
+        // ── Rate limit: check last successful run ──
         const { data: lastRun } = await db
             .from("job_import_logs")
             .select("created_at")
-            .eq("action", "run_started")
+            .eq("action", "run_completed")
             .order("created_at", { ascending: false })
             .limit(1)
             .single();
 
         if (lastRun) {
             const lastRunAge = Date.now() - new Date(lastRun.created_at).getTime();
-            if (lastRunAge < 30 * 60 * 1000) { // 30 minutes cooldown
+            if (lastRunAge < 10 * 60 * 1000) { // 10 minutes cooldown
                 return new Response(
                     JSON.stringify({
                         success: false,
-                        error: "Zu früh. Letzter Import vor weniger als 30 Minuten.",
+                        error: "Zu früh. Letzter Import vor weniger als 10 Minuten.",
                         lastRun: lastRun.created_at,
                     }),
                     { headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
