@@ -84,7 +84,7 @@ const JobSelector = ({ onSelectJob, isGenerating, generatingJobId }: JobSelector
         <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-background to-transparent z-10 pointer-events-none" />
 
         {/* Scrolling container */}
-        <div className="scroll-container py-4 px-4 space-y-3">
+        <div className={`scroll-container py-4 px-4 space-y-3 ${isGenerating ? "scroll-paused" : ""}`}>
           {duplicatedJobs.map((job, index) => (
             <Card
               key={`${job.id}-${index}`}

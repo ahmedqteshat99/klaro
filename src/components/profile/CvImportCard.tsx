@@ -1,11 +1,12 @@
 import { useRef, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { FileUp, Loader2 } from "lucide-react";
+import { CheckCircle2, FileUp, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { readCvFile } from "@/lib/cv-file";
 import { parseCvText, type CvImportData } from "@/lib/api/cv-import";
@@ -107,6 +108,7 @@ const CvImportCard = ({
   addPublication,
   addCustomSection,
   addCustomSectionEntry,
+  onImportComplete,
 }: CvImportCardProps) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [rawText, setRawText] = useState("");
@@ -115,6 +117,8 @@ const CvImportCard = ({
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [parsedData, setParsedData] = useState<CvImportData | null>(null);
   const [parsedSourceText, setParsedSourceText] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [savingStatus, setSavingStatus] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -163,6 +167,7 @@ const CvImportCard = ({
     customSections: CustomSectionToCreate[]
   ) => {
     // Save profile data to database
+    setSavingStatus("Profildaten werden gespeichert...");
     if (data.profile) {
       const profileUpdates: Partial<Profile> = {};
 
@@ -262,24 +267,40 @@ const CvImportCard = ({
       }) || [];
 
     // Save all entries directly to database (not just local state)
-    for (const entry of workExperiences) {
-      await addWorkExperience(entry);
+    if (workExperiences.length > 0) {
+      setSavingStatus("Berufserfahrung wird gespeichert...");
+      for (const entry of workExperiences) {
+        await addWorkExperience(entry);
+      }
     }
-    for (const entry of educationEntries) {
-      await addEducation(entry);
+    if (educationEntries.length > 0) {
+      setSavingStatus("Ausbildung wird gespeichert...");
+      for (const entry of educationEntries) {
+        await addEducation(entry);
+      }
     }
-    for (const entry of practicalExperiences) {
-      await addPracticalExperience(entry);
+    if (practicalExperiences.length > 0) {
+      setSavingStatus("Praktische Erfahrungen werden gespeichert...");
+      for (const entry of practicalExperiences) {
+        await addPracticalExperience(entry);
+      }
     }
-    for (const entry of certifications) {
-      await addCertification(entry);
+    if (certifications.length > 0) {
+      setSavingStatus("Zertifikate werden gespeichert...");
+      for (const entry of certifications) {
+        await addCertification(entry);
+      }
     }
-    for (const entry of publications) {
-      await addPublication(entry);
+    if (publications.length > 0) {
+      setSavingStatus("Publikationen werden gespeichert...");
+      for (const entry of publications) {
+        await addPublication(entry);
+      }
     }
 
     // Create custom sections if functions are available
     if (addCustomSection && addCustomSectionEntry && customSections.length > 0) {
+      setSavingStatus("Eigene Sektionen werden gespeichert...");
       for (const section of customSections) {
         if (section.existingSectionId) {
           // Add to existing section
@@ -347,9 +368,21 @@ const CvImportCard = ({
     sourceText: string,
     customSections: CustomSectionToCreate[]
   ) => {
-    await applyImport(filteredData, sourceText, customSections);
-
+    // Close review modal and show saving dialog
     setIsReviewModalOpen(false);
+    setIsSaving(true);
+    setSavingStatus("Profildaten werden gespeichert...");
+
+    try {
+      await applyImport(filteredData, sourceText, customSections);
+      setSavingStatus("Import abgeschlossen!");
+      // Brief pause to show completion state
+      await new Promise(resolve => setTimeout(resolve, 800));
+    } finally {
+      setIsSaving(false);
+      setSavingStatus("");
+    }
+
     setParsedData(null);
     setParsedSourceText("");
     resetInputs();
@@ -359,7 +392,7 @@ const CvImportCard = ({
       description: "Alle Daten wurden automatisch gespeichert.",
     });
 
-    // Notify parent component that import is complete
+    // Notify parent component that import is complete (navigates to step 2)
     if (onImportComplete) {
       onImportComplete();
     }
@@ -454,6 +487,28 @@ const CvImportCard = ({
           onConfirm={handleReviewConfirm}
         />
       )}
+
+      <Dialog open={isSaving} onOpenChange={() => {}}>
+        <DialogContent
+          className="sm:max-w-md [&>button]:hidden"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <div className="flex flex-col items-center gap-4 py-6">
+            {savingStatus === "Import abgeschlossen!" ? (
+              <CheckCircle2 className="h-10 w-10 text-green-500" />
+            ) : (
+              <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            )}
+            <div className="text-center space-y-1">
+              <h3 className="font-semibold text-lg">
+                {savingStatus === "Import abgeschlossen!" ? "Fertig!" : "Daten werden gespeichert"}
+              </h3>
+              <p className="text-sm text-muted-foreground">{savingStatus}</p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

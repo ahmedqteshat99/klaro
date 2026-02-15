@@ -419,37 +419,6 @@ const JobExtractionForm = ({
               />
             </div>
 
-            {/* Generate Anschreiben Button */}
-            {onGenerateAnschreiben && (
-              <div className="pt-4 border-t">
-                <Button
-                  onClick={handleGenerate}
-                  disabled={isGeneratingAnschreiben || !canGenerate}
-                  className="w-full"
-                  size="lg"
-                >
-                  {isGeneratingAnschreiben ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generiere Anschreiben...
-                    </>
-                  ) : (
-                    <>
-                      <FileEdit className="mr-2 h-4 w-4" />
-                      {userPreferences.length > 0
-                        ? `Anschreiben generieren (${userPreferences.length} Präferenz${userPreferences.length > 1 ? 'en' : ''})`
-                        : "Anschreiben generieren"}
-                    </>
-                  )}
-                </Button>
-                {!canGenerate && (
-                  <p className="text-sm text-muted-foreground mt-2 text-center">
-                    Bitte geben Sie mindestens das Krankenhaus oder die Fachabteilung ein.
-                  </p>
-                )}
-              </div>
-            )}
-
             {/* AI Preferences Section */}
             <>
               <Separator className="my-6" />
@@ -557,6 +526,37 @@ const JobExtractionForm = ({
                   </div>
                 </div>
             </>
+
+            {/* Generate Anschreiben Button */}
+            {onGenerateAnschreiben && (
+              <div className="pt-4 border-t">
+                <Button
+                  onClick={handleGenerate}
+                  disabled={isGeneratingAnschreiben || !canGenerate}
+                  className="w-full"
+                  size="lg"
+                >
+                  {isGeneratingAnschreiben ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Generiere Anschreiben...
+                    </>
+                  ) : (
+                    <>
+                      <FileEdit className="mr-2 h-4 w-4" />
+                      {userPreferences.length > 0
+                        ? `Anschreiben generieren (${userPreferences.length} Präferenz${userPreferences.length > 1 ? 'en' : ''})`
+                        : "Anschreiben generieren"}
+                    </>
+                  )}
+                </Button>
+                {!canGenerate && (
+                  <p className="text-sm text-muted-foreground mt-2 text-center">
+                    Bitte geben Sie mindestens das Krankenhaus oder die Fachabteilung ein.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
       </CardContent>

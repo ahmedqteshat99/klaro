@@ -1221,7 +1221,8 @@ table.cv-languages td:nth-child(3) {
   animation: scroll-vertical 60s linear infinite;
 }
 
-.scroll-container:hover {
+.scroll-container:hover,
+.scroll-container.scroll-paused {
   animation-play-state: paused;
 }
 
