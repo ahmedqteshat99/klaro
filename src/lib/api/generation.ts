@@ -284,3 +284,42 @@ export async function backfillJobDescriptions(): Promise<{
 
   return result.data ?? { success: false, error: "Keine Antwort vom Server" };
 }
+
+/**
+ * Trigger RSS job import from Stellenmarkt.de.
+ * Admin-only operation.
+ */
+export async function triggerRssImport(): Promise<{
+  success: boolean;
+  runId?: string;
+  totalFeedItems?: number;
+  matchingItems?: number;
+  imported?: number;
+  updated?: number;
+  skipped?: number;
+  expired?: number;
+  errors?: number;
+  errorMessages?: string[];
+  error?: string;
+}> {
+  await ensureFreshSession();
+
+  const result = await invokeEdgeFunction<{
+    success: boolean;
+    runId?: string;
+    totalFeedItems?: number;
+    matchingItems?: number;
+    imported?: number;
+    updated?: number;
+    skipped?: number;
+    expired?: number;
+    errors?: number;
+    errorMessages?: string[];
+  }>("import-rss-jobs", {});
+
+  if (result.error) {
+    return { success: false, error: result.error };
+  }
+
+  return result.data ?? { success: false, error: "Keine Antwort vom Server" };
+}

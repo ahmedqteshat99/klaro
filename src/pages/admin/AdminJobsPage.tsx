@@ -27,7 +27,9 @@ import {
   mapExtractedJobToAdminForm,
   type AdminJobFormValues,
 } from "@/lib/job-import";
-import { ExternalLink, Info, Link2, Loader2, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { Check, ExternalLink, Info, Link2, Loader2, Pencil, Plus, Rss, Sparkles, Trash2, X } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 
 interface JobFormState {
   title: string;
@@ -130,6 +132,8 @@ const AdminJobsPage = () => {
   const [missingFields, setMissingFields] = useState<Array<keyof AdminJobFormValues>>([]);
   const [lastImportSource, setLastImportSource] = useState<"url" | "text" | null>(null);
   const [isBackfilling, setIsBackfilling] = useState(false);
+  const [isRssImporting, setIsRssImporting] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const loadJobs = useCallback(async () => {
     setIsLoading(true);
@@ -448,6 +452,109 @@ const AdminJobsPage = () => {
     }
   };
 
+  const handleRssImport = async () => {
+    setIsRssImporting(true);
+    try {
+      const { triggerRssImport } = await import("@/lib/api/generation");
+      const result = await triggerRssImport();
+
+      if (!result.success) {
+        toast({
+          title: "RSS-Import fehlgeschlagen",
+          description: result.error || "Unbekannter Fehler",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const parts = [];
+      if (result.imported) parts.push(`${result.imported} importiert`);
+      if (result.updated) parts.push(`${result.updated} aktualisiert`);
+      if (result.skipped) parts.push(`${result.skipped} übersprungen`);
+      if (result.expired) parts.push(`${result.expired} abgelaufen`);
+
+      toast({
+        title: "RSS-Import abgeschlossen",
+        description: parts.length > 0
+          ? parts.join(", ")
+          : "Keine neuen Assistenzarzt-Stellen gefunden",
+      });
+
+      await loadJobs();
+    } catch (error) {
+      toast({
+        title: "Fehler",
+        description: error instanceof Error ? error.message : "Unbekannter Fehler",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRssImporting(false);
+    }
+  };
+
+  const handleApproveJob = async (job: Tables<"jobs">) => {
+    setBusyJobId(job.id);
+    const { error } = await supabase
+      .from("jobs")
+      .update({
+        import_status: "published",
+        is_published: true,
+        published_at: new Date().toISOString(),
+      })
+      .eq("id", job.id);
+    setBusyJobId(null);
+
+    if (error) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Job genehmigt", description: "Der Job ist jetzt öffentlich sichtbar." });
+    void loadJobs();
+  };
+
+  const handleRejectJob = async (job: Tables<"jobs">) => {
+    setBusyJobId(job.id);
+    const { error } = await supabase
+      .from("jobs")
+      .update({
+        import_status: "rejected",
+        is_published: false,
+      })
+      .eq("id", job.id);
+    setBusyJobId(null);
+
+    if (error) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Job abgelehnt", description: "Der Job wurde als abgelehnt markiert." });
+    void loadJobs();
+  };
+
+  const getStatusBadge = (job: Tables<"jobs">) => {
+    const status = (job as any).import_status as string | null;
+    switch (status) {
+      case "pending_review":
+        return <Badge variant="outline" className="border-yellow-500 text-yellow-600 bg-yellow-50/50">Ausstehend</Badge>;
+      case "published":
+        return <Badge variant="outline" className="border-green-500 text-green-600 bg-green-50/50">Genehmigt</Badge>;
+      case "rejected":
+        return <Badge variant="outline" className="border-red-500 text-red-600 bg-red-50/50">Abgelehnt</Badge>;
+      case "expired":
+        return <Badge variant="outline" className="border-gray-400 text-gray-500 bg-gray-50/50">Abgelaufen</Badge>;
+      default:
+        return job.is_published
+          ? <Badge variant="outline" className="border-green-500 text-green-600 bg-green-50/50">Veröffentlicht</Badge>
+          : <Badge variant="outline">Entwurf</Badge>;
+    }
+  };
+
+  const filteredJobs = statusFilter === "all"
+    ? jobs
+    : statusFilter === "draft"
+      ? jobs.filter((j) => !(j as any).import_status || (j as any).import_status === "manual")
+      : jobs.filter((j) => (j as any).import_status === statusFilter);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -459,18 +566,36 @@ const AdminJobsPage = () => {
           <Button
             type="button"
             variant="secondary"
+            onClick={handleRssImport}
+            disabled={isRssImporting}
+          >
+            {isRssImporting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Importiere...
+              </>
+            ) : (
+              <>
+                <Rss className="mr-2 h-4 w-4" />
+                RSS importieren
+              </>
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
             onClick={handleBackfillDescriptions}
             disabled={isBackfilling}
           >
             {isBackfilling ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Generiere Beschreibungen...
+                Generiere...
               </>
             ) : (
               <>
                 <Sparkles className="mr-2 h-4 w-4" />
-                Beschreibungen generieren
+                Beschreibungen
               </>
             )}
           </Button>
@@ -726,8 +851,25 @@ const AdminJobsPage = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Alle Jobs</CardTitle>
-          <CardDescription>{jobs.length} Einträge</CardDescription>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle>Alle Jobs</CardTitle>
+              <CardDescription>{filteredJobs.length} von {jobs.length} Einträgen</CardDescription>
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Status filtern" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alle Status</SelectItem>
+                <SelectItem value="pending_review">Ausstehend</SelectItem>
+                <SelectItem value="published">Genehmigt</SelectItem>
+                <SelectItem value="rejected">Abgelehnt</SelectItem>
+                <SelectItem value="expired">Abgelaufen</SelectItem>
+                <SelectItem value="draft">Manuell/Entwurf</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -740,56 +882,93 @@ const AdminJobsPage = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Titel</TableHead>
-                    <TableHead>Kontakt</TableHead>
+                    <TableHead>Quelle</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Veröffentlicht</TableHead>
-                    <TableHead>Ablauf</TableHead>
                     <TableHead>Aktionen</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {jobs.map((job) => {
+                  {filteredJobs.map((job) => {
                     const isBusy = busyJobId === job.id;
+                    const importStatus = (job as any).import_status as string | null;
+                    const isPending = importStatus === "pending_review";
+                    const isRssJob = importStatus && importStatus !== "manual";
                     return (
-                      <TableRow key={job.id}>
+                      <TableRow key={job.id} className={isPending ? "bg-yellow-50/30 dark:bg-yellow-900/10" : undefined}>
                         <TableCell>
                           <div className="font-medium">{job.title}</div>
                           <div className="text-xs text-muted-foreground">
                             {[job.hospital_name, job.department, job.location].filter(Boolean).join(" | ") || "-"}
                           </div>
                         </TableCell>
-                        <TableCell>{job.contact_email ?? "-"}</TableCell>
-                        <TableCell>{job.is_published ? "Veröffentlicht" : "Entwurf"}</TableCell>
-                        <TableCell>{formatDateTime(job.published_at)}</TableCell>
-                        <TableCell>{job.expires_at || "-"}</TableCell>
                         <TableCell>
-                          <div className="flex flex-wrap gap-2">
+                          {isRssJob ? (
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Rss className="h-3 w-3" /> RSS
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Manuell</span>
+                          )}
+                        </TableCell>
+                        <TableCell>{getStatusBadge(job)}</TableCell>
+                        <TableCell>{formatDateTime(job.published_at)}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1.5">
+                            {isPending && (
+                              <>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={isBusy}
+                                  className="border-green-500 text-green-600 hover:bg-green-50"
+                                  onClick={() => handleApproveJob(job)}
+                                >
+                                  {isBusy ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Check className="mr-1 h-3.5 w-3.5" />}
+                                  Genehmigen
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={isBusy}
+                                  className="border-red-500 text-red-600 hover:bg-red-50"
+                                  onClick={() => handleRejectJob(job)}
+                                >
+                                  {isBusy ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <X className="mr-1 h-3.5 w-3.5" />}
+                                  Ablehnen
+                                </Button>
+                              </>
+                            )}
                             <Button type="button" size="sm" variant="outline" onClick={() => startEdit(job)}>
-                              <Pencil className="mr-2 h-3.5 w-3.5" />
+                              <Pencil className="mr-1 h-3.5 w-3.5" />
                               Bearbeiten
                             </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              disabled={isBusy}
-                              onClick={() => handleTogglePublish(job)}
-                            >
-                              {isBusy ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
-                              {job.is_published ? "Deaktivieren" : "Publizieren"}
-                            </Button>
+                            {!isPending && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={isBusy}
+                                onClick={() => handleTogglePublish(job)}
+                              >
+                                {isBusy ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
+                                {job.is_published ? "Deaktivieren" : "Publizieren"}
+                              </Button>
+                            )}
                             {job.apply_url ? (
                               <Button asChild type="button" size="sm" variant="outline">
                                 <a href={job.apply_url} target="_blank" rel="noreferrer">
-                                  <ExternalLink className="mr-2 h-3.5 w-3.5" />
-                                  Anzeige
+                                  <ExternalLink className="mr-1 h-3.5 w-3.5" />
+                                  Link
                                 </a>
                               </Button>
                             ) : null}
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button type="button" size="sm" variant="destructive" disabled={isBusy}>
-                                  {isBusy ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Trash2 className="mr-2 h-3.5 w-3.5" />}
+                                  {isBusy ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Trash2 className="mr-1 h-3.5 w-3.5" />}
                                   Löschen
                                 </Button>
                               </AlertDialogTrigger>

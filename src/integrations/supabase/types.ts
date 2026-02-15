@@ -14,6 +14,72 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_deletion_log: {
+        Row: {
+          deleted_at: string | null
+          deleted_by: string | null
+          deletion_summary: Json | null
+          id: string
+          user_email: string | null
+          user_id: string
+        }
+        Insert: {
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deletion_summary?: Json | null
+          id?: string
+          user_email?: string | null
+          user_id: string
+        }
+        Update: {
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deletion_summary?: Json | null
+          id?: string
+          user_email?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      admin_audit_log: {
+        Row: {
+          action: string
+          admin_user_id: string
+          created_at: string | null
+          id: string
+          ip_address: unknown
+          query_details: Json | null
+          target_record_id: string | null
+          target_table: string | null
+          target_user_id: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          admin_user_id: string
+          created_at?: string | null
+          id?: string
+          ip_address?: unknown
+          query_details?: Json | null
+          target_record_id?: string | null
+          target_table?: string | null
+          target_user_id?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          admin_user_id?: string
+          created_at?: string | null
+          id?: string
+          ip_address?: unknown
+          query_details?: Json | null
+          target_record_id?: string | null
+          target_table?: string | null
+          target_user_id?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       app_events: {
         Row: {
           created_at: string | null
@@ -69,7 +135,22 @@ export type Database = {
           size_bytes?: number | null
           user_document_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "application_attachments_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "application_attachments_user_document_id_fkey"
+            columns: ["user_document_id"]
+            isOneToOne: false
+            referencedRelation: "user_documents"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       application_messages: {
         Row: {
@@ -132,7 +213,15 @@ export type Database = {
           text_body?: string | null
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "application_messages_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       applications: {
         Row: {
@@ -192,7 +281,29 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "applications_cover_letter_document_id_fkey"
+            columns: ["cover_letter_document_id"]
+            isOneToOne: false
+            referencedRelation: "document_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "applications_cv_document_id_fkey"
+            columns: ["cv_document_id"]
+            isOneToOne: false
+            referencedRelation: "document_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "applications_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       candidate_share_requests: {
         Row: {
@@ -427,9 +538,52 @@ export type Database = {
         }
         Relationships: []
       }
+      job_import_logs: {
+        Row: {
+          action: string
+          created_at: string | null
+          details: Json | null
+          id: string
+          job_id: string | null
+          job_title: string | null
+          rss_guid: string | null
+          run_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          job_id?: string | null
+          job_title?: string | null
+          rss_guid?: string | null
+          run_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          job_id?: string | null
+          job_title?: string | null
+          rss_guid?: string | null
+          run_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_import_logs_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       jobs: {
         Row: {
           apply_url: string | null
+          attribution_metadata: Json | null
+          cache_expires_at: string | null
           contact_email: string | null
           contact_name: string | null
           created_at: string | null
@@ -439,16 +593,27 @@ export type Database = {
           expires_at: string | null
           hospital_name: string | null
           id: string
+          import_status: string | null
           is_published: boolean
           location: string | null
           published_at: string | null
           requirements: string | null
+          rss_content_hash: string | null
+          rss_feed_source: string | null
+          rss_guid: string | null
+          rss_imported_at: string | null
+          rss_last_seen_at: string | null
+          scraped_at: string | null
+          source_name: string | null
+          source_url: string | null
           tags: string[] | null
           title: string
           updated_at: string | null
         }
         Insert: {
           apply_url?: string | null
+          attribution_metadata?: Json | null
+          cache_expires_at?: string | null
           contact_email?: string | null
           contact_name?: string | null
           created_at?: string | null
@@ -458,16 +623,27 @@ export type Database = {
           expires_at?: string | null
           hospital_name?: string | null
           id?: string
+          import_status?: string | null
           is_published?: boolean
           location?: string | null
           published_at?: string | null
           requirements?: string | null
+          rss_content_hash?: string | null
+          rss_feed_source?: string | null
+          rss_guid?: string | null
+          rss_imported_at?: string | null
+          rss_last_seen_at?: string | null
+          scraped_at?: string | null
+          source_name?: string | null
+          source_url?: string | null
           tags?: string[] | null
           title: string
           updated_at?: string | null
         }
         Update: {
           apply_url?: string | null
+          attribution_metadata?: Json | null
+          cache_expires_at?: string | null
           contact_email?: string | null
           contact_name?: string | null
           created_at?: string | null
@@ -477,10 +653,19 @@ export type Database = {
           expires_at?: string | null
           hospital_name?: string | null
           id?: string
+          import_status?: string | null
           is_published?: boolean
           location?: string | null
           published_at?: string | null
           requirements?: string | null
+          rss_content_hash?: string | null
+          rss_feed_source?: string | null
+          rss_guid?: string | null
+          rss_imported_at?: string | null
+          rss_last_seen_at?: string | null
+          scraped_at?: string | null
+          source_name?: string | null
+          source_url?: string | null
           tags?: string[] | null
           title?: string
           updated_at?: string | null
@@ -682,33 +867,59 @@ export type Database = {
         }
         Relationships: []
       }
-      user_email_aliases: {
+      publications: {
         Row: {
-          alias: string
+          beschreibung: string | null
           created_at: string | null
-          deactivated_at: string | null
-          domain: string
-          full_address: string | null
+          datum: string | null
           id: string
-          is_active: boolean
+          journal_ort: string | null
+          titel: string
+          typ: string | null
+          updated_at: string | null
           user_id: string
         }
         Insert: {
-          alias: string
+          beschreibung?: string | null
           created_at?: string | null
-          deactivated_at?: string | null
-          domain?: string
+          datum?: string | null
           id?: string
-          is_active?: boolean
+          journal_ort?: string | null
+          titel: string
+          typ?: string | null
+          updated_at?: string | null
           user_id: string
         }
         Update: {
-          alias?: string
+          beschreibung?: string | null
           created_at?: string | null
-          deactivated_at?: string | null
-          domain?: string
+          datum?: string | null
           id?: string
-          is_active?: boolean
+          journal_ort?: string | null
+          titel?: string
+          typ?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      rate_limit_log: {
+        Row: {
+          created_at: string
+          endpoint: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          endpoint: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          endpoint?: string
+          id?: string
           user_id?: string
         }
         Relationships: []
@@ -758,38 +969,35 @@ export type Database = {
         }
         Relationships: []
       }
-      publications: {
+      user_email_aliases: {
         Row: {
-          beschreibung: string | null
+          alias: string
           created_at: string | null
-          datum: string | null
+          deactivated_at: string | null
+          domain: string
+          full_address: string | null
           id: string
-          journal_ort: string | null
-          titel: string
-          typ: string | null
-          updated_at: string | null
+          is_active: boolean
           user_id: string
         }
         Insert: {
-          beschreibung?: string | null
+          alias: string
           created_at?: string | null
-          datum?: string | null
+          deactivated_at?: string | null
+          domain?: string
+          full_address?: string | null
           id?: string
-          journal_ort?: string | null
-          titel: string
-          typ?: string | null
-          updated_at?: string | null
+          is_active?: boolean
           user_id: string
         }
         Update: {
-          beschreibung?: string | null
+          alias?: string
           created_at?: string | null
-          datum?: string | null
+          deactivated_at?: string | null
+          domain?: string
+          full_address?: string | null
           id?: string
-          journal_ort?: string | null
-          titel?: string
-          typ?: string | null
-          updated_at?: string | null
+          is_active?: boolean
           user_id?: string
         }
         Relationships: []
@@ -868,10 +1076,75 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      admin_activity_summary: {
+        Row: {
+          action: string | null
+          action_count: number | null
+          admin_email: string | null
+          admin_name: string | null
+          admin_user_id: string | null
+          last_action_at: string | null
+        }
+        Relationships: []
+      }
+      user_data_access_log: {
+        Row: {
+          action: string | null
+          admin_name: string | null
+          admin_user_id: string | null
+          created_at: string | null
+          target_table: string | null
+          target_user_email: string | null
+          target_user_id: string | null
+          target_user_name: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      check_rate_limit: {
+        Args: {
+          p_endpoint: string
+          p_max_requests: number
+          p_user_id: string
+          p_window_minutes: number
+        }
+        Returns: boolean
+      }
+      cleanup_expired_jobs: {
+        Args: never
+        Returns: {
+          deleted_count: number
+        }[]
+      }
+      cleanup_old_audit_logs: { Args: never; Returns: number }
+      cleanup_old_rate_limits: { Args: never; Returns: undefined }
+      delete_user_account: { Args: { p_user_id: string }; Returns: Json }
       is_admin: { Args: never; Returns: boolean }
+      job_needs_refresh: { Args: { job_id: string }; Returns: boolean }
+      log_admin_action: {
+        Args: {
+          p_action: string
+          p_query_details?: Json
+          p_target_record_id?: string
+          p_target_table?: string
+          p_target_user_id?: string
+        }
+        Returns: string
+      }
+      log_rate_limit: {
+        Args: { p_endpoint: string; p_user_id: string }
+        Returns: undefined
+      }
+      provision_user_alias: {
+        Args: {
+          p_domain?: string
+          p_nachname: string
+          p_user_id: string
+          p_vorname: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never
