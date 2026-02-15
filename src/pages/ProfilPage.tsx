@@ -32,6 +32,7 @@ import CvImportCard from "@/components/profile/CvImportCard";
 import { CustomSectionForm } from "@/components/profile/CustomSectionForm";
 import EmailNotificationPreferences from "@/components/profile/EmailNotificationPreferences";
 import UserDataExport from "@/components/profile/UserDataExport";
+import DeleteAccountCard from "@/components/profile/DeleteAccountCard";
 import CVTemplate from "@/components/cv/CVTemplate";
 
 const ProfilPage = () => {
@@ -453,6 +454,8 @@ const ProfilPage = () => {
             <EmailNotificationPreferences />
 
             <UserDataExport />
+
+            <DeleteAccountCard />
 
             {customSections.map((section) => (
               <CustomSectionForm
