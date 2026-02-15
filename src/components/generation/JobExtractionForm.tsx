@@ -240,17 +240,32 @@ const JobExtractionForm = ({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="bg-muted/30 p-3 rounded-md border border-border/50 mb-4">
-          <div className="flex items-start gap-2">
+        <div className="rounded-lg border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 p-4 space-y-3 mb-4">
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200 flex items-center gap-2">
+              ⚠️ Wichtiger Hinweis zur KI-Haftung
+            </p>
+            <p className="text-sm text-amber-900 dark:text-amber-200">
+              Die KI generiert Texte auf Basis Ihrer Angaben, kann aber <strong>Fehler, Ungenauigkeiten
+              oder unangemessene Formulierungen</strong> enthalten. Sie sind <strong>selbst verantwortlich</strong> für
+              die Richtigkeit, Vollständigkeit und Angemessenheit aller Bewerbungsunterlagen, die Sie
+              an Arbeitgeber senden.
+            </p>
+            <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+              <strong>Sie MÜSSEN alle KI-generierten Inhalte vor der Verwendung sorgfältig prüfen und ggf. anpassen.</strong>
+            </p>
+          </div>
+
+          <div className="flex items-start gap-3 pt-2">
             <Checkbox
               id="legal-consent"
               checked={legalConsent}
               onCheckedChange={(checked) => setLegalConsent(checked as boolean)}
             />
-            <Label htmlFor="legal-consent" className="text-xs text-muted-foreground leading-normal cursor-pointer">
-              Ich bestätige, dass ich berechtigt bin, diese Stellenanzeige für meine <strong>persönliche Bewerbung</strong> zu verwenden.
-              Mir ist bewusst, dass Klaro die Daten nur <strong>temporär verarbeitet</strong> und nicht dauerhaft speichert.
-              (Automatisches Auslesen via Firecrawl/AI).
+            <Label htmlFor="legal-consent" className="text-sm font-normal cursor-pointer leading-relaxed text-amber-900 dark:text-amber-200">
+              Ich habe den Hinweis gelesen und verstanden. Ich willige ein, dass meine Profildaten zur KI-gestützten Textgenerierung
+              an Anthropic übermittelt werden. Ich bestätige, dass ich berechtigt bin, diese Stellenanzeige für meine persönliche
+              Bewerbung zu verwenden und mir bewusst ist, dass die Daten nur temporär verarbeitet werden.
             </Label>
           </div>
         </div>
