@@ -7,12 +7,14 @@ import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { captureAttributionFromLocation } from "@/lib/attribution";
 import { initializeKlaro } from "@/lib/cookie-consent";
 import AdminRoute from "./components/admin/AdminRoute";
+import AuthorizedRoute from "./components/auth/AuthorizedRoute";
 import "klaro/dist/klaro.css";
 import "@/styles/cookie-banner.css";
 
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const AuthPage = lazy(() => import("./pages/AuthPage"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
+const ComingSoonPage = lazy(() => import("./pages/ComingSoonPage"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const ProfilPage = lazy(() => import("./pages/ProfilPage"));
 const UnterlagenPage = lazy(() => import("./pages/UnterlagenPage"));
@@ -66,31 +68,37 @@ const App = () => {
             }
           >
             <Routes>
+              {/* Public routes */}
               <Route path="/" element={<LandingPage />} />
               <Route path="/landing" element={<LandingPage />} />
               <Route path="/auth" element={<AuthPage />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/onboarding" element={<OnboardingPage />} />
-              <Route path="/profil" element={<ProfilPage />} />
-              <Route path="/unterlagen" element={<UnterlagenPage />} />
-              <Route path="/anschreiben" element={<AnschreibenPage />} />
-              <Route path="/jobs" element={<JobsPage />} />
-              <Route path="/jobs/:id" element={<JobDetailPage />} />
-              <Route path="/jobs/:id/:slug" element={<JobDetailPage />} />
-              <Route path="/inbox" element={<InboxPage />} />
+              <Route path="/coming-soon" element={<ComingSoonPage />} />
               <Route path="/datenschutz" element={<DatenschutzPage />} />
               <Route path="/agb" element={<AgbPage />} />
               <Route path="/datenaufbewahrung" element={<DatenaufbewahrungPage />} />
               <Route path="/impressum" element={<ImpressumPage />} />
-              {/* <Route path="/agb" element={<AgbPage />} /> Removed duplicate */}
-              <Route path="/admin" element={<AdminRoute />}>
+
+              {/* Protected routes - require authorization */}
+              <Route path="/dashboard" element={<AuthorizedRoute><Dashboard /></AuthorizedRoute>} />
+              <Route path="/onboarding" element={<AuthorizedRoute><OnboardingPage /></AuthorizedRoute>} />
+              <Route path="/profil" element={<AuthorizedRoute><ProfilPage /></AuthorizedRoute>} />
+              <Route path="/unterlagen" element={<AuthorizedRoute><UnterlagenPage /></AuthorizedRoute>} />
+              <Route path="/anschreiben" element={<AuthorizedRoute><AnschreibenPage /></AuthorizedRoute>} />
+              <Route path="/jobs" element={<AuthorizedRoute><JobsPage /></AuthorizedRoute>} />
+              <Route path="/jobs/:id" element={<AuthorizedRoute><JobDetailPage /></AuthorizedRoute>} />
+              <Route path="/jobs/:id/:slug" element={<AuthorizedRoute><JobDetailPage /></AuthorizedRoute>} />
+              <Route path="/inbox" element={<AuthorizedRoute><InboxPage /></AuthorizedRoute>} />
+
+              {/* Admin routes - require authorization */}
+              <Route path="/admin" element={<AuthorizedRoute><AdminRoute /></AuthorizedRoute>}>
                 <Route index element={<AdminDashboardPage />} />
                 <Route path="jobs" element={<AdminJobsPage />} />
                 <Route path="users" element={<AdminUsersPage />} />
                 <Route path="users/:id" element={<AdminUserDetailPage />} />
                 <Route path="data-subjects" element={<AdminDataSubjectPage />} />
               </Route>
+
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

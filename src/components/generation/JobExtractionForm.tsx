@@ -505,7 +505,6 @@ const JobExtractionForm = ({
                             size="sm"
                             className="justify-start text-left h-auto py-2 px-3"
                             onClick={() => setInputValue(suggestion)}
-                            disabled={isProcessing}
                           >
                             <Badge variant="secondary" className="mr-2 shrink-0 text-xs">
                               {index + 1}
