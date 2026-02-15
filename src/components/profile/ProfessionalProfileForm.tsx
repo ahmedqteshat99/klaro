@@ -80,6 +80,7 @@ const ProfessionalProfileForm = ({ profile, onSave, isLoading }: ProfessionalPro
     approbationsstatus: "",
     deutschniveau: "",
     berufserfahrung_jahre: 0,
+    berufserfahrung_monate: 0,
     cv_text: ""
   });
   const [isSaving, setIsSaving] = useState(false);
@@ -91,6 +92,7 @@ const ProfessionalProfileForm = ({ profile, onSave, isLoading }: ProfessionalPro
         approbationsstatus: profile.approbationsstatus || "",
         deutschniveau: profile.deutschniveau || "",
         berufserfahrung_jahre: profile.berufserfahrung_jahre || 0,
+        berufserfahrung_monate: profile.berufserfahrung_monate || 0,
         cv_text: profile.cv_text || ""
       });
     }
@@ -153,35 +155,50 @@ const ProfessionalProfileForm = ({ profile, onSave, isLoading }: ProfessionalPro
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Deutschniveau</Label>
-            <Select
-              value={formData.deutschniveau}
-              onValueChange={(value) => setFormData({ ...formData, deutschniveau: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Niveau auswählen..." />
-              </SelectTrigger>
-              <SelectContent>
-                {DEUTSCHNIVEAU.map((niveau) => (
-                  <SelectItem key={niveau} value={niveau}>
-                    {niveau}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="berufserfahrung">Berufserfahrung (Jahre)</Label>
-            <Input
-              id="berufserfahrung"
-              type="number"
-              min="0"
-              max="50"
-              value={formData.berufserfahrung_jahre}
-              onChange={(e) => setFormData({ ...formData, berufserfahrung_jahre: parseInt(e.target.value) || 0 })}
-            />
+        <div className="space-y-2">
+          <Label>Deutschniveau</Label>
+          <Select
+            value={formData.deutschniveau}
+            onValueChange={(value) => setFormData({ ...formData, deutschniveau: value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Niveau auswählen..." />
+            </SelectTrigger>
+            <SelectContent>
+              {DEUTSCHNIVEAU.map((niveau) => (
+                <SelectItem key={niveau} value={niveau}>
+                  {niveau}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Berufserfahrung</Label>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="berufserfahrung_jahre" className="text-sm text-muted-foreground">Jahre</Label>
+              <Input
+                id="berufserfahrung_jahre"
+                type="number"
+                min="0"
+                max="50"
+                value={formData.berufserfahrung_jahre}
+                onChange={(e) => setFormData({ ...formData, berufserfahrung_jahre: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="berufserfahrung_monate" className="text-sm text-muted-foreground">Monate</Label>
+              <Input
+                id="berufserfahrung_monate"
+                type="number"
+                min="0"
+                max="11"
+                value={formData.berufserfahrung_monate}
+                onChange={(e) => setFormData({ ...formData, berufserfahrung_monate: parseInt(e.target.value) || 0 })}
+              />
+            </div>
           </div>
         </div>
 
