@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Accordion } from "@/components/ui/accordion";
 import { FileCheck } from "lucide-react";
 import type { CvImportData } from "@/lib/api/cv-import";
-import type { CvReviewState, CustomSectionToCreate } from "@/lib/types/cv-review";
+import type { CvReviewState, CustomSectionToCreate, StandardSectionKey, CustomSection } from "@/lib/types/cv-review";
 import {
   initializeReviewState,
   filterEnabledItems,
@@ -35,6 +35,7 @@ interface CvImportReviewModalProps {
   onOpenChange: (open: boolean) => void;
   importData: CvImportData;
   sourceText: string;
+  existingCustomSections?: CustomSection[]; // NEW: from database
   onConfirm: (
     filteredData: CvImportData,
     sourceText: string,
@@ -47,6 +48,7 @@ export function CvImportReviewModal({
   onOpenChange,
   importData,
   sourceText,
+  existingCustomSections = [],
   onConfirm,
 }: CvImportReviewModalProps) {
   const [reviewState, setReviewState] = useState<CvReviewState>(() =>
@@ -93,6 +95,75 @@ export function CvImportReviewModal({
         certifications: prev.certifications.map((i) => ({ ...i, _enabled: enabled })),
         publications: prev.publications.map((i) => ({ ...i, _enabled: enabled })),
       };
+    });
+  };
+
+  // Helper function to create items from raw text
+  const createItemFromRawText = (sectionKey: StandardSectionKey, rawText: string): any => {
+    const baseItem = {
+      _tempId: `${sectionKey}-${Date.now()}-${Math.random()}`,
+      _enabled: true,
+    };
+
+    switch (sectionKey) {
+      case 'workExperiences':
+        return { ...baseItem, klinik: rawText, station: null, zeitraum_von: null, zeitraum_bis: null, taetigkeiten: null };
+      case 'educationEntries':
+        return { ...baseItem, universitaet: rawText, abschluss: null, zeitraum_von: null, zeitraum_bis: null, abschlussarbeit: null };
+      case 'practicalExperiences':
+        return { ...baseItem, einrichtung: rawText, typ: null, fachbereich: null, zeitraum_von: null, zeitraum_bis: null, beschreibung: null };
+      case 'certifications':
+        return { ...baseItem, name: rawText, aussteller: null, datum: null };
+      case 'publications':
+        return { ...baseItem, titel: rawText, typ: null, journal_ort: null, datum: null, beschreibung: null };
+    }
+  };
+
+  // Handle assignment to standard section
+  const handleAssignToStandardSection = (sectionKey: StandardSectionKey, rawText: string) => {
+    const newItem = createItemFromRawText(sectionKey, rawText);
+
+    setReviewState((prev) => ({
+      ...prev,
+      [sectionKey]: [...prev[sectionKey], newItem],
+    }));
+  };
+
+  // Handle assignment to existing custom section
+  const handleAssignToCustomSection = (sectionId: string, rawText: string) => {
+    const section = existingCustomSections.find(s => s.id === sectionId);
+    if (!section) return;
+
+    // Find or create CustomSectionToCreate with existingSectionId
+    setReviewState((prev) => {
+      const existing = prev.customSectionsToCreate.find(
+        s => s.existingSectionId === sectionId
+      );
+
+      if (existing) {
+        // Add to existing
+        return {
+          ...prev,
+          customSectionsToCreate: prev.customSectionsToCreate.map(s =>
+            s.existingSectionId === sectionId
+              ? { ...s, entries: [...s.entries, { title: rawText, description: null }] }
+              : s
+          ),
+        };
+      } else {
+        // Create new with existingSectionId set
+        return {
+          ...prev,
+          customSectionsToCreate: [
+            ...prev.customSectionsToCreate,
+            {
+              sectionName: section.section_name,
+              existingSectionId: sectionId,
+              entries: [{ title: rawText, description: null }],
+            },
+          ],
+        };
+      }
     });
   };
 
@@ -175,12 +246,15 @@ export function CvImportReviewModal({
             <UnmatchedDataSection
               items={reviewState.unmatchedData}
               customSections={reviewState.customSectionsToCreate}
+              existingCustomSections={existingCustomSections}
               onChange={(unmatchedData) =>
                 setReviewState((prev) => ({ ...prev, unmatchedData }))
               }
               onCustomSectionsChange={(customSectionsToCreate) =>
                 setReviewState((prev) => ({ ...prev, customSectionsToCreate }))
               }
+              onAssignToStandardSection={handleAssignToStandardSection}
+              onAssignToCustomSection={handleAssignToCustomSection}
             />
           </Accordion>
         </div>

@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { GraduationCap, Pencil, Trash2, Check, X } from "lucide-react";
 import type { CvReviewEducationEntry } from "@/lib/types/cv-review";
+import EmptyStateActions from "./EmptyStateActions";
 
 interface EducationSectionProps {
   items: CvReviewEducationEntry[];
@@ -74,9 +75,18 @@ export function EducationSection({ items, onChange }: EducationSectionProps) {
       </AccordionTrigger>
       <AccordionContent>
         {items.length === 0 ? (
-          <p className="text-muted-foreground text-center py-4">
-            Keine Ausbildung erkannt.
-          </p>
+          <EmptyStateActions
+            message="Keine Ausbildung erkannt."
+            sectionType="education"
+            onQuickAdd={(data) => {
+              const newItem = {
+                ...data,
+                _tempId: `edu-${Date.now()}-${Math.random()}`,
+                _enabled: true,
+              };
+              onChange([...items, newItem]);
+            }}
+          />
         ) : (
           <div className="space-y-3">
             {items.map((item) => (

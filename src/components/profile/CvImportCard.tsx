@@ -23,6 +23,7 @@ import type {
 
 interface CvImportCardProps {
   profile: Profile | null;
+  customSections?: CustomSection[]; // NEW: existing custom sections
   updateLocalProfile: (data: Partial<Profile>) => void;
   saveProfile: (data: Partial<Profile>) => Promise<void>;
   addWorkExperiencesLocal: (
@@ -91,6 +92,7 @@ const mergeUnique = (current: string[] | null | undefined, incoming: string[]) =
 
 const CvImportCard = ({
   profile,
+  customSections = [],
   updateLocalProfile,
   saveProfile,
   addWorkExperiencesLocal,
@@ -279,10 +281,18 @@ const CvImportCard = ({
     // Create custom sections if functions are available
     if (addCustomSection && addCustomSectionEntry && customSections.length > 0) {
       for (const section of customSections) {
-        const newSection = await addCustomSection(section.sectionName);
-        if (newSection) {
+        if (section.existingSectionId) {
+          // Add to existing section
           for (const entry of section.entries) {
-            await addCustomSectionEntry(newSection.id, entry);
+            await addCustomSectionEntry(section.existingSectionId, entry);
+          }
+        } else {
+          // Create new section
+          const newSection = await addCustomSection(section.sectionName);
+          if (newSection) {
+            for (const entry of section.entries) {
+              await addCustomSectionEntry(newSection.id, entry);
+            }
           }
         }
       }
@@ -440,6 +450,7 @@ const CvImportCard = ({
           onOpenChange={setIsReviewModalOpen}
           importData={parsedData}
           sourceText={parsedSourceText}
+          existingCustomSections={customSections}
           onConfirm={handleReviewConfirm}
         />
       )}
