@@ -1203,3 +1203,31 @@ table.cv-languages td:nth-child(3) {
     }
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   JOB SELECTOR AUTO-SCROLL ANIMATION
+   ═══════════════════════════════════════════════════════════════════ */
+
+@keyframes scroll-vertical {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-50%);
+  }
+}
+
+.scroll-container {
+  animation: scroll-vertical 60s linear infinite;
+}
+
+.scroll-container:hover {
+  animation-play-state: paused;
+}
+
+/* Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .scroll-container {
+    animation: none;
+  }
+}
