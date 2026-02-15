@@ -435,11 +435,10 @@ const JobExtractionForm = ({
               </div>
             )}
 
-            {/* AI Preferences Section - Only shown BEFORE generation */}
-            {!currentHtml && (
-              <>
-                <Separator className="my-6" />
-                <div className="space-y-4">
+            {/* AI Preferences Section */}
+            <>
+              <Separator className="my-6" />
+              <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="font-semibold flex items-center gap-2">
@@ -543,8 +542,7 @@ const JobExtractionForm = ({
                     </div>
                   </div>
                 </div>
-              </>
-            )}
+            </>
           </div>
         )}
       </CardContent>
