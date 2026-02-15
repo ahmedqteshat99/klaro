@@ -27,7 +27,7 @@ import {
   mapExtractedJobToAdminForm,
   type AdminJobFormValues,
 } from "@/lib/job-import";
-import { ExternalLink, Info, Link2, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { ExternalLink, Info, Link2, Loader2, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 
 interface JobFormState {
   title: string;
@@ -129,6 +129,7 @@ const AdminJobsPage = () => {
   const [importedFields, setImportedFields] = useState<Array<keyof AdminJobFormValues>>([]);
   const [missingFields, setMissingFields] = useState<Array<keyof AdminJobFormValues>>([]);
   const [lastImportSource, setLastImportSource] = useState<"url" | "text" | null>(null);
+  const [isBackfilling, setIsBackfilling] = useState(false);
 
   const loadJobs = useCallback(async () => {
     setIsLoading(true);
@@ -410,6 +411,43 @@ const AdminJobsPage = () => {
     void loadJobs();
   };
 
+  const handleBackfillDescriptions = async () => {
+    setIsBackfilling(true);
+    try {
+      const { backfillJobDescriptions } = await import("@/lib/api/generation");
+      const result = await backfillJobDescriptions();
+
+      if (!result.success) {
+        toast({
+          title: "Backfill fehlgeschlagen",
+          description: result.error || "Unbekannter Fehler",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Backfill abgeschlossen",
+        description: result.message || `${result.updated || 0} Jobs aktualisiert`,
+      });
+
+      if (result.errors && result.errors.length > 0) {
+        console.warn("Backfill errors:", result.errors);
+      }
+
+      // Reload jobs to show updated descriptions
+      await loadJobs();
+    } catch (error) {
+      toast({
+        title: "Fehler",
+        description: error instanceof Error ? error.message : "Unbekannter Fehler",
+        variant: "destructive",
+      });
+    } finally {
+      setIsBackfilling(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -417,10 +455,30 @@ const AdminJobsPage = () => {
           <h1 className="text-2xl font-bold text-foreground">Jobs verwalten</h1>
           <p className="text-sm text-muted-foreground">Stellen erstellen, aktualisieren und veröffentlichen.</p>
         </div>
-        <Button type="button" variant="outline" onClick={resetForm}>
-          <Plus className="mr-2 h-4 w-4" />
-          Neuer Job
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleBackfillDescriptions}
+            disabled={isBackfilling}
+          >
+            {isBackfilling ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Generiere Beschreibungen...
+              </>
+            ) : (
+              <>
+                <Sparkles className="mr-2 h-4 w-4" />
+                Beschreibungen generieren
+              </>
+            )}
+          </Button>
+          <Button type="button" variant="outline" onClick={resetForm}>
+            <Plus className="mr-2 h-4 w-4" />
+            Neuer Job
+          </Button>
+        </div>
       </div>
 
       <Card>
