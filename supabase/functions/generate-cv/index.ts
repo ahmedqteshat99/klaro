@@ -108,7 +108,7 @@ serve(async (req) => {
 - Staatsangehörigkeit: ${profile.staatsangehoerigkeit || 'nicht angegeben'}
 - Familienstand: ${profile.familienstand || 'nicht angegeben'}
 - Stadt: ${profile.stadt || 'nicht angegeben'}
-- E-Mail: ${klaroEmail}
+- E-Mail: ${personalEmail || klaroEmail}
 - Telefon: ${profile.telefon || 'nicht angegeben'}
 - Fachrichtung: ${profile.fachrichtung || 'nicht angegeben'}
 - Approbationsstatus: ${profile.approbationsstatus || 'nicht angegeben'}
@@ -370,8 +370,9 @@ ${buildList(edvSkills)}
       cleanHtml = `${cleanHtml}\n${fallback.trim()}`;
     }
 
-    if (personalEmail && personalEmail !== klaroEmail) {
-      cleanHtml = cleanHtml.split(personalEmail).join(klaroEmail);
+    // Ensure klaro email is replaced with personal email if both exist
+    if (personalEmail && klaroEmail && personalEmail !== klaroEmail) {
+      cleanHtml = cleanHtml.split(klaroEmail).join(personalEmail);
     }
 
     return new Response(JSON.stringify({ success: true, html: cleanHtml }), {
