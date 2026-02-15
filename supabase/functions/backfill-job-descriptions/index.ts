@@ -31,14 +31,14 @@ serve(async (req) => {
             });
         }
 
-        // Check if user is admin
+        // Check if user is admin (stored in profiles.role as 'ADMIN')
         const { data: roleData } = await supabaseClient
-            .from('user_roles')
+            .from('profiles')
             .select('role')
             .eq('user_id', userData.user.id)
             .single();
 
-        if (roleData?.role !== 'admin') {
+        if (roleData?.role !== 'ADMIN') {
             return new Response(JSON.stringify({ error: 'Nur Admins können diese Funktion nutzen' }), {
                 status: 403,
                 headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
