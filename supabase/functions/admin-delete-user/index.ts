@@ -75,39 +75,55 @@ serve(async (req) => {
       });
     }
 
-    const tables = [
-      "document_versions",
-      "publications",
-      "certifications",
-      "practical_experiences",
-      "education_entries",
-      "work_experiences",
-      "profiles",
-    ];
+    // Call the comprehensive delete_user_account function
+    // This handles ALL tables including applications, messages, email_aliases, etc.
+    const { data: deletionSummary, error: deleteFuncError } = await supabaseAdmin
+      .rpc("delete_user_account", { p_user_id: targetUserId });
 
-    for (const table of tables) {
-      const { error } = await supabaseAdmin
-        .from(table)
-        .delete()
-        .eq("user_id", targetUserId);
-
-      if (error) {
-        console.error(`Error deleting from ${table}:`, error);
-      }
+    if (deleteFuncError) {
+      console.error("Error calling delete_user_account:", deleteFuncError);
+      throw new Error(`Fehler beim Löschen der Benutzerdaten: ${deleteFuncError.message}`);
     }
 
+    console.log("Deletion summary:", deletionSummary);
+
+    // Delete storage files
     const { data: files } = await supabaseAdmin.storage
       .from("user-files")
       .list(targetUserId);
 
     if (files && files.length > 0) {
       const filePaths = files.map((file) => `${targetUserId}/${file.name}`);
-      await supabaseAdmin.storage.from("user-files").remove(filePaths);
+      const { error: storageError } = await supabaseAdmin.storage
+        .from("user-files")
+        .remove(filePaths);
+
+      if (storageError) {
+        console.error("Error deleting storage files:", storageError);
+        // Continue anyway - don't fail the whole operation
+      }
     }
 
+    // Log deletion for audit trail
+    const { data: userData } = await supabaseAdmin.auth.admin.getUserById(targetUserId);
+    const userEmail = userData?.user?.email || "unknown";
+
+    await supabaseAdmin
+      .from("account_deletion_log")
+      .insert({
+        user_id: targetUserId,
+        user_email: userEmail,
+        deletion_summary: deletionSummary,
+        deleted_by: user.id,
+      })
+      .select()
+      .single();
+
+    // Finally, delete the auth user (trigger will run but data already deleted)
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(targetUserId);
     if (deleteError) {
-      throw new Error("Benutzerkonto konnte nicht gelöscht werden");
+      console.error("Error deleting auth user:", deleteError);
+      throw new Error(`Benutzerkonto konnte nicht gelöscht werden: ${deleteError.message}`);
     }
 
     return new Response(JSON.stringify({ success: true }), {

@@ -188,7 +188,7 @@ REGELN:
 9. Erlaubte Tags: p, strong, br, div
 10. Struktur: Briefkopf (zweispaltig), Betreff (fett), Anrede, Einleitung, Hauptteil (Motivation, Qualifikationen), Schluss, Grußformel
 11. Länge: ca. 250-350 Wörter
-12. Verwende als Absender-E-Mail exakt die Klaro-E-Mail aus den Bewerberdaten.${userPreferencesText}
+12. Verwende als Absender-E-Mail die persönliche E-Mail-Adresse des Bewerbers (falls vorhanden), NICHT die Klaro-E-Mail.${userPreferencesText}
 
 LAYOUT-ANWEISUNGEN:
 - Briefkopf als zweispaltiges Layout mit Flexbox:

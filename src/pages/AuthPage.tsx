@@ -8,30 +8,21 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Lock, User, Loader2 } from "lucide-react";
+import { Mail, Lock, User, Loader2, ArrowLeft } from "lucide-react";
 import { z } from "zod";
 import AppFooter from "@/components/AppFooter";
 import BrandLogo from "@/components/BrandLogo";
 import { logEvent, touchLastSeen } from "@/lib/app-events";
 import { getAttributionMeta } from "@/lib/attribution";
 import { sanitizeNextPath, withNextParam } from "@/lib/navigation-intent";
+import { emailSchema, loginPasswordSchema, signupPasswordSchema, nameSchema } from "@/lib/validation";
 
-// Validation schemas
-const emailSchema = z.string().email("Bitte geben Sie eine gültige E-Mail-Adresse ein.");
-// Keep login permissive so legacy users can still sign in with older passwords.
-// Enforce strong passwords only for new sign-ups.
-const loginPasswordSchema = z.string().min(6, "Das Passwort muss mindestens 6 Zeichen haben.");
-const signupPasswordSchema = z.string()
-  .min(12, "Das Passwort muss mindestens 12 Zeichen haben.")
-  .regex(/[A-Z]/, "Das Passwort muss mindestens einen Großbuchstaben enthalten.")
-  .regex(/[a-z]/, "Das Passwort muss mindestens einen Kleinbuchstaben enthalten.")
-  .regex(/[0-9]/, "Das Passwort muss mindestens eine Ziffer enthalten.")
-  .regex(/[^A-Za-z0-9]/, "Das Passwort muss mindestens ein Sonderzeichen enthalten.");
-const nameSchema = z.string().min(2, "Der Name muss mindestens 2 Zeichen haben.");
+type AuthView = "login" | "signup" | "forgot-password";
 
 const AuthPage = () => {
-  const [isLogin, setIsLogin] = useState(true);
+  const [view, setView] = useState<AuthView>("login");
   const [isLoading, setIsLoading] = useState(false);
+  const [resetEmailSent, setResetEmailSent] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [vorname, setVorname] = useState("");
@@ -108,14 +99,14 @@ const AuthPage = () => {
     }
 
     try {
-      (isLogin ? loginPasswordSchema : signupPasswordSchema).parse(password);
+      (view === "login" ? loginPasswordSchema : signupPasswordSchema).parse(password);
     } catch (e) {
       if (e instanceof z.ZodError) {
         newErrors.password = e.errors[0].message;
       }
     }
 
-    if (!isLogin) {
+    if (view === "signup") {
       try {
         nameSchema.parse(vorname);
       } catch (e) {
@@ -155,7 +146,7 @@ const AuthPage = () => {
     setIsLoading(true);
 
     try {
-      if (isLogin) {
+      if (view === "login") {
         const { data: { session }, error } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -224,14 +215,12 @@ const AuthPage = () => {
             });
           }
         } else {
-          // ALWAYS require email verification (don't check data.session)
-          toast({
-            title: "Registrierung erfolgreich!",
-            description: "Bitte prüfen Sie Ihre E-Mails und bestätigen Sie Ihre Adresse, bevor Sie sich anmelden.",
-            duration: 10000,
-          });
-          // Redirect to login page (not auto-login)
-          setIsLogin(true);
+          // Sign out the unverified session if one was created
+          if (data.session && !data.session.user.email_confirmed_at) {
+            await supabase.auth.signOut();
+          }
+          // Redirect to verification waiting page
+          navigate("/auth/verify-email", { state: { email }, replace: true });
         }
       }
     } catch (error) {
@@ -240,6 +229,31 @@ const AuthPage = () => {
         description: "Ein unerwarteter Fehler ist aufgetreten.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const emailResult = emailSchema.safeParse(email);
+    if (!emailResult.success) {
+      setErrors({ email: emailResult.error.errors[0].message });
+      return;
+    }
+    setErrors({});
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${appBaseUrl}/auth/reset-password`,
+      });
+      if (error) {
+        toast({ variant: "destructive", title: "Fehler", description: error.message });
+      } else {
+        setResetEmailSent(true);
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Fehler", description: "Ein unerwarteter Fehler ist aufgetreten." });
     } finally {
       setIsLoading(false);
     }
@@ -273,6 +287,69 @@ const AuthPage = () => {
     }
   };
 
+  // Forgot-password view
+  if (view === "forgot-password") {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <div className="flex-1 flex items-center justify-center p-4 sm:p-6">
+          <div className="w-full max-w-md">
+            <Link to="/" className="flex items-center justify-center mb-10">
+              <BrandLogo />
+            </Link>
+            <Card className="animate-fade-in shadow-apple-lg">
+              <CardHeader className="text-center pb-2">
+                <CardTitle className="text-2xl tracking-tight">Passwort zurücksetzen</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-5 pt-2">
+                {resetEmailSent ? (
+                  <div className="text-center space-y-4 py-4">
+                    <Mail className="h-12 w-12 mx-auto text-primary" />
+                    <p className="text-sm text-muted-foreground">
+                      Falls ein Konto mit <strong>{email}</strong> existiert, haben wir Ihnen einen
+                      Link zum Zurücksetzen Ihres Passworts gesendet.
+                    </p>
+                    <p className="text-xs text-muted-foreground">Prüfen Sie auch Ihren Spam-Ordner.</p>
+                    <Button variant="outline" className="w-full" onClick={() => { setView("login"); setResetEmailSent(false); setErrors({}); }}>
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Zurück zur Anmeldung
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground text-center">
+                      Geben Sie Ihre E-Mail-Adresse ein und wir senden Ihnen einen Link zum Zurücksetzen.
+                    </p>
+                    <form onSubmit={handleForgotPassword} className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="email">E-Mail</Label>
+                        <div className="relative">
+                          <Mail className="absolute left-4 top-3.5 h-4 w-4 text-muted-foreground" />
+                          <Input id="email" type="email" placeholder="ihre@email.de" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-11" disabled={isLoading} />
+                        </div>
+                        {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
+                      </div>
+                      <Button type="submit" className="w-full h-12" disabled={isLoading}>
+                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Link senden
+                      </Button>
+                    </form>
+                    <div className="text-center">
+                      <button type="button" onClick={() => { setView("login"); setErrors({}); }} className="text-sm text-primary hover:underline font-medium">
+                        <ArrowLeft className="inline mr-1 h-3 w-3" />
+                        Zurück zur Anmeldung
+                      </button>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+        <AppFooter />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <div className="flex-1 flex items-center justify-center p-4 sm:p-6">
@@ -285,7 +362,7 @@ const AuthPage = () => {
           <Card className="animate-fade-in shadow-apple-lg">
             <CardHeader className="text-center pb-2">
               <CardTitle className="text-2xl tracking-tight">
-                {isLogin ? "Willkommen zurück" : "Konto erstellen"}
+                {view === "login" ? "Willkommen zurück" : "Konto erstellen"}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-5 pt-2">
@@ -330,7 +407,7 @@ const AuthPage = () => {
 
               {/* Email Form */}
               <form onSubmit={handleEmailAuth} className="space-y-4">
-                {!isLogin && (
+                {view === "signup" && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="vorname">Vorname</Label>
@@ -403,7 +480,19 @@ const AuthPage = () => {
                   )}
                 </div>
 
-                {!isLogin && (
+                {view === "login" && (
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => { setView("forgot-password"); setErrors({}); }}
+                      className="text-sm text-primary hover:underline"
+                    >
+                      Passwort vergessen?
+                    </button>
+                  </div>
+                )}
+
+                {view === "signup" && (
                   <>
                     <div className="space-y-2">
                       <div className="flex items-start space-x-3">
@@ -464,11 +553,11 @@ const AuthPage = () => {
 
                 <Button type="submit" className="w-full h-12" disabled={isLoading}>
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {isLogin ? "Anmelden" : "Registrieren"}
+                  {view === "login" ? "Anmelden" : "Registrieren"}
                 </Button>
               </form>
 
-              {isLogin && (
+              {view === "login" && (
                 <div className="text-center mt-4">
                   <button
                     type="button"
@@ -508,18 +597,18 @@ const AuthPage = () => {
 
               <div className="text-center text-sm">
                 <span className="text-muted-foreground">
-                  {isLogin ? "Noch kein Konto?" : "Bereits registriert?"}
+                  {view === "login" ? "Noch kein Konto?" : "Bereits registriert?"}
                 </span>{" "}
                 <button
                   type="button"
                   onClick={() => {
-                    setIsLogin(!isLogin);
+                    setView(view === "login" ? "signup" : "login");
                     setErrors({});
                   }}
                   className="text-primary hover:underline font-medium"
                   disabled={isLoading}
                 >
-                  {isLogin ? "Jetzt registrieren" : "Anmelden"}
+                  {view === "login" ? "Jetzt registrieren" : "Anmelden"}
                 </button>
               </div>
             </CardContent>

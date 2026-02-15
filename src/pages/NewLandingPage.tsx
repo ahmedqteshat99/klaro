@@ -200,11 +200,6 @@ const NewLandingPage = () => {
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </Link>
                 </Button>
-                <Button asChild size="lg" variant="outline" className="text-base px-12 h-16 rounded-full hover-lift font-semibold border-2">
-                  <Link to="/#funktionen">
-                    Demo ansehen
-                  </Link>
-                </Button>
               </div>
               <div className="flex items-center justify-center gap-6 text-sm text-slate-500 font-medium">
                 <div className="flex items-center gap-2">
