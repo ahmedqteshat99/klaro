@@ -323,3 +323,36 @@ export async function triggerRssImport(): Promise<{
 
   return result.data ?? { success: false, error: "Keine Antwort vom Server" };
 }
+
+/**
+ * Check all published job URLs for dead links.
+ */
+export async function checkStaleJobs(): Promise<{
+  success: boolean;
+  error?: string;
+  checked?: number;
+  active?: number;
+  stale?: number;
+  errors?: number;
+  unknown?: number;
+  staleJobs?: Array<{ id: string; url: string; httpStatus?: number }>;
+}> {
+  await ensureFreshSession();
+
+  const result = await invokeEdgeFunction<{
+    success: boolean;
+    error?: string;
+    checked?: number;
+    active?: number;
+    stale?: number;
+    errors?: number;
+    unknown?: number;
+    staleJobs?: Array<{ id: string; url: string; httpStatus?: number }>;
+  }>("check-stale-jobs", {});
+
+  if (result.error) {
+    return { success: false, error: result.error };
+  }
+
+  return result.data ?? { success: false, error: "Keine Antwort vom Server" };
+}

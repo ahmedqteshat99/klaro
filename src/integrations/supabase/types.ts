@@ -595,6 +595,8 @@ export type Database = {
           id: string
           import_status: string | null
           is_published: boolean
+          link_checked_at: string | null
+          link_status: string | null
           location: string | null
           published_at: string | null
           requirements: string | null
@@ -625,6 +627,8 @@ export type Database = {
           id?: string
           import_status?: string | null
           is_published?: boolean
+          link_checked_at?: string | null
+          link_status?: string | null
           location?: string | null
           published_at?: string | null
           requirements?: string | null
@@ -655,6 +659,8 @@ export type Database = {
           id?: string
           import_status?: string | null
           is_published?: boolean
+          link_checked_at?: string | null
+          link_status?: string | null
           location?: string | null
           published_at?: string | null
           requirements?: string | null
