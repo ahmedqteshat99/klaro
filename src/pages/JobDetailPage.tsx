@@ -1578,6 +1578,21 @@ const JobDetailPage = () => {
                     </Button>
                   </div>
 
+                  <Button
+                    onClick={() => {
+                      const jobUrl = job.source_url || job.apply_url;
+                      if (jobUrl) {
+                        window.open(jobUrl, '_blank', 'noopener,noreferrer');
+                      }
+                    }}
+                    disabled={!job.source_url && !job.apply_url}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Direkt beim Arbeitgeber bewerben
+                  </Button>
+
                   {!job.contact_email && (
                     <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3">
                       <p className="text-xs text-amber-800 dark:text-amber-300">
