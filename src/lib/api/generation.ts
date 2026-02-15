@@ -217,3 +217,38 @@ export const deleteAccount = async (): Promise<{ success: boolean; error?: strin
 
   return data;
 };
+
+interface ConversationMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+interface EnhanceAnschreibenParams {
+  currentHtml: string | null;
+  userMessage: string;
+  conversationHistory?: ConversationMessage[];
+}
+
+export const enhanceAnschreiben = async (
+  params: EnhanceAnschreibenParams
+): Promise<{ success: boolean; message?: string; updatedHtml?: string | null; error?: string }> => {
+  await ensureFreshSession();
+  const start = typeof performance !== "undefined" ? performance.now() : Date.now();
+  const { data, error, status } = await invokeEdgeFunction<{
+    success: boolean;
+    message?: string;
+    updatedHtml?: string | null;
+    error?: string;
+  }>("enhance-anschreiben", params);
+  const durationMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - start;
+  if (durationMs > 1500) {
+    void logSlowEndpoint("enhance-anschreiben", durationMs, { ok: !error, status });
+  }
+
+  if (error || !data) {
+    console.error('Enhance Anschreiben error:', error);
+    return { success: false, error: error || "Unbekannter Fehler" };
+  }
+
+  return data;
+};

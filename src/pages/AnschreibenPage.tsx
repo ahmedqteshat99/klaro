@@ -14,6 +14,7 @@ import BrandLogo from "@/components/BrandLogo";
 import JobExtractionForm from "@/components/generation/JobExtractionForm";
 import AiConsentModal from "@/components/profile/AiConsentModal";
 import CVTemplate from "@/components/cv/CVTemplate";
+import AnschreibenEnhancer from "@/components/generation/AnschreibenEnhancer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -355,6 +356,29 @@ const AnschreibenPage = () => {
     }
   };
 
+  const handleEnhancedHtmlUpdate = async (updatedHtml: string) => {
+    const htmlWithDate = applyAnschreibenDate(updatedHtml, new Date().toISOString());
+    setAnschreibenHtml(htmlWithDate);
+
+    // Save the enhanced version
+    if (userId && jobData) {
+      await saveDocument({
+        userId,
+        typ: "Anschreiben",
+        htmlContent: updatedHtml,
+        hospitalName: jobData.krankenhaus,
+        departmentOrSpecialty: jobData.fachabteilung,
+        positionTitle: jobData.position,
+        jobUrl: jobUrl || undefined,
+        showFoto: false,
+        showSignatur: true,
+      });
+
+      await loadVersions();
+      void logEvent("enhance", { docType: "ANSCHREIBEN", source: "anschreiben_enhancer" }, userId);
+    }
+  };
+
   if (isAuthLoading || isProfileLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -394,6 +418,12 @@ const AnschreibenPage = () => {
               isGeneratingAnschreiben={isGeneratingAnschreiben}
               jobUrl={jobUrl}
               setJobUrl={setJobUrl}
+            />
+
+            <AnschreibenEnhancer
+              currentHtml={anschreibenHtml}
+              onHtmlUpdated={handleEnhancedHtmlUpdate}
+              disabled={isGeneratingAnschreiben || isExporting}
             />
 
             <Card>
