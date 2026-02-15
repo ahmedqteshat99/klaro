@@ -32,7 +32,6 @@ import CvImportCard from "@/components/profile/CvImportCard";
 import { CustomSectionForm } from "@/components/profile/CustomSectionForm";
 import EmailNotificationPreferences from "@/components/profile/EmailNotificationPreferences";
 import UserDataExport from "@/components/profile/UserDataExport";
-import AiConsentModal from "@/components/profile/AiConsentModal";
 import CVTemplate from "@/components/cv/CVTemplate";
 
 const ProfilPage = () => {
@@ -48,8 +47,6 @@ const ProfilPage = () => {
   const [showFoto, setShowFoto] = useState(true);
   const [showSignatur, setShowSignatur] = useState(true);
   const [cvHtml, setCvHtml] = useState<string | null>(null);
-  const [showAiConsentModal, setShowAiConsentModal] = useState(false);
-  const [pendingGeneration, setPendingGeneration] = useState(false);
 
   const cvStudioRef = useRef<HTMLDivElement | null>(null);
 
@@ -165,11 +162,9 @@ const ProfilPage = () => {
       return;
     }
 
-    // Check for AI consent
+    // Auto-grant AI consent when user clicks generate button
     if (!hasConsent) {
-      setPendingGeneration(true);
-      setShowAiConsentModal(true);
-      return;
+      grantConsent();
     }
 
     setIsGeneratingCV(true);
@@ -216,28 +211,6 @@ const ProfilPage = () => {
     } finally {
       setIsGeneratingCV(false);
     }
-  };
-
-  const handleAiConsentGranted = () => {
-    grantConsent();
-    setShowAiConsentModal(false);
-
-    if (pendingGeneration) {
-      setPendingGeneration(false);
-      // Retry generation after consent
-      setTimeout(() => handleGenerateCV(), 100);
-    }
-  };
-
-  const handleAiConsentDeclined = () => {
-    setShowAiConsentModal(false);
-    setPendingGeneration(false);
-
-    toast({
-      title: "KI-Generierung abgebrochen",
-      description: "Ohne Einwilligung können wir keine KI-gestützten Texte erstellen. Sie können Ihre Einwilligung jederzeit erteilen.",
-      variant: "default",
-    });
   };
 
   const handleExportCV = async () => {
@@ -345,6 +318,21 @@ const ProfilPage = () => {
                   <Label htmlFor="showSignatur" className="flex items-center gap-1">
                     <PenTool className="h-4 w-4" /> Signatur einblenden
                   </Label>
+                </div>
+
+                {/* AI Disclaimer Link */}
+                <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3">
+                  <p className="text-xs text-amber-800 dark:text-amber-300">
+                    ⚠️ <strong>KI-Generierung:</strong> Durch Klick auf "Lebenslauf neu generieren" stimmen Sie der{" "}
+                    <Link
+                      to="/agb"
+                      target="_blank"
+                      className="underline font-medium hover:text-amber-900 dark:hover:text-amber-200"
+                    >
+                      KI-Nutzung
+                    </Link>
+                    {" "}zu. Sie sind für die Überprüfung aller generierten Inhalte verantwortlich.
+                  </p>
                 </div>
 
                 <Button onClick={handleGenerateCV} disabled={isGeneratingCV} className="w-full">
@@ -480,22 +468,6 @@ const ProfilPage = () => {
           </div>
         </div>
       </div>
-
-      <AiConsentModal
-        open={showAiConsentModal}
-        onConsent={handleAiConsentGranted}
-        onDecline={handleAiConsentDeclined}
-        onUseManualMode={() => {
-          setShowAiConsentModal(false);
-          setPendingGeneration(false);
-          toast({
-            title: "Alternative: Lebenslauf hochladen",
-            description: "Sie werden zu 'Unterlagen' weitergeleitet, wo Sie Ihren CV hochladen können.",
-          });
-          // Redirect to Unterlagen page with focus on CV upload
-          navigate('/unterlagen?tab=cv');
-        }}
-      />
     </div>
   );
 };
