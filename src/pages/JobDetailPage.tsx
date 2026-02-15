@@ -39,6 +39,7 @@ import {
   Download,
   ExternalLink,
   FileText,
+  FolderOpen,
   Info,
   Loader2,
   Mail,
@@ -46,6 +47,7 @@ import {
   Send,
   Share2,
   Sparkles,
+  Upload,
   AlertCircle,
 } from "lucide-react";
 
@@ -113,18 +115,18 @@ const normalizeEmailAddress = (value: string | null | undefined) => {
   return normalized.length > 0 ? normalized : null;
 };
 
-const buildLockedKlaroFooter = (klaroEmail: string) =>
-  `\n\n${KLARO_EMAIL_FOOTER_PREFIX} ${klaroEmail}`;
+const buildLockedEmailFooter = (email: string) =>
+  `\n\n${KLARO_EMAIL_FOOTER_PREFIX} ${email}`;
 
-const stripLockedKlaroFooter = (value: string) =>
+const stripLockedEmailFooter = (value: string) =>
   value.replace(/\n\n(?:Klaro\s+)?Kontakt[\s-]E-Mail:\s*[^\n]*\s*$/i, "").trimEnd();
 
-const ensureLockedKlaroFooter = (value: string, klaroEmail: string | null) => {
-  if (!klaroEmail) return value;
-  const content = stripLockedKlaroFooter(value ?? "");
+const ensureLockedEmailFooter = (value: string, email: string | null) => {
+  if (!email) return value;
+  const content = stripLockedEmailFooter(value ?? "");
   return content
-    ? `${content}${buildLockedKlaroFooter(klaroEmail)}`
-    : `${KLARO_EMAIL_FOOTER_PREFIX} ${klaroEmail}`;
+    ? `${content}${buildLockedEmailFooter(email)}`
+    : `${KLARO_EMAIL_FOOTER_PREFIX} ${email}`;
 };
 
 const JobDetailPage = () => {
@@ -173,6 +175,12 @@ const JobDetailPage = () => {
 
   const { url: fotoUrl } = useUserFileUrl(profile?.foto_url);
   const { url: signaturUrl } = useUserFileUrl(profile?.signatur_url);
+
+  // Personal email from profile (preferred for display in CV/Anschreiben/email body)
+  const personalEmail = useMemo(() => normalizeEmailAddress(profile?.email), [profile?.email]);
+  // Display email: personal if available, otherwise klaro (for email footer)
+  const displayEmail = useMemo(() => personalEmail || klaroEmail, [personalEmail, klaroEmail]);
+
   const baseUrl =
     (import.meta.env.VITE_PUBLIC_SITE_URL as string | undefined)?.trim().replace(/\/+$/, "") ||
     window.location.origin;
@@ -523,7 +531,7 @@ const JobDetailPage = () => {
     return data.size;
   };
 
-  const tryReuseExistingDraft = async (jobId: string, lockedKlaroEmail: string | null) => {
+  const tryReuseExistingDraft = async (jobId: string, lockedDisplayEmail: string | null) => {
     if (!userId) return false;
 
     const { data: existingDraft, error: draftError } = await supabase
@@ -574,7 +582,7 @@ const JobDetailPage = () => {
 
     setApplicationId(existingDraft.id);
     setSubject(existingDraft.subject ?? "");
-    setMessageText(ensureLockedKlaroFooter(existingDraft.message_text ?? "", lockedKlaroEmail));
+    setMessageText(ensureLockedEmailFooter(existingDraft.message_text ?? "", lockedDisplayEmail));
     setPreparedAttachments(mappedAttachments);
 
     return true;
@@ -650,8 +658,10 @@ const JobDetailPage = () => {
       setPrepareProgressGoal(24);
 
       const profileWithKlaroEmail = { ...profile, klaro_email: lockedKlaroEmail };
+      // Use personal email if available, otherwise klaro email
+      const lockedDisplayEmail = normalizeEmailAddress(profile?.email) || lockedKlaroEmail;
 
-      const reusedDraft = await tryReuseExistingDraft(job.id, lockedKlaroEmail);
+      const reusedDraft = await tryReuseExistingDraft(job.id, lockedDisplayEmail);
       setPrepareProgressGoal(34);
       if (reusedDraft) {
         setPrepareProgressGoal(100);
@@ -771,9 +781,9 @@ const JobDetailPage = () => {
 
       const fullName = `${profile.vorname ?? ""} ${profile.nachname ?? ""}`.trim() || "Bewerber/in";
       const defaultSubject = `Bewerbung als ${job.title}${job.hospital_name ? ` bei ${job.hospital_name}` : ""}`;
-      const defaultText = ensureLockedKlaroFooter(
+      const defaultText = ensureLockedEmailFooter(
         buildDefaultMessageText(job, fullName),
-        lockedKlaroEmail
+        lockedDisplayEmail
       );
       const defaultHtml = toEmailHtml(defaultText);
 
@@ -921,7 +931,7 @@ const JobDetailPage = () => {
 
     setIsSending(true);
     try {
-      const finalText = ensureLockedKlaroFooter(messageText, klaroEmail);
+      const finalText = ensureLockedEmailFooter(messageText, displayEmail);
       if (finalText !== messageText) {
         setMessageText(finalText);
       }
@@ -1272,42 +1282,69 @@ const JobDetailPage = () => {
           <>
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Zusatzdokumente aus Profil</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  Bewerbungsunterlagen
+                  {userDocuments.length > 0 && (
+                    <Badge variant="secondary" className="text-xs">
+                      {userDocuments.length} {userDocuments.length === 1 ? 'Dokument' : 'Dokumente'}
+                    </Badge>
+                  )}
+                </CardTitle>
                 <CardDescription>
-                  Diese Dateien werden zusammen mit CV und Anschreiben angehaengt. Maximal 10 MB insgesamt.
+                  Pflichtdokumente für Ihre Bewerbung (Approbation, Zertifikate, etc.). Diese werden zusammen mit CV und Anschreiben versendet. Maximal 10 MB insgesamt.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 {userDocuments.length > 0 ? (
-                  userDocuments.map((doc) => (
-                    <div key={doc.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{doc.file_name ?? doc.title ?? doc.doc_type}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {doc.doc_type}
-                          {doc.size_bytes ? ` | ${humanFileSize(doc.size_bytes)}` : ""}
-                        </p>
+                  <>
+                    {userDocuments.map((doc) => (
+                      <div key={doc.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{doc.file_name ?? doc.title ?? doc.doc_type}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {doc.doc_type}
+                            {doc.size_bytes ? ` | ${humanFileSize(doc.size_bytes)}` : ""}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor={`doc-${doc.id}`} className="text-sm">
+                            An Bewerbung anhängen
+                          </Label>
+                          <Checkbox
+                            id={`doc-${doc.id}`}
+                            checked={selectedDocIds.has(doc.id)}
+                            onCheckedChange={(checked) => toggleSelectedDoc(doc.id, checked === true)}
+                          />
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Label htmlFor={`doc-${doc.id}`} className="text-sm">
-                          Anhaengen
-                        </Label>
-                        <Checkbox
-                          id={`doc-${doc.id}`}
-                          checked={selectedDocIds.has(doc.id)}
-                          onCheckedChange={(checked) => toggleSelectedDoc(doc.id, checked === true)}
-                        />
-                      </div>
+                    ))}
+
+                    <div className="mt-4 p-3 bg-muted rounded-md">
+                      <p className="text-xs text-muted-foreground">
+                        <strong>Typischerweise benötigt:</strong> Approbationsurkunde, Arbeitszeugnisse, Facharzt-Diplom, Zertifikate, Sprachzertifikate
+                      </p>
                     </div>
-                  ))
+                  </>
                 ) : (
                   <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                    Keine Zusatzdokumente vorhanden. Sie koennen sie im Profil hochladen.
+                    Noch keine Bewerbungsunterlagen hochgeladen. Klicken Sie auf "Bewerbungsunterlagen hochladen", um wichtige Dokumente wie Approbation und Zertifikate hinzuzufügen.
                   </div>
                 )}
 
                 <Button asChild variant="outline" size="sm">
-                  <Link to="/profil">Dokumente im Profil verwalten</Link>
+                  <Link to="/unterlagen">
+                    {userDocuments.length === 0 ? (
+                      <>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Bewerbungsunterlagen hochladen
+                      </>
+                    ) : (
+                      <>
+                        <FolderOpen className="h-4 w-4 mr-2" />
+                        Bewerbungsunterlagen verwalten
+                      </>
+                    )}
+                  </Link>
                 </Button>
               </CardContent>
             </Card>
@@ -1419,7 +1456,7 @@ const JobDetailPage = () => {
                       rows={10}
                       value={messageText}
                       onChange={(event) =>
-                        setMessageText(ensureLockedKlaroFooter(event.target.value, klaroEmail))
+                        setMessageText(ensureLockedEmailFooter(event.target.value, displayEmail))
                       }
                     />
                     <p className="text-xs text-muted-foreground">
