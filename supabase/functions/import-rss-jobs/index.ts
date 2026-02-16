@@ -179,44 +179,50 @@ serve(async (req) => {
     };
 
     try {
-        // ── Auth check: admin only ──
-        const authHeader = req.headers.get("Authorization");
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
         const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY")!;
 
-        if (!authHeader) {
-            return new Response(JSON.stringify({ error: "Nicht autorisiert" }), {
-                status: 401,
-                headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        // ── Auth: admin only or CRON_SECRET ──
+        const authHeader = req.headers.get("Authorization");
+        const cronSecret = Deno.env.get("CRON_SECRET");
+        const headerSecret = req.headers.get("x-cron-secret");
+
+        const isCron = cronSecret && headerSecret === cronSecret;
+
+        if (!isCron) {
+            if (!authHeader) {
+                return new Response(JSON.stringify({ error: "Nicht autorisiert" }), {
+                    status: 401,
+                    headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+                });
+            }
+
+            const supabaseClient = createClient(supabaseUrl, serviceRoleKey, {
+                global: { headers: { Authorization: authHeader } },
             });
+
+            const { data: userData, error: userError } = await supabaseClient.auth.getUser();
+            if (userError || !userData?.user) {
+                return new Response(JSON.stringify({ error: "Nicht autorisiert" }), {
+                    status: 401,
+                    headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+                });
+            }
+
+            const { data: roleData } = await supabaseClient
+                .from("profiles")
+                .select("role")
+                .eq("user_id", userData.user.id)
+                .single();
+
+            if (roleData?.role !== "ADMIN") {
+                return new Response(JSON.stringify({ error: "Nur Admins" }), {
+                    status: 403,
+                    headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+                });
+            }
         }
-
-        const supabaseClient = createClient(supabaseUrl, serviceRoleKey, {
-            global: { headers: { Authorization: authHeader } },
-        });
-
-        const { data: userData, error: userError } = await supabaseClient.auth.getUser();
-        if (userError || !userData?.user) {
-            return new Response(JSON.stringify({ error: "Nicht autorisiert" }), {
-                status: 401,
-                headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-            });
-        }
-
-        const { data: roleData } = await supabaseClient
-            .from("profiles")
-            .select("role")
-            .eq("user_id", userData.user.id)
-            .single();
-
-        if (roleData?.role !== "ADMIN") {
-            return new Response(JSON.stringify({ error: "Nur Admins" }), {
-                status: 403,
-                headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-            });
-        }
-
         const db = createClient(supabaseUrl, serviceRoleKey);
 
         // ── Rate limit: check last successful run ──
