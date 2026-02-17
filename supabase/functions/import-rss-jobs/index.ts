@@ -3,10 +3,17 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
 // ─── Configuration ───────────────────────────────────────────────
-const SEARCH_URL = "https://www.stellenmarkt.de/stellenangebote--Assistenzarzt";
-const FEED_SOURCE = "stellenmarkt_medizin";
-const MAX_PAGES = 5; // Scrape up to 5 pages (~75 jobs)
-const MAX_JOBS_PER_RUN = 50;
+// Stellenmarkt config
+const STELLENMARKT_URL = "https://www.stellenmarkt.de/stellenangebote--Assistenzarzt";
+const STELLENMARKT_SOURCE = "stellenmarkt_medizin";
+
+// Ärzteblatt config
+const AERZTEBLATT_URL = "https://aerztestellen.aerzteblatt.de/de/stellen/assistenzarzt-arzt-weiterbildung";
+const AERZTEBLATT_SOURCE = "aerzteblatt";
+
+// Shared config
+const MAX_PAGES = 5; // Scrape up to 5 pages per source
+const MAX_JOBS_PER_RUN = 50; // Per source (100 total across 2 sources)
 const EXPIRATION_GRACE_HOURS = 48;
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -44,8 +51,8 @@ interface ScrapedJob {
     guid: string; // The anzeige URL as unique identifier
 }
 
-/** Scrape job listings from a single search results page. */
-function parseSearchPage(html: string): ScrapedJob[] {
+/** Scrape job listings from a single Stellenmarkt search results page. */
+function parseStellemarktPage(html: string): ScrapedJob[] {
     const jobs: ScrapedJob[] = [];
 
     // Match job listing blocks: <a ... href="/anzeige[ID].html" ... title="Stellenangebot [TITLE]">
@@ -103,9 +110,110 @@ function parseSearchPage(html: string): ScrapedJob[] {
     return jobs;
 }
 
+/** Scrape job listings from a single Ärzteblatt search results page. */
+function parseAerzteblattPage(html: string): ScrapedJob[] {
+    const jobs: ScrapedJob[] = [];
+
+    // Match all job links: <a href="/de/stelle/assistenzarzt-...-[numeric-id]">
+    const jobLinkRegex = /<a\s+href="(\/de\/stelle\/[^"]+)"/g;
+    const matches = [...html.matchAll(jobLinkRegex)];
+
+    for (const match of matches) {
+        const urlPath = match[1]; // /de/stelle/assistenzarzt-...-82767
+        const fullLink = `https://aerztestellen.aerzteblatt.de${urlPath}`;
+
+        // Extract job ID from URL - must end with numeric ID
+        const idMatch = urlPath.match(/.*-(\d+)$/);
+        if (!idMatch) continue; // Skip if not a job URL
+        const jobId = idMatch[1];
+
+        // Extract 2000-char context around this link for parsing
+        const matchIndex = match.index ?? 0;
+        const contextStart = Math.max(0, matchIndex - 1000);
+        const contextEnd = Math.min(html.length, matchIndex + 1000);
+        const context = html.substring(contextStart, contextEnd);
+
+        // Extract title (anchor text content)
+        const titleMatch = context.match(new RegExp(`<a\\s+href="${urlPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*>([^<]+)<\\/a>`));
+        const title = titleMatch?.[1]?.trim() || "Assistenzarzt Position";
+
+        // Extract company (text after date pattern)
+        // Pattern: "17.02.2026, [Company Name]" or just company name
+        const companyMatch = context.match(/\d{2}\.\d{2}\.\d{4},\s*([^\n<]+)/);
+        const company = companyMatch?.[1]?.trim() || "";
+
+        // Extract location (zip code + city pattern)
+        const locationMatch = context.match(/(\d{5}\s+[A-Za-zäöüÄÖÜß\s\-]+)/);
+        const location = locationMatch?.[1]?.trim() || "";
+
+        // Dedup within page
+        if (jobs.some((j) => j.guid === fullLink)) continue;
+
+        jobs.push({
+            title: cleanText(title),
+            link: fullLink,
+            company: cleanText(company),
+            location: cleanText(location),
+            guid: fullLink,
+        });
+    }
+
+    return jobs;
+}
+
 /** Check if there's a next page. */
 function hasNextPage(html: string, currentPage: number): boolean {
     return html.includes(`page=${currentPage + 1}`);
+}
+
+/** Generic scraper function for job boards with pagination. */
+async function scrapeJobBoard(
+    baseUrl: string,
+    parsePageFn: (html: string) => ScrapedJob[],
+    getNextPageUrl: (baseUrl: string, page: number) => string,
+    runId: string
+): Promise<ScrapedJob[]> {
+    const allJobs: ScrapedJob[] = [];
+
+    for (let page = 1; page <= MAX_PAGES; page++) {
+        const url = getNextPageUrl(baseUrl, page);
+
+        try {
+            const response = await fetch(url, {
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (compatible; KlaroBot/1.0)",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": "de-DE,de;q=0.9,en;q=0.5",
+                },
+                signal: AbortSignal.timeout(30_000),
+            });
+
+            if (!response.ok) {
+                console.warn(`[${runId}] Page ${page} returned ${response.status}, stopping`);
+                break;
+            }
+
+            const html = await response.text();
+            const jobs = parsePageFn(html);
+
+            console.log(`[${runId}] Page ${page}: found ${jobs.length} jobs`);
+            allJobs.push(...jobs);
+
+            // No more jobs on this page, stop pagination
+            if (jobs.length === 0) break;
+
+            // Delay between pages (polite scraping)
+            if (page < MAX_PAGES) {
+                await new Promise((r) => setTimeout(r, 1500));
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : "Fetch error";
+            console.error(`[${runId}] Page ${page} error: ${msg}`);
+            break;
+        }
+    }
+
+    return allJobs;
 }
 
 /** Generate an AI summary for a job using Claude. */
@@ -252,77 +360,59 @@ serve(async (req) => {
         await db.from("job_import_logs").insert({
             run_id: runId,
             action: "run_started",
-            details: { source: SEARCH_URL, method: "html_scrape" },
+            details: { sources: [STELLENMARKT_SOURCE, AERZTEBLATT_SOURCE], method: "html_scrape" },
         });
 
-        // ── 1. Scrape search results pages ──
-        console.log(`[${runId}] Scraping Assistenzarzt listings...`);
-        const allJobs: ScrapedJob[] = [];
+        // ── 1. Scrape search results pages from both sources in parallel ──
+        console.log(`[${runId}] Scraping Assistenzarzt listings from multiple sources...`);
 
-        for (let page = 1; page <= MAX_PAGES; page++) {
-            const url = page === 1 ? SEARCH_URL : `${SEARCH_URL}?page=${page}`;
+        const [stellenmarktJobs, aerzteblattJobs] = await Promise.all([
+            // Stellenmarkt
+            scrapeJobBoard(
+                STELLENMARKT_URL,
+                parseStellemarktPage,
+                (base, page) => page === 1 ? base : `${base}?page=${page}`,
+                runId
+            ),
 
-            try {
-                const response = await fetch(url, {
-                    headers: {
-                        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                        "Accept-Language": "de-DE,de;q=0.9,en;q=0.5",
-                    },
-                    signal: AbortSignal.timeout(30_000),
-                });
+            // Ärzteblatt
+            scrapeJobBoard(
+                AERZTEBLATT_URL,
+                parseAerzteblattPage,
+                (base, page) => page === 1 ? base : `${base}?page=${page}`,
+                runId
+            ),
+        ]);
 
-                if (!response.ok) {
-                    console.warn(`[${runId}] Page ${page} returned ${response.status}, stopping`);
-                    break;
-                }
+        console.log(`[${runId}] Scraped totals: Stellenmarkt=${stellenmarktJobs.length}, Ärzteblatt=${aerzteblattJobs.length}`);
 
-                const html = await response.text();
-                const pageJobs = parseSearchPage(html);
-                results.pagesScraped++;
-
-                console.log(`[${runId}] Page ${page}: found ${pageJobs.length} listings`);
-
-                if (pageJobs.length === 0) break;
-
-                allJobs.push(...pageJobs);
-
-                // Check if there's a next page
-                if (!hasNextPage(html, page)) break;
-
-                // Brief delay between pages
-                if (page < MAX_PAGES) {
-                    await new Promise((r) => setTimeout(r, 1500));
-                }
-            } catch (fetchErr) {
-                const msg = fetchErr instanceof Error ? fetchErr.message : "Fetch error";
-                console.error(`[${runId}] Page ${page} error: ${msg}`);
-                await db.from("job_import_logs").insert({
-                    run_id: runId,
-                    action: "error",
-                    details: { phase: "scrape", page, error: msg },
-                });
-                break;
-            }
+        // Tag jobs with their source
+        interface ScrapedJobWithSource extends ScrapedJob {
+            feedSource: string;
         }
 
-        results.totalListings = allJobs.length;
-        console.log(`[${runId}] Total: ${allJobs.length} listings from ${results.pagesScraped} pages`);
+        const allScrapedJobs: ScrapedJobWithSource[] = [
+            ...stellenmarktJobs.map((j) => ({ ...j, feedSource: STELLENMARKT_SOURCE })),
+            ...aerzteblattJobs.map((j) => ({ ...j, feedSource: AERZTEBLATT_SOURCE })),
+        ];
 
-        if (allJobs.length === 0) {
+        results.totalListings = allScrapedJobs.length;
+        console.log(`[${runId}] Total: ${allScrapedJobs.length} listings from both sources`);
+
+        if (allScrapedJobs.length === 0) {
             await db.from("job_import_logs").insert({
                 run_id: runId,
                 action: "error",
-                details: { phase: "scrape", error: "No listings found" },
+                details: { phase: "scrape", error: "No listings found from any source" },
             });
-            throw new Error("Keine Stellenangebote auf der Suchseite gefunden");
+            throw new Error("Keine Stellenangebote von beiden Quellen gefunden");
         }
 
         // ── 2. Load existing jobs for dedup ──
         const { data: existingJobs } = await db
             .from("jobs")
-            .select("id, rss_guid, rss_content_hash, import_status")
-            .eq("rss_feed_source", FEED_SOURCE)
+            .select("id, rss_guid, rss_content_hash, import_status, rss_feed_source")
+            .in("rss_feed_source", [STELLENMARKT_SOURCE, AERZTEBLATT_SOURCE])
             .not("rss_guid", "is", null);
 
         const existingByGuid = new Map(
@@ -330,7 +420,7 @@ serve(async (req) => {
         );
 
         const seenGuids = new Set<string>();
-        const itemsToProcess = allJobs.slice(0, MAX_JOBS_PER_RUN);
+        const itemsToProcess = allScrapedJobs.slice(0, MAX_JOBS_PER_RUN * 2); // 100 total (50 per source)
 
         // ── 3. Process each listing ──
         for (const job of itemsToProcess) {
@@ -339,6 +429,14 @@ serve(async (req) => {
             try {
                 const contentHash = await sha256(job.title + job.company + job.location);
                 const existing = existingByGuid.get(job.guid);
+                const feedSource = job.feedSource;
+
+                // Determine source display name
+                const sourceName = feedSource === STELLENMARKT_SOURCE
+                    ? "stellenmarkt.de"
+                    : feedSource === AERZTEBLATT_SOURCE
+                        ? "aerzteblatt.de"
+                        : feedSource;
 
                 if (existing) {
                     // Update last_seen
@@ -355,7 +453,7 @@ serve(async (req) => {
                             rss_guid: job.guid,
                             job_id: existing.id,
                             job_title: job.title,
-                            details: { reason: "content_unchanged" },
+                            details: { reason: "content_unchanged", source: feedSource },
                         });
                         continue;
                     }
@@ -380,9 +478,9 @@ serve(async (req) => {
                         rss_guid: job.guid,
                         job_id: existing.id,
                         job_title: job.title,
-                        details: { reason: "content_changed" },
+                        details: { reason: "content_changed", source: feedSource },
                     });
-                    console.log(`[${runId}] Updated: ${job.title}`);
+                    console.log(`[${runId}] Updated (${sourceName}): ${job.title}`);
                 } else {
                     // New job
                     const summary = await generateAiSummary(job, anthropicKey);
@@ -396,12 +494,12 @@ serve(async (req) => {
                             location: job.location || null,
                             apply_url: job.link,
                             source_url: job.link,
-                            source_name: "stellenmarkt.de",
+                            source_name: sourceName,
                             rss_guid: job.guid,
                             rss_content_hash: contentHash,
                             rss_imported_at: new Date().toISOString(),
                             rss_last_seen_at: new Date().toISOString(),
-                            rss_feed_source: FEED_SOURCE,
+                            rss_feed_source: feedSource,
                             import_status: "pending_review",
                             is_published: false,
                             scraped_at: new Date().toISOString(),
@@ -424,8 +522,9 @@ serve(async (req) => {
                         rss_guid: job.guid,
                         job_id: inserted?.id,
                         job_title: job.title,
+                        details: { source: feedSource },
                     });
-                    console.log(`[${runId}] Imported: ${job.title}`);
+                    console.log(`[${runId}] Imported (${sourceName}): ${job.title}`);
 
                     // Delay between AI calls
                     await new Promise((r) => setTimeout(r, 500));
@@ -439,39 +538,51 @@ serve(async (req) => {
                     action: "error",
                     rss_guid: job.guid,
                     job_title: job.title,
-                    details: { error: msg },
+                    details: { error: msg, source: job.feedSource },
                 });
                 console.error(`[${runId}] Error: "${job.title}":`, msg);
             }
         }
 
-        // ── 4. Mark expired jobs ──
+        // ── 4. Mark expired jobs (check per source) ──
         const expirationThreshold = new Date(
             Date.now() - EXPIRATION_GRACE_HOURS * 60 * 60 * 1000
         ).toISOString();
 
-        for (const [guid, existing] of existingByGuid) {
-            if (!seenGuids.has(guid) && (existing as any).import_status === "pending_review") {
-                const { data: jobData } = await db
-                    .from("jobs")
-                    .select("rss_last_seen_at")
-                    .eq("id", (existing as any).id)
-                    .single();
+        for (const source of [STELLENMARKT_SOURCE, AERZTEBLATT_SOURCE]) {
+            const seenGuidsForSource = new Set(
+                allScrapedJobs
+                    .filter((j) => j.feedSource === source)
+                    .map((j) => j.guid)
+            );
 
-                if (jobData?.rss_last_seen_at && jobData.rss_last_seen_at < expirationThreshold) {
-                    await db
+            for (const [guid, existing] of existingByGuid) {
+                if (
+                    (existing as any).rss_feed_source === source &&
+                    !seenGuidsForSource.has(guid) &&
+                    (existing as any).import_status === "pending_review"
+                ) {
+                    const { data: jobData } = await db
                         .from("jobs")
-                        .update({ import_status: "expired" })
-                        .eq("id", (existing as any).id);
+                        .select("rss_last_seen_at")
+                        .eq("id", (existing as any).id)
+                        .single();
 
-                    results.expired++;
-                    await db.from("job_import_logs").insert({
-                        run_id: runId,
-                        action: "expired",
-                        rss_guid: guid,
-                        job_id: (existing as any).id,
-                        details: { last_seen: jobData.rss_last_seen_at },
-                    });
+                    if (jobData?.rss_last_seen_at && jobData.rss_last_seen_at < expirationThreshold) {
+                        await db
+                            .from("jobs")
+                            .update({ import_status: "expired" })
+                            .eq("id", (existing as any).id);
+
+                        results.expired++;
+                        await db.from("job_import_logs").insert({
+                            run_id: runId,
+                            action: "expired",
+                            rss_guid: guid,
+                            job_id: (existing as any).id,
+                            details: { last_seen: jobData.rss_last_seen_at, source: source },
+                        });
+                    }
                 }
             }
         }
