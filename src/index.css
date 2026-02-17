@@ -164,7 +164,20 @@
    Width: 210mm, Content area with 15mm margins = 180mm
    ═══════════════════════════════════════════════════════════════════ */
 
-.cv-paper,
+.cv-paper {
+  width: 210mm;
+  padding: 15mm;
+  margin: 0 auto;
+  background: #ffffff;
+  box-sizing: border-box;
+  font-family: 'Spectral', Georgia, serif;
+  font-weight: 300;
+  font-size: 10.5pt;
+  line-height: 1.35;
+  color: #1a1a1a;
+  position: relative;
+}
+
 .anschreiben-paper {
   width: 210mm;
   padding: 15mm;
@@ -181,13 +194,6 @@
 
 .cv-paper {
   min-height: 297mm;
-}
-
-.anschreiben-paper {
-  min-height: auto;
-  height: auto;
-  width: 100%;
-  max-width: 210mm;
 }
 
 /* For screen preview - scale down to fit viewport while maintaining A4 proportions */
@@ -222,16 +228,69 @@
 
   .anschreiben-paper {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    transform: none;
-    margin: 0;
+    transform: scale(0.45);
+    transform-origin: top center;
+    margin-bottom: -400px;
   }
 
-  .cv-paper-wrapper {
+  @media (min-width: 430px) {
+    .anschreiben-paper {
+      transform: scale(0.55);
+      margin-bottom: -350px;
+    }
+  }
+
+  @media (min-width: 640px) {
+    .anschreiben-paper {
+      transform: scale(0.75);
+      margin-bottom: -250px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .anschreiben-paper {
+      transform: scale(0.65);
+      margin-bottom: -300px;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .anschreiben-paper {
+      transform: scale(0.75);
+      margin-bottom: -250px;
+    }
+  }
+
+  @media (min-width: 1536px) {
+    .anschreiben-paper {
+      transform: scale(0.85);
+      margin-bottom: -150px;
+    }
+  }
+
+  @media (min-width: 1920px) {
+    .anschreiben-paper {
+      transform: scale(1);
+      margin-bottom: 0;
+    }
+  }
+
+  .cv-paper-wrapper,
+  .anschreiben-paper-wrapper {
     overflow: hidden;
     display: flex;
     justify-content: center;
     min-width: 0;
     width: 100%;
+  }
+}
+
+/* Print styles for anschreiben-paper */
+@media print {
+  .anschreiben-paper {
+    transform: none !important;
+    margin: 0;
+    box-shadow: none;
   }
 }
 
