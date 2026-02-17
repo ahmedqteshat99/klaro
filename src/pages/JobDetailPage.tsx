@@ -1043,14 +1043,14 @@ const JobDetailPage = () => {
 
       {/* PDF Preview Dialog */}
       <Dialog open={!!previewFile} onOpenChange={(open) => !open && setPreviewFile(null)}>
-        <DialogContent className="max-w-[90vw] max-h-[90vh] w-full h-full p-0">
-          <DialogHeader className="p-4 pb-2">
+        <DialogContent className="w-screen h-[100dvh] max-w-full max-h-full sm:max-w-[90vw] sm:max-h-[90vh] sm:w-full sm:h-full p-0 rounded-none sm:rounded-lg">
+          <DialogHeader className="p-3 sm:p-4 pb-2">
             <div className="flex items-center justify-between">
-              <DialogTitle className="text-lg truncate pr-8">{previewFile?.fileName}</DialogTitle>
+              <DialogTitle className="text-base sm:text-lg truncate pr-16">{previewFile?.fileName}</DialogTitle>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 p-0 absolute right-12 top-4"
+                className="h-8 w-8 p-0 absolute right-12 top-3 sm:top-4"
                 onClick={() => {
                   if (previewFile) {
                     const link = document.createElement("a");
@@ -1067,11 +1067,11 @@ const JobDetailPage = () => {
               </Button>
             </div>
           </DialogHeader>
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-auto" style={{ WebkitOverflowScrolling: "touch" }}>
             {previewFile && (
               <iframe
                 src={previewFile.url}
-                className="w-full h-[calc(90vh-80px)] border-0"
+                className="w-full h-[calc(100dvh-60px)] sm:h-[calc(90vh-80px)] border-0"
                 title={previewFile.fileName}
               />
             )}
