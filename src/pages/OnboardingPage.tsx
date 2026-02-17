@@ -151,6 +151,7 @@ const OnboardingPage = () => {
         addPublicationsLocal,
         addCustomSection,
         addCustomSectionEntry,
+        refetch,
     } = useProfile();
 
     const { url: fotoUrl } = useUserFileUrl(profile?.foto_url);
@@ -261,6 +262,9 @@ const OnboardingPage = () => {
 
         setIsGeneratingCV(true);
         try {
+            // Reload all data from DB to ensure imported entries are included
+            await refetch();
+
             const result = await generateCV({
                 profile,
                 workExperiences,
@@ -332,6 +336,9 @@ const OnboardingPage = () => {
 
         setIsGeneratingAnschreiben(true);
         try {
+            // Reload all data from DB to ensure imported entries are included
+            await refetch();
+
             const result = await generateAnschreiben({
                 profile,
                 workExperiences,
@@ -708,11 +715,17 @@ const OnboardingPage = () => {
                                             <CheckCircle2 className="h-5 w-5" />
                                             <span className="font-medium">Ihr Anschreiben wurde erfolgreich erstellt!</span>
                                         </div>
-                                        <Card>
-                                            <CardContent className="py-6">
-                                                <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: anschreibenHtml }} />
-                                            </CardContent>
-                                        </Card>
+                                        <div className="bg-gray-100 rounded-lg p-4 overflow-auto max-h-[40vh] sm:max-h-[500px] border">
+                                            <CVTemplate
+                                                htmlContent={anschreibenHtml}
+                                                showFoto={false}
+                                                showSignatur={!!profile?.signatur_url}
+                                                signaturUrl={signaturUrl ?? undefined}
+                                                stadt={profile?.stadt}
+                                                paperClassName="anschreiben-paper"
+                                                useBasePaperClass={false}
+                                            />
+                                        </div>
                                         <p className="text-sm text-muted-foreground text-center">
                                             Ihr Anschreiben wurde gespeichert. Sie können es im Dashboard als PDF herunterladen.
                                         </p>

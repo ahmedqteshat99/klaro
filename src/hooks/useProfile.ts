@@ -124,7 +124,7 @@ export const useProfile = () => {
         .select()
         .single();
       if (error) throw error;
-      setWorkExperiences([newEntry, ...workExperiences]);
+      setWorkExperiences(prev => [newEntry, ...prev]);
       toast({ title: "Hinzugefügt", description: "Berufserfahrung wurde hinzugefügt." });
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
@@ -135,7 +135,7 @@ export const useProfile = () => {
     try {
       const { error } = await supabase.from("work_experiences").update(data).eq("id", id);
       if (error) throw error;
-      setWorkExperiences(workExperiences.map(w => w.id === id ? { ...w, ...data } : w));
+      setWorkExperiences(prev => prev.map(w => w.id === id ? { ...w, ...data } : w));
       toast({ title: "Gespeichert", description: "Berufserfahrung wurde aktualisiert." });
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
@@ -146,7 +146,7 @@ export const useProfile = () => {
     try {
       const { error } = await supabase.from("work_experiences").delete().eq("id", id);
       if (error) throw error;
-      setWorkExperiences(workExperiences.filter(w => w.id !== id));
+      setWorkExperiences(prev => prev.filter(w => w.id !== id));
       toast({ title: "Gelöscht", description: "Berufserfahrung wurde entfernt." });
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
@@ -163,7 +163,7 @@ export const useProfile = () => {
         .select()
         .single();
       if (error) throw error;
-      setEducationEntries([newEntry, ...educationEntries]);
+      setEducationEntries(prev => [newEntry, ...prev]);
       toast({ title: "Hinzugefügt", description: "Ausbildung wurde hinzugefügt." });
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
@@ -174,7 +174,7 @@ export const useProfile = () => {
     try {
       const { error } = await supabase.from("education_entries").update(data).eq("id", id);
       if (error) throw error;
-      setEducationEntries(educationEntries.map(e => e.id === id ? { ...e, ...data } : e));
+      setEducationEntries(prev => prev.map(e => e.id === id ? { ...e, ...data } : e));
       toast({ title: "Gespeichert", description: "Ausbildung wurde aktualisiert." });
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
@@ -185,7 +185,7 @@ export const useProfile = () => {
     try {
       const { error } = await supabase.from("education_entries").delete().eq("id", id);
       if (error) throw error;
-      setEducationEntries(educationEntries.filter(e => e.id !== id));
+      setEducationEntries(prev => prev.filter(e => e.id !== id));
       toast({ title: "Gelöscht", description: "Ausbildung wurde entfernt." });
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
@@ -202,7 +202,7 @@ export const useProfile = () => {
         .select()
         .single();
       if (error) throw error;
-      setPracticalExperiences([newEntry, ...practicalExperiences]);
+      setPracticalExperiences(prev => [newEntry, ...prev]);
       toast({ title: "Hinzugefügt", description: "Praktische Erfahrung wurde hinzugefügt." });
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
@@ -213,7 +213,7 @@ export const useProfile = () => {
     try {
       const { error } = await supabase.from("practical_experiences").update(data).eq("id", id);
       if (error) throw error;
-      setPracticalExperiences(practicalExperiences.map(p => p.id === id ? { ...p, ...data } : p));
+      setPracticalExperiences(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
       toast({ title: "Gespeichert", description: "Praktische Erfahrung wurde aktualisiert." });
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
@@ -224,7 +224,7 @@ export const useProfile = () => {
     try {
       const { error } = await supabase.from("practical_experiences").delete().eq("id", id);
       if (error) throw error;
-      setPracticalExperiences(practicalExperiences.filter(p => p.id !== id));
+      setPracticalExperiences(prev => prev.filter(p => p.id !== id));
       toast({ title: "Gelöscht", description: "Praktische Erfahrung wurde entfernt." });
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
@@ -241,7 +241,7 @@ export const useProfile = () => {
         .select()
         .single();
       if (error) throw error;
-      setCertifications([newEntry, ...certifications]);
+      setCertifications(prev => [newEntry, ...prev]);
       toast({ title: "Hinzugefügt", description: "Zertifikat wurde hinzugefügt." });
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
@@ -252,7 +252,7 @@ export const useProfile = () => {
     try {
       const { error } = await supabase.from("certifications").update(data).eq("id", id);
       if (error) throw error;
-      setCertifications(certifications.map(c => c.id === id ? { ...c, ...data } : c));
+      setCertifications(prev => prev.map(c => c.id === id ? { ...c, ...data } : c));
       toast({ title: "Gespeichert", description: "Zertifikat wurde aktualisiert." });
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
@@ -263,7 +263,7 @@ export const useProfile = () => {
     try {
       const { error } = await supabase.from("certifications").delete().eq("id", id);
       if (error) throw error;
-      setCertifications(certifications.filter(c => c.id !== id));
+      setCertifications(prev => prev.filter(c => c.id !== id));
       toast({ title: "Gelöscht", description: "Zertifikat wurde entfernt." });
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
@@ -280,7 +280,7 @@ export const useProfile = () => {
         .select()
         .single();
       if (error) throw error;
-      setPublications([newEntry, ...publications]);
+      setPublications(prev => [newEntry, ...prev]);
       toast({ title: "Hinzugefügt", description: "Publikation wurde hinzugefügt." });
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
@@ -291,7 +291,7 @@ export const useProfile = () => {
     try {
       const { error } = await supabase.from("publications").update(data).eq("id", id);
       if (error) throw error;
-      setPublications(publications.map(p => p.id === id ? { ...p, ...data } : p));
+      setPublications(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
       toast({ title: "Gespeichert", description: "Publikation wurde aktualisiert." });
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
@@ -302,7 +302,7 @@ export const useProfile = () => {
     try {
       const { error } = await supabase.from("publications").delete().eq("id", id);
       if (error) throw error;
-      setPublications(publications.filter(p => p.id !== id));
+      setPublications(prev => prev.filter(p => p.id !== id));
       toast({ title: "Gelöscht", description: "Publikation wurde entfernt." });
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
