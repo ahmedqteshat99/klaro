@@ -307,39 +307,33 @@ serve(async (req) => {
                 });
             }
 
-            // Use service role client to verify JWT and check admin role
-            const dbAuth = createClient(supabaseUrl, serviceRoleKey);
+            // Extract JWT token
+            const jwt = authHeader.replace('Bearer ', '');
 
-            // Parse JWT to get user ID
-            const token = authHeader.replace('Bearer ', '');
-            let userId: string;
+            // Use anon key client with explicit JWT for verification
+            const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
 
-            try {
-                // Decode JWT (basic parsing without verification since we trust our own tokens)
-                const payload = JSON.parse(atob(token.split('.')[1]));
-                userId = payload.sub;
+            // Verify JWT and get user
+            const { data: { user }, error: userError } = await supabaseClient.auth.getUser(jwt);
 
-                if (!userId) {
-                    return new Response(JSON.stringify({ error: "Invalid token" }), {
-                        status: 401,
-                        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
-                    });
-                }
-            } catch (e) {
-                return new Response(JSON.stringify({ error: "Invalid token format" }), {
+            if (userError || !user) {
+                console.error('Auth error:', userError);
+                return new Response(JSON.stringify({ error: "Authentifizierung fehlgeschlagen" }), {
                     status: 401,
                     headers: { ...corsHeaders(req), "Content-Type": "application/json" },
                 });
             }
 
-            // Check if user has ADMIN role
-            const { data: roleData, error: roleError } = await dbAuth
+            // Use service role client to check admin role (bypasses RLS)
+            const dbAdmin = createClient(supabaseUrl, serviceRoleKey);
+            const { data: roleData, error: roleError } = await dbAdmin
                 .from("profiles")
                 .select("role")
-                .eq("user_id", userId)
+                .eq("user_id", user.id)
                 .single();
 
             if (roleError || roleData?.role !== "ADMIN") {
+                console.error('Role check failed:', roleError, roleData);
                 return new Response(JSON.stringify({ error: "Nur Admins" }), {
                     status: 403,
                     headers: { ...corsHeaders(req), "Content-Type": "application/json" },
