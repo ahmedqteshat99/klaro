@@ -373,8 +373,8 @@ const AnschreibenPage = () => {
           <h1 className="text-3xl font-semibold tracking-tight">Anschreiben</h1>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr] items-start">
-          <div className="space-y-6">
+        <div className="grid gap-4 lg:grid-cols-2 items-start max-w-full">
+          <div className="space-y-6 min-w-0">
             <JobExtractionForm
               onJobDataExtracted={setJobData}
               jobData={jobData}
@@ -454,7 +454,7 @@ const AnschreibenPage = () => {
             </Card>
           </div>
 
-          <Card className="h-full">
+          <Card className="lg:sticky lg:top-24 lg:self-start min-w-0">
             <CardHeader className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <CardTitle className="flex items-center gap-2">
@@ -473,9 +473,9 @@ const AnschreibenPage = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <ScrollArea className="h-[560px] rounded-lg border overflow-auto">
+              <div className="h-[400px] sm:h-[500px] lg:h-[600px] xl:h-[700px] rounded-lg border overflow-auto bg-gray-100">
                 {anschreibenHtml ? (
-                  <div className="bg-gray-100 p-1 sm:p-4 flex items-start justify-center">
+                  <div className="p-2 flex justify-center items-start w-full min-h-full">
                     <CVTemplate
                       htmlContent={anschreibenHtml}
                       showFoto={false}
@@ -493,7 +493,7 @@ const AnschreibenPage = () => {
                     <p className="text-sm">Links erstellen oder laden.</p>
                   </div>
                 )}
-              </ScrollArea>
+              </div>
 
               <Button
                 onClick={handleExportPdf}
