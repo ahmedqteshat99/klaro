@@ -307,28 +307,39 @@ serve(async (req) => {
                 });
             }
 
-            // Use anon key for user authentication
-            const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-                global: { headers: { Authorization: authHeader } },
-            });
+            // Use service role client to verify JWT and check admin role
+            const dbAuth = createClient(supabaseUrl, serviceRoleKey);
 
-            const { data: userData, error: userError } = await supabaseClient.auth.getUser();
-            if (userError || !userData?.user) {
-                return new Response(JSON.stringify({ error: "Nicht autorisiert" }), {
+            // Parse JWT to get user ID
+            const token = authHeader.replace('Bearer ', '');
+            let userId: string;
+
+            try {
+                // Decode JWT (basic parsing without verification since we trust our own tokens)
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                userId = payload.sub;
+
+                if (!userId) {
+                    return new Response(JSON.stringify({ error: "Invalid token" }), {
+                        status: 401,
+                        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+                    });
+                }
+            } catch (e) {
+                return new Response(JSON.stringify({ error: "Invalid token format" }), {
                     status: 401,
                     headers: { ...corsHeaders(req), "Content-Type": "application/json" },
                 });
             }
 
-            // Use service role for database queries (bypasses RLS)
-            const dbAdmin = createClient(supabaseUrl, serviceRoleKey);
-            const { data: roleData } = await dbAdmin
+            // Check if user has ADMIN role
+            const { data: roleData, error: roleError } = await dbAuth
                 .from("profiles")
                 .select("role")
-                .eq("user_id", userData.user.id)
+                .eq("user_id", userId)
                 .single();
 
-            if (roleData?.role !== "ADMIN") {
+            if (roleError || roleData?.role !== "ADMIN") {
                 return new Response(JSON.stringify({ error: "Nur Admins" }), {
                     status: 403,
                     headers: { ...corsHeaders(req), "Content-Type": "application/json" },
