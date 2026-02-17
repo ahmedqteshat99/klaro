@@ -288,6 +288,7 @@ serve(async (req) => {
 
     try {
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
         const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
         const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY")!;
 
@@ -306,7 +307,8 @@ serve(async (req) => {
                 });
             }
 
-            const supabaseClient = createClient(supabaseUrl, serviceRoleKey, {
+            // Use anon key for user authentication
+            const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
                 global: { headers: { Authorization: authHeader } },
             });
 
@@ -318,7 +320,9 @@ serve(async (req) => {
                 });
             }
 
-            const { data: roleData } = await supabaseClient
+            // Use service role for database queries (bypasses RLS)
+            const dbAdmin = createClient(supabaseUrl, serviceRoleKey);
+            const { data: roleData } = await dbAdmin
                 .from("profiles")
                 .select("role")
                 .eq("user_id", userData.user.id)
