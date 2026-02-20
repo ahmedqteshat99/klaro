@@ -37,6 +37,8 @@ import ApplicationReviewCard from "@/components/job-detail/ApplicationReviewCard
 import type { AttachmentPreview } from "@/components/job-detail/ApplicationReviewCard";
 import JobDetailSkeleton from "@/components/job-detail/JobDetailSkeleton";
 import JobDetailNotFound from "@/components/job-detail/JobDetailNotFound";
+import PreparationProgressModal from "@/components/job-detail/PreparationProgressModal";
+import type { PreparationStep, StepStatus } from "@/components/job-detail/PreparationProgressModal";
 
 // --- Utility functions ---
 
@@ -113,10 +115,8 @@ const JobDetailPage = () => {
   const [isPreparing, setIsPreparing] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
-  const [prepareStepIndex, setPrepareStepIndex] = useState(0);
-  const [prepareProgress, setPrepareProgress] = useState(0);
-  const [prepareProgressTarget, setPrepareProgressTarget] = useState(0);
-  const prepareProgressTargetRef = useRef(0);
+  const [preparationSteps, setPreparationSteps] = useState<PreparationStep[]>([]);
+  const [showPreparationModal, setShowPreparationModal] = useState(false);
 
   const [job, setJob] = useState<Tables<"jobs"> | null>(null);
   const [userDocuments, setUserDocuments] = useState<Tables<"user_documents">[]>([]);
@@ -159,13 +159,18 @@ const JobDetailPage = () => {
     [location.search]
   );
 
-  const setPrepareProgressGoal = useCallback((goal: number) => {
-    const boundedGoal = Math.min(100, Math.max(0, goal));
-    setPrepareProgressTarget((prev) => {
-      const next = Math.max(prev, boundedGoal);
-      prepareProgressTargetRef.current = next;
-      return next;
-    });
+  const updatePreparationStep = useCallback((stepId: string, status: StepStatus, errorMessage?: string) => {
+    setPreparationSteps((prev) =>
+      prev.map((s) => (s.id === stepId ? { ...s, status, errorMessage } : s))
+    );
+  }, []);
+
+  const initPreparationSteps = useCallback(() => {
+    setPreparationSteps([
+      { id: "lebenslauf", label: "Lebenslauf", description: "", status: "pending" },
+      { id: "anschreiben", label: "Anschreiben", description: "", status: "pending" },
+      { id: "email", label: "E-Mail & Dokumente", description: "", status: "pending" },
+    ]);
   }, []);
 
   // --- Effects ---
@@ -183,41 +188,6 @@ const JobDetailPage = () => {
     });
     return () => subscription.unsubscribe();
   }, []);
-
-  useEffect(() => {
-    if (!isPreparing) {
-      setPrepareStepIndex(0);
-      setPrepareProgress(0);
-      setPrepareProgressTarget(0);
-      prepareProgressTargetRef.current = 0;
-      return;
-    }
-    setPrepareProgress(3);
-    setPrepareProgressGoal(12);
-
-    const stepInterval = window.setInterval(() => {
-      setPrepareStepIndex((prev) => (prev + 1) % 4);
-    }, 1400);
-    const progressInterval = window.setInterval(() => {
-      setPrepareProgress((prev) => {
-        const target = prepareProgressTargetRef.current;
-        if (prev >= target) return prev;
-        const remaining = target - prev;
-        const increment =
-          remaining > 20 ? 1.3 : remaining > 10 ? 0.9 : remaining > 4 ? 0.55 : 0.3;
-        return Math.min(target, Number((prev + increment).toFixed(1)));
-      });
-    }, 320);
-
-    return () => {
-      window.clearInterval(stepInterval);
-      window.clearInterval(progressInterval);
-    };
-  }, [isPreparing, setPrepareProgressGoal]);
-
-  useEffect(() => {
-    prepareProgressTargetRef.current = prepareProgressTarget;
-  }, [prepareProgressTarget]);
 
   useEffect(() => {
     const normalized = normalizeEmailAddress(profile?.klaro_email);
@@ -511,47 +481,47 @@ const JobDetailPage = () => {
     }
 
     setIsPreparing(true);
-    setPrepareProgress(3);
-    setPrepareProgressGoal(14);
+    initPreparationSteps();
+    setShowPreparationModal(true);
     void logFunnelEvent(
       "funnel_prepare_start",
       { job_id: job.id, job_title: job.title, selected_profile_docs_count: selectedDocuments.length },
       userId
     );
 
+    let currentStep = "lebenslauf";
     try {
+      // --- Step 1: Lebenslauf ---
+      updatePreparationStep("lebenslauf", "in_progress");
+
       const lockedKlaroEmail = await ensureKlaroEmailAddress();
       if (!lockedKlaroEmail) {
         throw new Error("Klaro E-Mail konnte nicht erstellt werden. Bitte versuchen Sie es erneut.");
       }
-      setPrepareProgressGoal(24);
 
       const profileWithKlaroEmail = { ...profile, klaro_email: lockedKlaroEmail };
       const lockedDisplayEmail = normalizeEmailAddress(profile?.email) || lockedKlaroEmail;
 
       const reusedDraft = await tryReuseExistingDraft(job.id, lockedDisplayEmail);
-      setPrepareProgressGoal(34);
       if (reusedDraft) {
-        setPrepareProgressGoal(100);
-        setPrepareProgress(100);
-        await new Promise<void>((r) => window.setTimeout(r, 220));
+        updatePreparationStep("lebenslauf", "completed");
+        updatePreparationStep("anschreiben", "completed");
+        updatePreparationStep("email", "completed");
+        await new Promise<void>((r) => window.setTimeout(r, 600));
         void logFunnelEvent(
           "funnel_prepare_success",
           { job_id: job.id, job_title: job.title, reused_draft: true, selected_profile_docs_count: selectedDocuments.length },
           userId
         );
-        toast({ title: "Bestehender Entwurf geladen", description: "Diese Bewerbung wurde bereits vorbereitet." });
         return;
       }
 
-      setPrepareProgressGoal(42);
-
+      // Check CV freshness and generate if needed
       let cvHtmlToUse: string | null = null;
       let cvWasReused = false;
       let existingCvId: string | null = null;
 
       const existingCv = await getLatestDocument(userId, "CV");
-      setPrepareProgressGoal(48);
 
       if (existingCv) {
         const cvCreatedAt = new Date(existingCv.created_at);
@@ -572,87 +542,79 @@ const JobDetailPage = () => {
         }
       }
 
-      setPrepareProgressGoal(52);
-
-      const generatePromises: Promise<any>[] = [
-        generateAnschreiben({
+      let cvResult: { success: boolean; html?: string; error?: string };
+      if (!cvWasReused) {
+        cvResult = await generateCV({
           profile: profileWithKlaroEmail,
           workExperiences,
           educationEntries,
           practicalExperiences,
           certifications,
           publications,
-          jobData: {
-            krankenhaus: job.hospital_name,
-            standort: job.location,
-            fachabteilung: job.department,
-            position: job.title,
-            ansprechpartner: job.contact_name,
-            anforderungen: job.requirements,
-          },
-        }),
-      ];
-
-      let cvResult: { success: boolean; html?: string; error?: string };
-      if (!cvWasReused) {
-        generatePromises.push(
-          generateCV({
-            profile: profileWithKlaroEmail,
-            workExperiences,
-            educationEntries,
-            practicalExperiences,
-            certifications,
-            publications,
-          })
-        );
+        });
+      } else {
+        cvResult = { success: true, html: cvHtmlToUse! };
       }
-
-      const results = await Promise.all(generatePromises);
-      const anschreibenResult = results[0];
-      cvResult = cvWasReused ? { success: true, html: cvHtmlToUse! } : results[1];
-      setPrepareProgressGoal(58);
 
       if (!cvResult.success || !cvResult.html) {
         throw new Error(cvResult.error || "Lebenslauf konnte nicht generiert werden.");
       }
-      if (!anschreibenResult.success || !anschreibenResult.html) {
-        throw new Error(anschreibenResult.error || "Anschreiben konnte nicht generiert werden.");
-      }
-
-      const savePromises: Promise<any>[] = [
-        saveDocument({
-          userId,
-          typ: "Anschreiben",
-          htmlContent: anschreibenResult.html,
-          hospitalName: job.hospital_name,
-          departmentOrSpecialty: job.department,
-          positionTitle: job.title,
-          jobUrl: job.apply_url,
-          showFoto: false,
-          showSignatur: true,
-        }),
-      ];
 
       let cvSave: { success: boolean; id?: string };
       if (cvWasReused) {
         cvSave = { success: true, id: existingCvId! };
       } else {
-        savePromises.push(
-          saveDocument({ userId, typ: "CV", htmlContent: cvResult.html, showFoto: true, showSignatur: true })
-        );
+        cvSave = await saveDocument({ userId, typ: "CV", htmlContent: cvResult.html, showFoto: true, showSignatur: true });
+      }
+      if (!cvSave!.success || !cvSave!.id) throw new Error("Lebenslauf konnte nicht gespeichert werden.");
+
+      updatePreparationStep("lebenslauf", "completed");
+
+      // --- Step 2: Anschreiben ---
+      currentStep = "anschreiben";
+      updatePreparationStep("anschreiben", "in_progress");
+
+      const anschreibenResult = await generateAnschreiben({
+        profile: profileWithKlaroEmail,
+        workExperiences,
+        educationEntries,
+        practicalExperiences,
+        certifications,
+        publications,
+        jobData: {
+          krankenhaus: job.hospital_name,
+          standort: job.location,
+          fachabteilung: job.department,
+          position: job.title,
+          ansprechpartner: job.contact_name,
+          anforderungen: job.requirements,
+        },
+      });
+
+      if (!anschreibenResult.success || !anschreibenResult.html) {
+        throw new Error(anschreibenResult.error || "Anschreiben konnte nicht generiert werden.");
       }
 
-      const saveResults = await Promise.all(savePromises);
-      const anschreibenSave = saveResults[0];
-      if (!cvWasReused) cvSave = saveResults[1];
-      setPrepareProgressGoal(66);
-
-      if (!cvSave!.success || !cvSave!.id) throw new Error("Lebenslauf konnte nicht gespeichert werden.");
+      const anschreibenSave = await saveDocument({
+        userId,
+        typ: "Anschreiben",
+        htmlContent: anschreibenResult.html,
+        hospitalName: job.hospital_name,
+        departmentOrSpecialty: job.department,
+        positionTitle: job.title,
+        jobUrl: job.apply_url,
+        showFoto: false,
+        showSignatur: true,
+      });
       if (!anschreibenSave.success || !anschreibenSave.id) throw new Error("Anschreiben konnte nicht gespeichert werden.");
 
+      updatePreparationStep("anschreiben", "completed");
+
+      // --- Step 3: E-Mail & Documents ---
+      currentStep = "email";
+      updatePreparationStep("email", "in_progress");
+
       // Resolve fresh signed URLs for foto and signatur directly from storage.
-      // The useUserFileUrl hook resolves asynchronously and may still be null
-      // when this function runs (e.g. auto-apply after auth redirect).
       const resolveSignedUrl = async (rawValue: string | null | undefined): Promise<string | null> => {
         if (!rawValue) return null;
         const storagePath = resolveUserFilePath(rawValue);
@@ -687,7 +649,6 @@ const JobDetailPage = () => {
           fileName: "Anschreiben.pdf",
         }),
       ]);
-      setPrepareProgressGoal(78);
 
       const selectedDocSizes = await Promise.all(selectedDocuments.map((doc) => loadDocSize(doc)));
       const selectedDocsTotal = selectedDocSizes.reduce((sum, size) => sum + size, 0);
@@ -695,7 +656,6 @@ const JobDetailPage = () => {
       if (totalBytes > MAX_ATTACHMENT_BYTES) {
         throw new Error(`Ausgewaehlte Anhaenge sind ${humanFileSize(totalBytes)} gross. Maximal erlaubt sind 10 MB.`);
       }
-      setPrepareProgressGoal(84);
 
       const fullName = `${profile.vorname ?? ""} ${profile.nachname ?? ""}`.trim() || "Bewerber/in";
       const defaultSubject = `Bewerbung als ${job.title}${job.hospital_name ? ` bei ${job.hospital_name}` : ""}`;
@@ -722,7 +682,6 @@ const JobDetailPage = () => {
       if (applicationError || !applicationRow) {
         throw new Error(applicationError?.message || "Bewerbung konnte nicht vorbereitet werden.");
       }
-      setPrepareProgressGoal(90);
 
       const basePath = `${userId}/applications/${applicationRow.id}`;
       const nachnamePart = profile.nachname || "Arzt";
@@ -739,7 +698,6 @@ const JobDetailPage = () => {
       if (cvUploadError || anschreibenUploadError) {
         throw new Error(cvUploadError?.message || anschreibenUploadError?.message || "PDF Upload fehlgeschlagen");
       }
-      setPrepareProgressGoal(95);
 
       const attachmentRows = [
         { application_id: applicationRow.id, user_document_id: null, file_path: cvPath, file_name: cvFileName, mime_type: "application/pdf", size_bytes: cvPdfBlob.size },
@@ -756,7 +714,6 @@ const JobDetailPage = () => {
 
       const { error: attachmentError } = await supabase.from("application_attachments").insert(attachmentRows);
       if (attachmentError) throw new Error(attachmentError.message);
-      setPrepareProgressGoal(98);
 
       setApplicationId(applicationRow.id);
       setSubject(defaultSubject);
@@ -783,26 +740,14 @@ const JobDetailPage = () => {
         cv_reused: cvWasReused,
       }, userId);
 
-      setPrepareProgressGoal(100);
-      setPrepareProgress(100);
-      await new Promise<void>((r) => window.setTimeout(r, 220));
-      toast({
-        title: "Bewerbung vorbereitet",
-        description: cvWasReused
-          ? "Bestehender CV wiederverwendet. Anschreiben neu generiert."
-          : "CV und Anschreiben wurden generiert.",
-      });
+      updatePreparationStep("email", "completed");
     } catch (error) {
+      updatePreparationStep(currentStep, "error", error instanceof Error ? error.message : "Unbekannter Fehler");
       void logFunnelEvent("funnel_prepare_failed", {
         job_id: job.id,
         job_title: job.title,
         error: error instanceof Error ? error.message : "unknown_error",
       }, userId);
-      toast({
-        title: "Vorbereitung fehlgeschlagen",
-        description: error instanceof Error ? error.message : "Unbekannter Fehler",
-        variant: "destructive",
-      });
     } finally {
       setIsPreparing(false);
     }
@@ -1013,8 +958,6 @@ const JobDetailPage = () => {
                   isPreparing={isPreparing}
                   isDisabled={!isAuthenticated || !userId}
                   hasContactEmail={!!job.contact_email}
-                  prepareStepIndex={prepareStepIndex}
-                  prepareProgress={prepareProgress}
                 />
 
                 {applicationId && (
@@ -1078,6 +1021,13 @@ const JobDetailPage = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Preparation Progress Modal */}
+      <PreparationProgressModal
+        open={showPreparationModal}
+        steps={preparationSteps}
+        onClose={() => setShowPreparationModal(false)}
+      />
     </div>
   );
 };

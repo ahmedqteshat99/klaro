@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { enrichLocationWithState } from "../_shared/enrich-location.ts";
 
 // ─── Configuration ───────────────────────────────────────────────
 // Stellenmarkt config
@@ -11,9 +12,13 @@ const STELLENMARKT_SOURCE = "stellenmarkt_medizin";
 const AERZTEBLATT_URL = "https://aerztestellen.aerzteblatt.de/de/stellen/assistenzarzt-arzt-weiterbildung";
 const AERZTEBLATT_SOURCE = "aerzteblatt";
 
+// PraktischArzt config
+const PRAKTISCHARZT_URL = "https://www.praktischarzt.de/assistenzarzt/";
+const PRAKTISCHARZT_SOURCE = "praktischarzt";
+
 // Shared config
 const MAX_PAGES = 5; // Scrape up to 5 pages per source
-const MAX_JOBS_PER_RUN = 50; // Per source (100 total across 2 sources)
+const MAX_JOBS_PER_RUN = 50; // Per source
 const EXPIRATION_GRACE_HOURS = 48;
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -43,12 +48,15 @@ function cleanText(raw: string): string {
         .trim();
 }
 
+// enrichLocationWithState is imported from ../_shared/enrich-location.ts
+
 interface ScrapedJob {
     title: string;
     link: string;
     company: string;
     location: string;
     guid: string; // The anzeige URL as unique identifier
+    employerUrl?: string; // Direct employer application URL (resolved from detail page)
 }
 
 /** Scrape job listings from a single Stellenmarkt search results page. */
@@ -161,6 +169,49 @@ function parseAerzteblattPage(html: string): ScrapedJob[] {
     return jobs;
 }
 
+/** Scrape job listings from a single PraktischArzt search results page. */
+function parsePraktischArztPage(html: string): ScrapedJob[] {
+    const jobs: ScrapedJob[] = [];
+
+    // Each job block starts with: <div id="job-XXXXX" class="row job box-job ...">
+    const jobBlockRegex = /<div\s+id="job-\d+"[^>]*class="[^"]*box-job[^"]*"[^>]*>/g;
+    const blockStarts: number[] = [];
+    let blockMatch;
+    while ((blockMatch = jobBlockRegex.exec(html)) !== null) {
+        blockStarts.push(blockMatch.index);
+    }
+
+    for (let i = 0; i < blockStarts.length; i++) {
+        const start = blockStarts[i];
+        const end = i + 1 < blockStarts.length ? blockStarts[i + 1] : Math.min(start + 5000, html.length);
+        const block = html.substring(start, end);
+
+        // Job URL: href="https://www.praktischarzt.de/job/SLUG/"
+        const linkMatch = block.match(/href="(https:\/\/www\.praktischarzt\.de\/job\/[^"]+)"/);
+        if (!linkMatch) continue;
+        const link = linkMatch[1];
+
+        if (jobs.some((j) => j.guid === link)) continue;
+
+        // Title: <a class="title-link title desktop_show" ... title="Mehr Details für TITLE anzeigen"> TITLE </a>
+        const titleMatch = block.match(/class="title-link\s+title\s+desktop_show"[^>]*>\s*([^<]+?)\s*<\/a>/);
+        const title = titleMatch ? cleanText(titleMatch[1]) : "";
+        if (!title) continue;
+
+        // Company: <div class="employer-name"> <a ...><i ...></i> COMPANY</a></div>
+        const companyMatch = block.match(/class="employer-name"[^>]*>.*?<\/i>\s*([^<]+)<\/a>/);
+        const company = companyMatch ? cleanText(companyMatch[1]) : "";
+
+        // Location: after svg-location span, plain text until next tag
+        const locationMatch = block.match(/class="svg-location"[^>]*>.*?<\/svg><\/span>([^<]+)/);
+        const location = locationMatch ? cleanText(locationMatch[1]) : "";
+
+        jobs.push({ title, link, company, location, guid: link });
+    }
+
+    return jobs;
+}
+
 /** Check if there's a next page. */
 function hasNextPage(html: string, currentPage: number): boolean {
     return html.includes(`page=${currentPage + 1}`);
@@ -214,6 +265,75 @@ async function scrapeJobBoard(
     }
 
     return allJobs;
+}
+
+/** Fetch a job detail page and extract the employer's direct application URL. */
+async function resolveEmployerUrl(jobPageUrl: string): Promise<string | null> {
+    try {
+        const response = await fetch(jobPageUrl, {
+            headers: {
+                "User-Agent": "Mozilla/5.0 (compatible; KlaroBot/1.0)",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "de-DE,de;q=0.9,en;q=0.5",
+            },
+            signal: AbortSignal.timeout(15_000),
+        });
+
+        if (!response.ok) return null;
+        const html = await response.text();
+
+        // Stellenmarkt / generic: "Jetzt bewerben" links with external href (text directly in <a>)
+        const bewerbenLinks = [
+            ...html.matchAll(/<a[^>]*href="([^"]+)"[^>]*>\s*Jetzt bewerben\s*<\/a>/gi),
+            ...html.matchAll(/<a[^>]*href="([^"]+)"[^>]*>[^<]*[Bb]ewerben[^<]*<\/a>/gi),
+        ];
+
+        for (const match of bewerbenLinks) {
+            const href = match[1];
+            if (href.startsWith("mailto:") || href.startsWith("#") || href.startsWith("/")) continue;
+            if (href.includes("stellenmarkt.de") || href.includes("aerzteblatt.de") || href.includes("praktischarzt.de")) continue;
+            if (href.startsWith("http")) return href;
+        }
+
+        // PraktischArzt: <a class="apply_job_button" ... href="URL"><div class="btnshare">Jetzt bewerben</div></a>
+        const applyButtonLinks = [
+            ...html.matchAll(/<a[^>]*class="apply_job_button[^"]*"[^>]*href="([^"]+)"[^>]*>/gi),
+            ...html.matchAll(/<a[^>]*href="([^"]+)"[^>]*class="apply_job_button[^"]*"[^>]*>/gi),
+        ];
+
+        for (const match of applyButtonLinks) {
+            const href = match[1];
+            if (href.startsWith("mailto:") || href.startsWith("#") || href.startsWith("/")) continue;
+            if (href.includes("stellenmarkt.de") || href.includes("aerzteblatt.de") || href.includes("praktischarzt.de")) continue;
+            if (href.startsWith("http")) return href;
+        }
+
+        // Ärzteblatt: "Bewerben" links to /de/node/.../apply-external (redirect)
+        const applyExternalMatch = html.match(/href="(\/de\/node\/\d+\/apply-external)"/);
+        if (applyExternalMatch) {
+            const redirectUrl = new URL(applyExternalMatch[1], jobPageUrl).href;
+            try {
+                const redirectResp = await fetch(redirectUrl, {
+                    headers: {
+                        "User-Agent": "Mozilla/5.0 (compatible; KlaroBot/1.0)",
+                        "Accept": "text/html",
+                    },
+                    redirect: "manual",
+                    signal: AbortSignal.timeout(10_000),
+                });
+                const location = redirectResp.headers.get("Location");
+                if (location && location.startsWith("http") && !location.includes("aerzteblatt.de")) {
+                    return location;
+                }
+            } catch {
+                // Redirect follow failed, fall through
+            }
+        }
+
+        return null;
+    } catch {
+        return null;
+    }
 }
 
 /** Generate an AI summary for a job using Claude. */
@@ -307,14 +427,13 @@ serve(async (req) => {
                 });
             }
 
-            // Extract JWT token
-            const jwt = authHeader.replace('Bearer ', '');
-
-            // Use anon key client with explicit JWT for verification
-            const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+            // Use anon key client with the user's Authorization header for verification
+            const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+                global: { headers: { Authorization: authHeader } },
+            });
 
             // Verify JWT and get user
-            const { data: { user }, error: userError } = await supabaseClient.auth.getUser(jwt);
+            const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
 
             if (userError || !user) {
                 console.error('Auth error:', userError);
@@ -353,7 +472,7 @@ serve(async (req) => {
 
         if (lastRun) {
             const lastRunAge = Date.now() - new Date(lastRun.created_at).getTime();
-            if (lastRunAge < 10 * 60 * 1000) { // 10 minutes cooldown
+            if (lastRunAge < 10 * 60 * 1000) { // 10 minute cooldown
                 return new Response(
                     JSON.stringify({
                         success: false,
@@ -369,13 +488,13 @@ serve(async (req) => {
         await db.from("job_import_logs").insert({
             run_id: runId,
             action: "run_started",
-            details: { sources: [STELLENMARKT_SOURCE, AERZTEBLATT_SOURCE], method: "html_scrape" },
+            details: { sources: [STELLENMARKT_SOURCE, AERZTEBLATT_SOURCE, PRAKTISCHARZT_SOURCE], method: "html_scrape" },
         });
 
         // ── 1. Scrape search results pages from both sources in parallel ──
         console.log(`[${runId}] Scraping Assistenzarzt listings from multiple sources...`);
 
-        const [stellenmarktJobs, aerzteblattJobs] = await Promise.all([
+        const [stellenmarktJobs, aerzteblattJobs, praktischArztJobs] = await Promise.all([
             // Stellenmarkt
             scrapeJobBoard(
                 STELLENMARKT_URL,
@@ -391,9 +510,17 @@ serve(async (req) => {
                 (base, page) => page === 1 ? base : `${base}?page=${page}`,
                 runId
             ),
+
+            // PraktischArzt
+            scrapeJobBoard(
+                PRAKTISCHARZT_URL,
+                parsePraktischArztPage,
+                (base, page) => page === 1 ? base : `${base}${page}/`,
+                runId
+            ),
         ]);
 
-        console.log(`[${runId}] Scraped totals: Stellenmarkt=${stellenmarktJobs.length}, Ärzteblatt=${aerzteblattJobs.length}`);
+        console.log(`[${runId}] Scraped totals: Stellenmarkt=${stellenmarktJobs.length}, Ärzteblatt=${aerzteblattJobs.length}, PraktischArzt=${praktischArztJobs.length}`);
 
         // Tag jobs with their source
         interface ScrapedJobWithSource extends ScrapedJob {
@@ -403,10 +530,11 @@ serve(async (req) => {
         const allScrapedJobs: ScrapedJobWithSource[] = [
             ...stellenmarktJobs.map((j) => ({ ...j, feedSource: STELLENMARKT_SOURCE })),
             ...aerzteblattJobs.map((j) => ({ ...j, feedSource: AERZTEBLATT_SOURCE })),
+            ...praktischArztJobs.map((j) => ({ ...j, feedSource: PRAKTISCHARZT_SOURCE })),
         ];
 
         results.totalListings = allScrapedJobs.length;
-        console.log(`[${runId}] Total: ${allScrapedJobs.length} listings from both sources`);
+        console.log(`[${runId}] Total: ${allScrapedJobs.length} listings from all sources`);
 
         if (allScrapedJobs.length === 0) {
             await db.from("job_import_logs").insert({
@@ -420,8 +548,8 @@ serve(async (req) => {
         // ── 2. Load existing jobs for dedup ──
         const { data: existingJobs } = await db
             .from("jobs")
-            .select("id, rss_guid, rss_content_hash, import_status, rss_feed_source")
-            .in("rss_feed_source", [STELLENMARKT_SOURCE, AERZTEBLATT_SOURCE])
+            .select("id, rss_guid, rss_content_hash, import_status, rss_feed_source, apply_url, location")
+            .in("rss_feed_source", [STELLENMARKT_SOURCE, AERZTEBLATT_SOURCE, PRAKTISCHARZT_SOURCE])
             .not("rss_guid", "is", null);
 
         const existingByGuid = new Map(
@@ -429,7 +557,9 @@ serve(async (req) => {
         );
 
         const seenGuids = new Set<string>();
-        const itemsToProcess = allScrapedJobs.slice(0, MAX_JOBS_PER_RUN * 2); // 100 total (50 per source)
+        const itemsToProcess = allScrapedJobs.slice(0, MAX_JOBS_PER_RUN * 3); // 150 total (50 per source)
+        let urlBackfillCount = 0;
+        const MAX_URL_BACKFILLS_PER_RUN = 5; // Limit backfills to keep run time short
 
         // ── 3. Process each listing ──
         for (const job of itemsToProcess) {
@@ -445,7 +575,9 @@ serve(async (req) => {
                     ? "stellenmarkt.de"
                     : feedSource === AERZTEBLATT_SOURCE
                         ? "aerzteblatt.de"
-                        : feedSource;
+                        : feedSource === PRAKTISCHARZT_SOURCE
+                            ? "praktischarzt.de"
+                            : feedSource;
 
                 if (existing) {
                     // Update last_seen
@@ -455,6 +587,38 @@ serve(async (req) => {
                         .eq("id", existing.id);
 
                     if (existing.rss_content_hash === contentHash) {
+                        // Backfill employer URL for existing jobs that still point to the aggregator
+                        const currentUrl = (existing as any).apply_url as string | null;
+                        const needsUrlBackfill = currentUrl && (
+                            currentUrl.includes("stellenmarkt.de") || currentUrl.includes("aerzteblatt.de") || currentUrl.includes("praktischarzt.de")
+                        );
+
+                        if (needsUrlBackfill && urlBackfillCount < MAX_URL_BACKFILLS_PER_RUN) {
+                            const backfilledUrl = await resolveEmployerUrl(job.link);
+                            if (backfilledUrl) {
+                                await db
+                                    .from("jobs")
+                                    .update({ apply_url: backfilledUrl, source_url: backfilledUrl })
+                                    .eq("id", (existing as any).id);
+                                console.log(`[${runId}] Backfilled employer URL for "${job.title}": ${backfilledUrl}`);
+                            }
+                            urlBackfillCount++;
+                            await new Promise((r) => setTimeout(r, 1000));
+                        }
+
+                        // Backfill location with Bundesland if the DB value doesn't already have one
+                        const dbLocation = (existing as any).location as string | null;
+                        if (dbLocation) {
+                            const enrichedLoc = enrichLocationWithState(dbLocation);
+                            if (enrichedLoc !== dbLocation) {
+                                await db
+                                    .from("jobs")
+                                    .update({ location: enrichedLoc })
+                                    .eq("id", (existing as any).id);
+                                console.log(`[${runId}] Backfilled state for "${job.title}": ${enrichedLoc}`);
+                            }
+                        }
+
                         results.skipped++;
                         await db.from("job_import_logs").insert({
                             run_id: runId,
@@ -467,14 +631,22 @@ serve(async (req) => {
                         continue;
                     }
 
-                    // Content changed
+                    // Content changed — re-resolve employer URL
+                    const updatedEmployerUrl = await resolveEmployerUrl(job.link);
+                    if (updatedEmployerUrl) console.log(`[${runId}] Resolved employer URL: ${updatedEmployerUrl}`);
+                    await new Promise((r) => setTimeout(r, 1000));
+
                     const newSummary = await generateAiSummary(job, anthropicKey);
+                    const updateApplyUrl = updatedEmployerUrl || job.link;
+                    const enrichedLocation = enrichLocationWithState(job.location);
                     await db
                         .from("jobs")
                         .update({
                             description: newSummary,
                             hospital_name: job.company || null,
-                            location: job.location || null,
+                            location: enrichedLocation || null,
+                            apply_url: updateApplyUrl,
+                            source_url: updateApplyUrl,
                             rss_content_hash: contentHash,
                             rss_last_seen_at: new Date().toISOString(),
                         })
@@ -491,8 +663,14 @@ serve(async (req) => {
                     });
                     console.log(`[${runId}] Updated (${sourceName}): ${job.title}`);
                 } else {
-                    // New job
+                    // New job — resolve employer URL from detail page
+                    const employerUrl = await resolveEmployerUrl(job.link);
+                    if (employerUrl) console.log(`[${runId}] Resolved employer URL: ${employerUrl}`);
+                    await new Promise((r) => setTimeout(r, 1000));
+
                     const summary = await generateAiSummary(job, anthropicKey);
+                    const applyUrl = employerUrl || job.link;
+                    const enrichedLocation = enrichLocationWithState(job.location);
 
                     const { data: inserted, error: insertErr } = await db
                         .from("jobs")
@@ -500,9 +678,9 @@ serve(async (req) => {
                             title: job.title,
                             description: summary,
                             hospital_name: job.company || null,
-                            location: job.location || null,
-                            apply_url: job.link,
-                            source_url: job.link,
+                            location: enrichedLocation || null,
+                            apply_url: applyUrl,
+                            source_url: applyUrl,
                             source_name: sourceName,
                             rss_guid: job.guid,
                             rss_content_hash: contentHash,
@@ -558,7 +736,7 @@ serve(async (req) => {
             Date.now() - EXPIRATION_GRACE_HOURS * 60 * 60 * 1000
         ).toISOString();
 
-        for (const source of [STELLENMARKT_SOURCE, AERZTEBLATT_SOURCE]) {
+        for (const source of [STELLENMARKT_SOURCE, AERZTEBLATT_SOURCE, PRAKTISCHARZT_SOURCE]) {
             const seenGuidsForSource = new Set(
                 allScrapedJobs
                     .filter((j) => j.feedSource === source)

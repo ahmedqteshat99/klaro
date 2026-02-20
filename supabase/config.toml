@@ -35,3 +35,18 @@ verify_jwt = false
 
 [functions.merge-application-pdfs]
 verify_jwt = false
+
+[functions.enhance-anschreiben]
+verify_jwt = false
+
+[functions.import-rss-jobs]
+verify_jwt = false
+
+[functions.backfill-job-descriptions]
+verify_jwt = false
+
+[functions.check-stale-jobs]
+verify_jwt = false
+
+[functions.backfill-job-states]
+verify_jwt = false
