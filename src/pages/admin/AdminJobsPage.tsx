@@ -18,6 +18,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
@@ -28,6 +36,7 @@ import {
   type AdminJobFormValues,
 } from "@/lib/job-import";
 import { Check, ExternalLink, Info, Link2, LinkIcon, Loader2, Pencil, Plus, Rss, Search, Sparkles, Trash2, X } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
@@ -133,8 +142,16 @@ const AdminJobsPage = () => {
   const [lastImportSource, setLastImportSource] = useState<"url" | "text" | null>(null);
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [isRssImporting, setIsRssImporting] = useState(false);
+  const [rssDialogOpen, setRssDialogOpen] = useState(false);
+  const [rssDialogState, setRssDialogState] = useState<"running" | "success" | "error">("running");
+  const [rssDialogMessage, setRssDialogMessage] = useState("");
+  const [rssDialogResults, setRssDialogResults] = useState<{
+    imported?: number; updated?: number; skipped?: number; expired?: number; totalListings?: number;
+  } | null>(null);
   const [isCheckingLinks, setIsCheckingLinks] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
   const loadJobs = useCallback(async () => {
     setIsLoading(true);
@@ -455,39 +472,39 @@ const AdminJobsPage = () => {
 
   const handleRssImport = async () => {
     setIsRssImporting(true);
+    setRssDialogState("running");
+    setRssDialogMessage("Stellenangebote werden von Stellenmarkt.de, Ärzteblatt und PraktischArzt geladen...");
+    setRssDialogResults(null);
+    setRssDialogOpen(true);
+
     try {
       const { triggerRssImport } = await import("@/lib/api/generation");
       const result = await triggerRssImport();
 
       if (!result.success) {
-        toast({
-          title: "RSS-Import fehlgeschlagen",
-          description: result.error || "Unbekannter Fehler",
-          variant: "destructive",
-        });
+        setRssDialogState("error");
+        setRssDialogMessage(result.error || "Unbekannter Fehler");
         return;
       }
 
-      const parts = [];
-      if (result.imported) parts.push(`${result.imported} importiert`);
-      if (result.updated) parts.push(`${result.updated} aktualisiert`);
-      if (result.skipped) parts.push(`${result.skipped} übersprungen`);
-      if (result.expired) parts.push(`${result.expired} abgelaufen`);
-
-      toast({
-        title: "RSS-Import abgeschlossen",
-        description: parts.length > 0
-          ? parts.join(", ")
-          : "Keine neuen Assistenzarzt-Stellen gefunden",
+      setRssDialogState("success");
+      setRssDialogResults({
+        imported: result.imported,
+        updated: result.updated,
+        skipped: result.skipped,
+        expired: result.expired,
+        totalListings: result.totalFeedItems,
       });
+      setRssDialogMessage(
+        result.imported || result.updated
+          ? "Neue Stellen wurden erfolgreich importiert."
+          : "Keine neuen Assistenzarzt-Stellen gefunden."
+      );
 
       await loadJobs();
     } catch (error) {
-      toast({
-        title: "Fehler",
-        description: error instanceof Error ? error.message : "Unbekannter Fehler",
-        variant: "destructive",
-      });
+      setRssDialogState("error");
+      setRssDialogMessage(error instanceof Error ? error.message : "Unbekannter Fehler");
     } finally {
       setIsRssImporting(false);
     }
@@ -591,6 +608,76 @@ const AdminJobsPage = () => {
     void loadJobs();
   };
 
+  const toggleSelectJob = (jobId: string) => {
+    setSelectedJobIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(jobId)) next.delete(jobId);
+      else next.add(jobId);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedJobIds.size === filteredJobs.length) {
+      setSelectedJobIds(new Set());
+    } else {
+      setSelectedJobIds(new Set(filteredJobs.map((j) => j.id)));
+    }
+  };
+
+  const handleBulkApprove = async () => {
+    if (selectedJobIds.size === 0) return;
+    setIsBulkProcessing(true);
+    let count = 0;
+    for (const jobId of selectedJobIds) {
+      const { error } = await supabase
+        .from("jobs")
+        .update({
+          import_status: "published",
+          is_published: true,
+          published_at: new Date().toISOString(),
+        })
+        .eq("id", jobId);
+      if (!error) count++;
+    }
+    setIsBulkProcessing(false);
+    setSelectedJobIds(new Set());
+    toast({ title: "Jobs genehmigt", description: `${count} Jobs wurden veröffentlicht.` });
+    void loadJobs();
+  };
+
+  const handleBulkDeactivate = async () => {
+    if (selectedJobIds.size === 0) return;
+    setIsBulkProcessing(true);
+    let count = 0;
+    for (const jobId of selectedJobIds) {
+      const { error } = await supabase
+        .from("jobs")
+        .update({ is_published: false, published_at: null })
+        .eq("id", jobId);
+      if (!error) count++;
+    }
+    setIsBulkProcessing(false);
+    setSelectedJobIds(new Set());
+    toast({ title: "Jobs deaktiviert", description: `${count} Jobs wurden deaktiviert.` });
+    void loadJobs();
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedJobIds.size === 0) return;
+    setIsBulkProcessing(true);
+    let count = 0;
+    for (const jobId of selectedJobIds) {
+      const { error } = await supabase.from("jobs").delete().eq("id", jobId);
+      if (!error) count++;
+    }
+    setIsBulkProcessing(false);
+    setSelectedJobIds(new Set());
+    toast({ title: "Jobs gelöscht", description: `${count} Jobs wurden entfernt.` });
+    if (editingJobId && selectedJobIds.has(editingJobId)) resetForm();
+    void loadJobs();
+  };
+
   const getStatusBadge = (job: Tables<"jobs">) => {
     const status = (job as any).import_status as string | null;
     switch (status) {
@@ -625,13 +712,17 @@ const AdminJobsPage = () => {
     }
   };
 
-  const filteredJobs = statusFilter === "all"
-    ? jobs
-    : statusFilter === "draft"
-      ? jobs.filter((j) => !(j as any).import_status || (j as any).import_status === "manual")
-      : statusFilter === "stale_links"
-        ? jobs.filter((j) => (j as any).link_status === "stale")
-        : jobs.filter((j) => (j as any).import_status === statusFilter);
+  const filteredJobs = useMemo(() => {
+    if (statusFilter === "all") return jobs;
+    if (statusFilter === "draft") return jobs.filter((j) => !(j as any).import_status || (j as any).import_status === "manual");
+    if (statusFilter === "stale_links") return jobs.filter((j) => (j as any).link_status === "stale");
+    return jobs.filter((j) => (j as any).import_status === statusFilter);
+  }, [jobs, statusFilter]);
+
+  // Clear selection when filter changes or jobs reload
+  useEffect(() => {
+    setSelectedJobIds(new Set());
+  }, [statusFilter, jobs]);
 
   const staleCount = jobs.filter((j) => (j as any).link_status === "stale" && j.is_published).length;
 
@@ -980,6 +1071,74 @@ const AdminJobsPage = () => {
               </Button>
             )}
           </div>
+
+          {/* Bulk action bar */}
+          {selectedJobIds.size > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/50 p-3 mt-3">
+              <span className="text-sm font-medium mr-1">
+                {selectedJobIds.size} ausgewählt
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="border-green-500 text-green-600 hover:bg-green-50"
+                disabled={isBulkProcessing}
+                onClick={handleBulkApprove}
+              >
+                {isBulkProcessing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Check className="mr-1 h-3.5 w-3.5" />}
+                Genehmigen
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={isBulkProcessing}
+                onClick={handleBulkDeactivate}
+              >
+                {isBulkProcessing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <X className="mr-1 h-3.5 w-3.5" />}
+                Deaktivieren
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive"
+                    disabled={isBulkProcessing}
+                  >
+                    {isBulkProcessing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Trash2 className="mr-1 h-3.5 w-3.5" />}
+                    Löschen
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>{selectedJobIds.size} Jobs löschen?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Diese Aktion entfernt die ausgewählten Jobs dauerhaft aus dem System.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={handleBulkDelete}
+                    >
+                      {selectedJobIds.size} Jobs löschen
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setSelectedJobIds(new Set())}
+              >
+                Auswahl aufheben
+              </Button>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -988,9 +1147,16 @@ const AdminJobsPage = () => {
             </div>
           ) : (
             <div className="overflow-x-auto -mx-6 px-6">
-              <Table className="min-w-[860px]">
+              <Table className="min-w-[900px]">
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={filteredJobs.length > 0 && selectedJobIds.size === filteredJobs.length}
+                        onCheckedChange={toggleSelectAll}
+                        aria-label="Alle auswählen"
+                      />
+                    </TableHead>
                     <TableHead>Titel</TableHead>
                     <TableHead>Quelle</TableHead>
                     <TableHead>Status</TableHead>
@@ -1007,6 +1173,13 @@ const AdminJobsPage = () => {
                     const isRssJob = importStatus && importStatus !== "manual";
                     return (
                       <TableRow key={job.id} className={isPending ? "bg-yellow-50/30 dark:bg-yellow-900/10" : undefined}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedJobIds.has(job.id)}
+                            onCheckedChange={() => toggleSelectJob(job.id)}
+                            aria-label={`${job.title} auswählen`}
+                          />
+                        </TableCell>
                         <TableCell>
                           <div className="font-medium">{job.title}</div>
                           <div className="text-xs text-muted-foreground">
@@ -1109,7 +1282,7 @@ const AdminJobsPage = () => {
                   })}
                   {jobs.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
                         Noch keine Jobs vorhanden.
                       </TableCell>
                     </TableRow>
@@ -1120,6 +1293,102 @@ const AdminJobsPage = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* RSS Import Progress Dialog */}
+      <Dialog open={rssDialogOpen} onOpenChange={(open) => { if (!isRssImporting) setRssDialogOpen(open); }}>
+        <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => { if (isRssImporting) e.preventDefault(); }}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Rss className="h-5 w-5" />
+              RSS-Import
+            </DialogTitle>
+            <DialogDescription>
+              {rssDialogState === "running"
+                ? "Import läuft..."
+                : rssDialogState === "success"
+                  ? "Import abgeschlossen"
+                  : "Import fehlgeschlagen"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {rssDialogState === "running" && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary shrink-0" />
+                  <p className="text-sm">{rssDialogMessage}</p>
+                </div>
+                <div className="space-y-2 pl-8 text-xs text-muted-foreground">
+                  <p>Stellenmarkt.de, Ärzteblatt und PraktischArzt werden durchsucht</p>
+                  <p>Arbeitgeber-Links werden aufgelöst</p>
+                  <p>KI-Zusammenfassungen werden generiert</p>
+                </div>
+              </div>
+            )}
+
+            {rssDialogState === "success" && rssDialogResults && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30 shrink-0">
+                    <Check className="h-4 w-4 text-green-600" />
+                  </div>
+                  <p className="text-sm">{rssDialogMessage}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 rounded-lg border p-3">
+                  {rssDialogResults.imported != null && (
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">{rssDialogResults.imported}</div>
+                      <div className="text-xs text-muted-foreground">Neu importiert</div>
+                    </div>
+                  )}
+                  {rssDialogResults.updated != null && (
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-blue-600">{rssDialogResults.updated}</div>
+                      <div className="text-xs text-muted-foreground">Aktualisiert</div>
+                    </div>
+                  )}
+                  {rssDialogResults.skipped != null && (
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-muted-foreground">{rssDialogResults.skipped}</div>
+                      <div className="text-xs text-muted-foreground">Übersprungen</div>
+                    </div>
+                  )}
+                  {rssDialogResults.expired != null && (
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-orange-500">{rssDialogResults.expired}</div>
+                      <div className="text-xs text-muted-foreground">Abgelaufen</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {rssDialogState === "success" && !rssDialogResults && (
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30 shrink-0">
+                  <Check className="h-4 w-4 text-green-600" />
+                </div>
+                <p className="text-sm">{rssDialogMessage}</p>
+              </div>
+            )}
+
+            {rssDialogState === "error" && (
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30 shrink-0">
+                  <X className="h-4 w-4 text-red-600" />
+                </div>
+                <p className="text-sm text-red-600">{rssDialogMessage}</p>
+              </div>
+            )}
+          </div>
+
+          {!isRssImporting && (
+            <DialogFooter>
+              <Button onClick={() => setRssDialogOpen(false)}>Schließen</Button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
