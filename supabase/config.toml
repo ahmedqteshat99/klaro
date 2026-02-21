@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.backfill-job-states]
 verify_jwt = false
+
+[functions.scrape-hospital-jobs]
+verify_jwt = false
