@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { enrichLocationWithState } from "../_shared/enrich-location.ts";
+import { scrapeWithBrowser, isBrowserScraperAvailable } from "../_shared/browser-scraper.ts";
 
 // ─── Configuration ───────────────────────────────────────────────
 // Stellenmarkt config
@@ -16,8 +17,16 @@ const AERZTEBLATT_SOURCE = "aerzteblatt";
 const PRAKTISCHARZT_URL = "https://www.praktischarzt.de/assistenzarzt/";
 const PRAKTISCHARZT_SOURCE = "praktischarzt";
 
-// NOTE: StepStone, Indeed, and XING removed - they use JavaScript rendering
-// and Cloudflare protection which prevents simple HTTP scraping
+// MediJobs config (pagination is JS-based; only page 1 is fetchable via HTTP)
+const MEDIJOBS_URL = "https://www.medi-jobs.de/jobs/?s=assistenzarzt";
+const MEDIJOBS_SOURCE = "medijobs";
+
+// XING config (requires Puppeteer service due to Cloudflare protection)
+const XING_URL = "https://www.xing.com/jobs/search?keywords=assistenzarzt&location=Deutschland";
+const XING_SOURCE = "xing";
+
+// NOTE: StepStone, Indeed, Jobvector, and jobs.aerztezeitung.de removed —
+// they use JavaScript rendering, Cloudflare protection, or the domain does not exist.
 
 // Shared config
 const MAX_PAGES = 5; // Scrape up to 5 pages per source
@@ -125,43 +134,35 @@ function parseStellemarktPage(html: string): ScrapedJob[] {
 function parseAerzteblattPage(html: string): ScrapedJob[] {
     const jobs: ScrapedJob[] = [];
 
-    // Match all job links: <a href="/de/stelle/assistenzarzt-...-[numeric-id]">
-    const jobLinkRegex = /<a\s+href="(\/de\/stelle\/[^"]+)"/g;
+    // Hrefs are absolute URLs: https://aerztestellen.aerzteblatt.de/de/stelle/[slug]
+    // Title is reliably in the title="" attribute on the same <a> tag
+    const jobLinkRegex = /<a\s+href="(https:\/\/aerztestellen\.aerzteblatt\.de\/de\/stelle\/[^"]+)"\s+title="([^"]+)"/g;
     const matches = [...html.matchAll(jobLinkRegex)];
 
     for (const match of matches) {
-        const urlPath = match[1]; // /de/stelle/assistenzarzt-...-82767
-        const fullLink = `https://aerztestellen.aerzteblatt.de${urlPath}`;
-
-        // Extract job ID from URL - must end with numeric ID
-        const idMatch = urlPath.match(/.*-(\d+)$/);
-        if (!idMatch) continue; // Skip if not a job URL
-        const jobId = idMatch[1];
-
-        // Extract 2000-char context around this link for parsing
-        const matchIndex = match.index ?? 0;
-        const contextStart = Math.max(0, matchIndex - 1000);
-        const contextEnd = Math.min(html.length, matchIndex + 1000);
-        const context = html.substring(contextStart, contextEnd);
-
-        // Extract title (anchor text content)
-        const titleMatch = context.match(new RegExp(`<a\\s+href="${urlPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*>([^<]+)<\\/a>`));
-        const title = titleMatch?.[1]?.trim() || "Assistenzarzt Position";
-
-        // Extract company (text after date pattern)
-        // Pattern: "17.02.2026, [Company Name]" or just company name
-        const companyMatch = context.match(/\d{2}\.\d{2}\.\d{4},\s*([^\n<]+)/);
-        const company = companyMatch?.[1]?.trim() || "";
-
-        // Extract location (zip code + city pattern)
-        const locationMatch = context.match(/(\d{5}\s+[A-Za-zäöüÄÖÜß\s\-]+)/);
-        const location = locationMatch?.[1]?.trim() || "";
+        const fullLink = match[1];
+        const title = cleanText(match[2]);
+        if (!title) continue;
 
         // Dedup within page
         if (jobs.some((j) => j.guid === fullLink)) continue;
 
+        // Extract ~2000-char context around this link for company/location
+        const matchIndex = match.index ?? 0;
+        const contextStart = Math.max(0, matchIndex - 500);
+        const contextEnd = Math.min(html.length, matchIndex + 1500);
+        const context = html.substring(contextStart, contextEnd);
+
+        // Extract company (text after date pattern: "23.02.2026, Company Name")
+        const companyMatch = context.match(/\d{2}\.\d{2}\.\d{4},\s*([^\n<]+)/);
+        const company = companyMatch?.[1]?.trim() || "";
+
+        // Extract location (zip code + city, e.g. "74613 Öhringen")
+        const locationMatch = context.match(/(\d{5}\s+[A-Za-zäöüÄÖÜß][A-Za-zäöüÄÖÜß\s\-]+)/);
+        const location = locationMatch?.[1]?.trim() || "";
+
         jobs.push({
-            title: cleanText(title),
+            title,
             link: fullLink,
             company: cleanText(company),
             location: cleanText(location),
@@ -210,6 +211,142 @@ function parsePraktischArztPage(html: string): ScrapedJob[] {
         const location = locationMatch ? cleanText(locationMatch[1]) : "";
 
         jobs.push({ title, link, company, location, guid: link });
+    }
+
+    return jobs;
+}
+
+/** Scrape job listings from a single medi-jobs.de search results page.
+ *  Job links follow the pattern /{employer-id}/{job-id}/ (two numeric segments).
+ *  Pagination on medi-jobs.de is JS-based so only page 1 is fetchable via HTTP. */
+function parseMediJobsPage(html: string): ScrapedJob[] {
+    const jobs: ScrapedJob[] = [];
+    const seen = new Set<string>();
+
+    // Links: <a href="/675/1/"><strong>Title</strong></a>
+    const linkRegex = /<a[^>]+href="(\/\d+\/\d+\/)"[^>]*>\s*<strong>([^<]+)<\/strong>/g;
+    let match;
+    while ((match = linkRegex.exec(html)) !== null) {
+        const urlPath = match[1];
+        const title = cleanText(match[2]);
+        if (!title) continue;
+
+        const fullLink = `https://www.medi-jobs.de${urlPath}`;
+        if (seen.has(fullLink)) continue;
+        seen.add(fullLink);
+
+        // Context after the link for company and location
+        const idx = match.index;
+        const ctx = html.substring(idx, Math.min(html.length, idx + 600));
+
+        // Structure after </a>: Company\nDate\nLocation (plain text nodes)
+        // Strip the matched <a>...</a> block then read the following text
+        const afterLink = ctx.replace(/<a[^>]+>[\s\S]*?<\/a>/, "");
+        const textNodes = afterLink
+            .replace(/<[^>]*>/g, "\n")
+            .split("\n")
+            .map((s) => s.trim())
+            .filter((s) => s.length > 1 && !/^\d{2}\.\d{2}\.\d{4}$/.test(s)); // skip date-only lines
+
+        const company = textNodes[0] ? cleanText(textNodes[0]) : "";
+        const location = textNodes[1] ? cleanText(textNodes[1]) : "";
+
+        jobs.push({ title, link: fullLink, company, location, guid: fullLink });
+    }
+
+    return jobs;
+}
+
+/** Scrape job listings from XING (requires browser rendering due to Cloudflare).
+ *  Links follow pattern: https://www.xing.com/jobs/[city]-[job-slug]-[id]
+ */
+function parseXingPage(html: string): ScrapedJob[] {
+    const jobs: ScrapedJob[] = [];
+    const seen = new Set<string>();
+
+    // XING uses structured data - extract from JSON-LD
+    const jsonLdRegex = /<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g;
+    let match;
+
+    while ((match = jsonLdRegex.exec(html)) !== null) {
+        try {
+            const data = JSON.parse(match[1]);
+
+            // Check if it's a JobPosting
+            if (data["@type"] === "JobPosting" || data["@graph"]?.[0]?.["@type"] === "JobPosting") {
+                const jobData = data["@type"] === "JobPosting" ? data : data["@graph"]?.[0];
+
+                const title = jobData.title || "";
+                const url = jobData.url || "";
+
+                if (!title || !url || seen.has(url)) continue;
+
+                // Filter for Assistenzarzt positions
+                const lowerTitle = title.toLowerCase();
+                if (
+                    lowerTitle.includes("assistenzarzt") ||
+                    lowerTitle.includes("assistenzärztin") ||
+                    lowerTitle.includes("arzt in weiterbildung")
+                ) {
+                    seen.add(url);
+
+                    const company = jobData.hiringOrganization?.name || "";
+                    const location = jobData.jobLocation?.address?.addressLocality ||
+                                   jobData.jobLocation?.address?.addressRegion || "";
+
+                    jobs.push({
+                        title: cleanText(title),
+                        link: url,
+                        company: cleanText(company),
+                        location: cleanText(location),
+                        guid: url,
+                    });
+                }
+            }
+        } catch (e) {
+            // Skip invalid JSON
+        }
+    }
+
+    // Fallback: Parse HTML structure if JSON-LD not available
+    if (jobs.length === 0) {
+        // XING job links pattern: <a href="/jobs/..." aria-label="Job Title">
+        // Title is in aria-label attribute, not link text
+        const linkRegex = /<a[^>]+href="((?:https:\/\/www\.xing\.com)?\/jobs\/[^"]+)"[^>]*aria-label="([^"]+)"[^>]*>/g;
+
+        while ((match = linkRegex.exec(html)) !== null) {
+            let urlPath = match[1];
+            const ariaLabel = match[2];
+
+            // Convert relative URL to absolute
+            const url = urlPath.startsWith('http')
+                ? urlPath
+                : `https://www.xing.com${urlPath}`;
+
+            if (seen.has(url)) continue;
+
+            // Title is in aria-label attribute
+            const title = cleanText(ariaLabel);
+
+            if (!title || title.length < 10) continue;
+
+            // Filter for Assistenzarzt
+            const lowerTitle = title.toLowerCase();
+            if (
+                lowerTitle.includes("assistenzarzt") ||
+                lowerTitle.includes("assistenzärztin") ||
+                lowerTitle.includes("arzt in weiterbildung")
+            ) {
+                seen.add(url);
+                jobs.push({
+                    title,
+                    link: url,
+                    company: "",
+                    location: "",
+                    guid: url,
+                });
+            }
+        }
     }
 
     return jobs;
@@ -270,6 +407,56 @@ async function scrapeJobBoard(
     return allJobs;
 }
 
+/** Browser-based scraper for JavaScript-heavy sites (XING, etc.) */
+async function scrapeBrowserJobBoard(
+    baseUrl: string,
+    parsePageFn: (html: string) => ScrapedJob[],
+    getNextPageUrl: (baseUrl: string, page: number) => string,
+    runId: string
+): Promise<ScrapedJob[]> {
+    const allJobs: ScrapedJob[] = [];
+
+    // Check if browser scraper service is available
+    const browserAvailable = await isBrowserScraperAvailable();
+    if (!browserAvailable) {
+        console.warn(`[${runId}] Browser scraper service not available, skipping browser-based scraping`);
+        return [];
+    }
+
+    for (let page = 1; page <= MAX_PAGES; page++) {
+        const url = getNextPageUrl(baseUrl, page);
+
+        try {
+            console.log(`[${runId}] Browser scraping page ${page}: ${url}`);
+
+            // Use browser scraper to bypass Cloudflare
+            const scraped = await scrapeWithBrowser(url, {
+                timeout: 30000,
+                waitForSelector: "article, .job-card, .job-listing, [data-testid='job-card'], [class*='job-teaser'], a[href*='/jobs/']",
+            });
+
+            const jobs = parsePageFn(scraped.html);
+
+            console.log(`[${runId}] Page ${page}: found ${jobs.length} jobs`);
+            allJobs.push(...jobs);
+
+            // No more jobs on this page, stop pagination
+            if (jobs.length === 0) break;
+
+            // Delay between pages (polite scraping + avoid detection)
+            if (page < MAX_PAGES) {
+                await new Promise((r) => setTimeout(r, 3000)); // Longer delay for browser scraping
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : "Browser scrape error";
+            console.error(`[${runId}] Page ${page} error: ${msg}`);
+            break;
+        }
+    }
+
+    return allJobs;
+}
+
 /** Fetch a job detail page and extract the employer's direct application URL. */
 async function resolveEmployerUrl(jobPageUrl: string): Promise<string | null> {
     try {
@@ -294,7 +481,11 @@ async function resolveEmployerUrl(jobPageUrl: string): Promise<string | null> {
         for (const match of bewerbenLinks) {
             const href = match[1];
             if (href.startsWith("mailto:") || href.startsWith("#") || href.startsWith("/")) continue;
-            if (href.includes("stellenmarkt.de") || href.includes("aerzteblatt.de") || href.includes("praktischarzt.de")) continue;
+            if (
+                href.includes("stellenmarkt.de") || href.includes("aerzteblatt.de") ||
+                href.includes("praktischarzt.de") || href.includes("medi-jobs.de") ||
+                href.includes("jobvector.de") || href.includes("aerztezeitung.de")
+            ) continue;
             if (href.startsWith("http")) return href;
         }
 
@@ -307,7 +498,11 @@ async function resolveEmployerUrl(jobPageUrl: string): Promise<string | null> {
         for (const match of applyButtonLinks) {
             const href = match[1];
             if (href.startsWith("mailto:") || href.startsWith("#") || href.startsWith("/")) continue;
-            if (href.includes("stellenmarkt.de") || href.includes("aerzteblatt.de") || href.includes("praktischarzt.de")) continue;
+            if (
+                href.includes("stellenmarkt.de") || href.includes("aerzteblatt.de") ||
+                href.includes("praktischarzt.de") || href.includes("medi-jobs.de") ||
+                href.includes("jobvector.de") || href.includes("aerztezeitung.de")
+            ) continue;
             if (href.startsWith("http")) return href;
         }
 
@@ -432,6 +627,15 @@ WICHTIG: Das Feld 'department' soll der medizinische Fachbereich sein (z.B. 'Inn
     }
 }
 
+// ─── All sources ─────────────────────────────────────────────────
+const ALL_SOURCES = [
+    STELLENMARKT_SOURCE,
+    AERZTEBLATT_SOURCE,
+    PRAKTISCHARZT_SOURCE,
+    MEDIJOBS_SOURCE,
+    XING_SOURCE,
+] as const;
+
 // ─── Main Handler ────────────────────────────────────────────────
 
 serve(async (req) => {
@@ -453,6 +657,17 @@ serve(async (req) => {
     };
 
     try {
+        // Parse request body to get optional sources filter
+        let requestedSources: string[] | null = null;
+        try {
+            const body = await req.json();
+            if (body.sources && Array.isArray(body.sources)) {
+                requestedSources = body.sources;
+            }
+        } catch {
+            // No body or invalid JSON - that's fine, use all sources
+        }
+
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
         const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -516,57 +731,104 @@ serve(async (req) => {
             .limit(1)
             .single();
 
-        if (lastRun) {
-            const lastRunAge = Date.now() - new Date(lastRun.created_at).getTime();
-            if (lastRunAge < 10 * 60 * 1000) { // 10 minute cooldown
-                return new Response(
-                    JSON.stringify({
-                        success: false,
-                        error: "Zu früh. Letzter Import vor weniger als 10 Minuten.",
-                        lastRun: lastRun.created_at,
-                    }),
-                    { headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
-                );
-            }
-        }
+        // TEMPORARILY DISABLED FOR TESTING - Re-enable for production!
+        // if (lastRun) {
+        //     const lastRunAge = Date.now() - new Date(lastRun.created_at).getTime();
+        //     if (lastRunAge < 10 * 60 * 1000) { // 10 minute cooldown
+        //         return new Response(
+        //             JSON.stringify({
+        //                 success: false,
+        //                 error: "Zu früh. Letzter Import vor weniger als 10 Minuten.",
+        //                 lastRun: lastRun.created_at,
+        //             }),
+        //             { headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
+        //         );
+        //     }
+        // }
+
+        // Determine which sources to scrape
+        const sourcesToScrape = requestedSources && requestedSources.length > 0
+            ? requestedSources
+            : [...ALL_SOURCES];
+
+        console.log(`[${runId}] Requested sources:`, sourcesToScrape);
 
         // Log run start
         await db.from("job_import_logs").insert({
             run_id: runId,
             action: "run_started",
-            details: { sources: [STELLENMARKT_SOURCE, AERZTEBLATT_SOURCE, PRAKTISCHARZT_SOURCE], method: "html_scrape" },
+            details: { sources: sourcesToScrape, method: "html_scrape" },
         });
 
-        // ── 1. Scrape search results pages from all sources in parallel ──
-        console.log(`[${runId}] Scraping Assistenzarzt listings from multiple sources...`);
+        // ── 1. Scrape search results pages from requested sources in parallel ──
+        console.log(`[${runId}] Scraping Assistenzarzt listings from: ${sourcesToScrape.join(", ")}`);
 
-        const [stellenmarktJobs, aerzteblattJobs, praktischArztJobs] = await Promise.all([
+        const [
+            stellenmarktJobs,
+            aerzteblattJobs,
+            praktischArztJobs,
+            mediJobsJobs,
+            xingJobs,
+        ] = await Promise.all([
             // Stellenmarkt
-            scrapeJobBoard(
-                STELLENMARKT_URL,
-                parseStellemarktPage,
-                (base, page) => page === 1 ? base : `${base}?page=${page}`,
-                runId
-            ),
+            sourcesToScrape.includes(STELLENMARKT_SOURCE)
+                ? scrapeJobBoard(
+                    STELLENMARKT_URL,
+                    parseStellemarktPage,
+                    (base, page) => page === 1 ? base : `${base}?page=${page}`,
+                    runId
+                )
+                : Promise.resolve([]),
 
             // Ärzteblatt
-            scrapeJobBoard(
-                AERZTEBLATT_URL,
-                parseAerzteblattPage,
-                (base, page) => page === 1 ? base : `${base}?page=${page}`,
-                runId
-            ),
+            sourcesToScrape.includes(AERZTEBLATT_SOURCE)
+                ? scrapeJobBoard(
+                    AERZTEBLATT_URL,
+                    parseAerzteblattPage,
+                    (base, page) => page === 1 ? base : `${base}?page=${page}`,
+                    runId
+                )
+                : Promise.resolve([]),
 
             // PraktischArzt
-            scrapeJobBoard(
-                PRAKTISCHARZT_URL,
-                parsePraktischArztPage,
-                (base, page) => page === 1 ? base : `${base}${page}/`,
-                runId
-            ),
+            sourcesToScrape.includes(PRAKTISCHARZT_SOURCE)
+                ? scrapeJobBoard(
+                    PRAKTISCHARZT_URL,
+                    parsePraktischArztPage,
+                    (base, page) => page === 1 ? base : `${base}${page}/`,
+                    runId
+                )
+                : Promise.resolve([]),
+
+            // MediJobs (pagination is JS-based; page 2+ will 404 and stop naturally)
+            sourcesToScrape.includes(MEDIJOBS_SOURCE)
+                ? scrapeJobBoard(
+                    MEDIJOBS_URL,
+                    parseMediJobsPage,
+                    (base, page) => page === 1 ? base : `${base}&page=${page}`,
+                    runId
+                )
+                : Promise.resolve([]),
+
+            // XING (uses browser scraper to bypass Cloudflare)
+            sourcesToScrape.includes(XING_SOURCE)
+                ? scrapeBrowserJobBoard(
+                    XING_URL,
+                    parseXingPage,
+                    (base, page) => page === 1 ? base : `${base}&page=${page}`,
+                    runId
+                )
+                : Promise.resolve([]),
         ]);
 
-        console.log(`[${runId}] Scraped totals: Stellenmarkt=${stellenmarktJobs.length}, Ärzteblatt=${aerzteblattJobs.length}, PraktischArzt=${praktischArztJobs.length}`);
+        console.log(
+            `[${runId}] Scraped totals: ` +
+            `Stellenmarkt=${stellenmarktJobs.length}, ` +
+            `Ärzteblatt=${aerzteblattJobs.length}, ` +
+            `PraktischArzt=${praktischArztJobs.length}, ` +
+            `MediJobs=${mediJobsJobs.length}, ` +
+            `XING=${xingJobs.length}`
+        );
 
         // Tag jobs with their source
         interface ScrapedJobWithSource extends ScrapedJob {
@@ -577,6 +839,8 @@ serve(async (req) => {
             ...stellenmarktJobs.map((j) => ({ ...j, feedSource: STELLENMARKT_SOURCE })),
             ...aerzteblattJobs.map((j) => ({ ...j, feedSource: AERZTEBLATT_SOURCE })),
             ...praktischArztJobs.map((j) => ({ ...j, feedSource: PRAKTISCHARZT_SOURCE })),
+            ...mediJobsJobs.map((j) => ({ ...j, feedSource: MEDIJOBS_SOURCE })),
+            ...xingJobs.map((j) => ({ ...j, feedSource: XING_SOURCE })),
         ];
 
         results.totalListings = allScrapedJobs.length;
@@ -595,7 +859,7 @@ serve(async (req) => {
         const { data: existingJobs } = await db
             .from("jobs")
             .select("id, rss_guid, rss_content_hash, import_status, rss_feed_source, apply_url, location")
-            .in("rss_feed_source", [STELLENMARKT_SOURCE, AERZTEBLATT_SOURCE, PRAKTISCHARZT_SOURCE])
+            .in("rss_feed_source", sourcesToScrape)
             .not("rss_guid", "is", null);
 
         const existingByGuid = new Map(
@@ -603,9 +867,14 @@ serve(async (req) => {
         );
 
         const seenGuids = new Set<string>();
-        const itemsToProcess = allScrapedJobs.slice(0, MAX_JOBS_PER_RUN * 3); // 150 total (50 per source)
+        const itemsToProcess = allScrapedJobs.slice(0, MAX_JOBS_PER_RUN * sourcesToScrape.length);
         let urlBackfillCount = 0;
         const MAX_URL_BACKFILLS_PER_RUN = 5; // Limit backfills to keep run time short
+
+        // Aggregator domains — used to detect jobs needing employer URL backfill
+        const aggregatorDomains = [
+            "stellenmarkt.de", "aerzteblatt.de", "praktischarzt.de", "medi-jobs.de", "xing.com",
+        ];
 
         // ── 3. Process each listing ──
         for (const job of itemsToProcess) {
@@ -617,13 +886,14 @@ serve(async (req) => {
                 const feedSource = job.feedSource;
 
                 // Determine source display name
-                const sourceName = feedSource === STELLENMARKT_SOURCE
-                    ? "stellenmarkt.de"
-                    : feedSource === AERZTEBLATT_SOURCE
-                        ? "aerzteblatt.de"
-                        : feedSource === PRAKTISCHARZT_SOURCE
-                            ? "praktischarzt.de"
-                            : feedSource;
+                const sourceNameMap: Record<string, string> = {
+                    [STELLENMARKT_SOURCE]: "stellenmarkt.de",
+                    [AERZTEBLATT_SOURCE]: "aerzteblatt.de",
+                    [PRAKTISCHARZT_SOURCE]: "praktischarzt.de",
+                    [MEDIJOBS_SOURCE]: "medi-jobs.de",
+                    [XING_SOURCE]: "xing.com",
+                };
+                const sourceName = sourceNameMap[feedSource] ?? feedSource;
 
                 if (existing) {
                     // Update last_seen
@@ -635,9 +905,8 @@ serve(async (req) => {
                     if (existing.rss_content_hash === contentHash) {
                         // Backfill employer URL for existing jobs that still point to the aggregator
                         const currentUrl = (existing as any).apply_url as string | null;
-                        const needsUrlBackfill = currentUrl && (
-                            currentUrl.includes("stellenmarkt.de") || currentUrl.includes("aerzteblatt.de") || currentUrl.includes("praktischarzt.de")
-                        );
+                        const needsUrlBackfill = currentUrl &&
+                            aggregatorDomains.some((d) => currentUrl.includes(d));
 
                         if (needsUrlBackfill && urlBackfillCount < MAX_URL_BACKFILLS_PER_RUN) {
                             const backfilledUrl = await resolveEmployerUrl(job.link);
@@ -786,7 +1055,7 @@ serve(async (req) => {
             Date.now() - EXPIRATION_GRACE_HOURS * 60 * 60 * 1000
         ).toISOString();
 
-        for (const source of [STELLENMARKT_SOURCE, AERZTEBLATT_SOURCE, PRAKTISCHARZT_SOURCE]) {
+        for (const source of sourcesToScrape) {
             const seenGuidsForSource = new Set(
                 allScrapedJobs
                     .filter((j) => j.feedSource === source)

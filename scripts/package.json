@@ -1,0 +1,19 @@
+{
+  "name": "assistenzarzt-puppeteer-service",
+  "version": "1.0.0",
+  "description": "Puppeteer service for scraping JavaScript-heavy job sites",
+  "main": "puppeteer-service.js",
+  "scripts": {
+    "start": "node puppeteer-service.js",
+    "dev": "nodemon puppeteer-service.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "puppeteer": "^24.37.5",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}

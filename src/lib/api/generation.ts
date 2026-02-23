@@ -286,10 +286,10 @@ export async function backfillJobDescriptions(): Promise<{
 }
 
 /**
- * Trigger RSS job import from Stellenmarkt.de.
+ * Trigger RSS job import from specified sources or all sources.
  * Admin-only operation.
  */
-export async function triggerRssImport(): Promise<{
+export async function triggerRssImport(sources?: string[]): Promise<{
   success: boolean;
   runId?: string;
   totalFeedItems?: number;
@@ -315,13 +315,33 @@ export async function triggerRssImport(): Promise<{
     expired?: number;
     errors?: number;
     errorMessages?: string[];
-  }>("import-rss-jobs", {});
+  }>("import-rss-jobs", sources ? { sources } : {});
 
   if (result.error) {
     return { success: false, error: result.error };
   }
 
   return result.data ?? { success: false, error: "Keine Antwort vom Server" };
+}
+
+/**
+ * Trigger XING job import specifically.
+ * Admin-only operation.
+ */
+export async function triggerXingImport(): Promise<{
+  success: boolean;
+  runId?: string;
+  totalFeedItems?: number;
+  matchingItems?: number;
+  imported?: number;
+  updated?: number;
+  skipped?: number;
+  expired?: number;
+  errors?: number;
+  errorMessages?: string[];
+  error?: string;
+}> {
+  return triggerRssImport(['xing']);
 }
 
 /**

@@ -1,52 +1,46 @@
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = 'https://sfmgdvjwmoxoeqmcarbv.supabase.co';
-const SUPABASE_SERVICE_ROLE_KEY = '8f207cb76e501764d7805dafdeaa4bd4a146d32fb3be88e4da07555e9ec0cdb6';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNmbWdkdmp3bW94b2VxbWNhcmJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5NjE5OTMsImV4cCI6MjA4NTUzNzk5M30.yyzU7Vwa1LBlcIlj1sJwb8Vtsb3DX__6JkKcCGmYlJw';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false
-  }
-});
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-async function checkCareerPages() {
-  const { data: hospitals, error } = await supabase
+async function check() {
+  // Get hospitals WITH career pages
+  const { data: withPages, error } = await supabase
     .from('hospitals')
-    .select('name, website, career_page_url, career_platform, last_scrape_success')
-    .eq('is_active', true)
-    .order('name');
+    .select('*')
+    .not('career_page_url', 'is', null)
+    .limit(5);
 
   if (error) {
-    console.error('❌ Error:', error);
-    process.exit(1);
+    console.error('Error:', error);
+    return;
   }
 
-  console.log('\n📊 Career Page Discovery Results:\n');
-  console.log('═'.repeat(80));
-
-  const found = hospitals?.filter(h => h.career_page_url) || [];
-  const notFound = hospitals?.filter(h => !h.career_page_url) || [];
-
-  console.log(`\n✅ Found career pages: ${found.length}/${hospitals?.length || 0}\n`);
-
-  found.forEach(h => {
-    console.log(`✓ ${h.name}`);
-    console.log(`  Platform: ${h.career_platform || 'unknown'}`);
-    console.log(`  URL: ${h.career_page_url}`);
-    console.log();
+  console.log(`\n✅ Sample hospitals WITH career pages:\n`);
+  withPages.forEach((h, i) => {
+    console.log(`${i + 1}. ${h.name}`);
+    console.log(`   Career URL: ${h.career_page_url}`);
+    console.log(`   All columns:`, Object.keys(h).join(', '));
+    console.log('');
   });
 
-  if (notFound.length > 0) {
-    console.log(`\n❌ No career page found: ${notFound.length}\n`);
-    notFound.forEach(h => {
-      console.log(`✗ ${h.name}`);
-      console.log(`  Website: ${h.website}`);
-      console.log();
-    });
-  }
+  // Count totals
+  const { count: withCount } = await supabase
+    .from('hospitals')
+    .select('*', { count: 'exact', head: true })
+    .not('career_page_url', 'is', null);
 
-  console.log('═'.repeat(80));
+  const { count: withoutCount } = await supabase
+    .from('hospitals')
+    .select('*', { count: 'exact', head: true })
+    .is('career_page_url', null);
+
+  console.log(`\n📊 Summary:`);
+  console.log(`   Hospitals WITH career pages: ${withCount}`);
+  console.log(`   Hospitals WITHOUT career pages: ${withoutCount}`);
+  console.log(`   Total: ${(withCount || 0) + (withoutCount || 0)}`);
 }
 
-checkCareerPages();
+check();

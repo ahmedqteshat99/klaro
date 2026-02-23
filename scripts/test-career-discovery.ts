@@ -11,13 +11,10 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 });
 
 async function testCareerDiscovery() {
-  console.log('🔍 Calling career page discovery function...\n');
+  console.log('🔍 Running career page discovery...\n');
 
   const { data, error } = await supabase.functions.invoke('discover-career-pages', {
-    body: {},
-    headers: {
-      'x-cron-secret': 'd085d45aef36d9b077247ecf4ed24e865c2ae28c809ef34a599d4f6572d606c5'
-    }
+    body: {}
   });
 
   if (error) {
@@ -25,7 +22,7 @@ async function testCareerDiscovery() {
     process.exit(1);
   }
 
-  console.log('✅ Success!\n');
+  console.log('✅ Career discovery complete!\n');
   console.log(JSON.stringify(data, null, 2));
 }
 
