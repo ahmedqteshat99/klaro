@@ -16,6 +16,9 @@ const AERZTEBLATT_SOURCE = "aerzteblatt";
 const PRAKTISCHARZT_URL = "https://www.praktischarzt.de/assistenzarzt/";
 const PRAKTISCHARZT_SOURCE = "praktischarzt";
 
+// NOTE: StepStone, Indeed, and XING removed - they use JavaScript rendering
+// and Cloudflare protection which prevents simple HTTP scraping
+
 // Shared config
 const MAX_PAGES = 5; // Scrape up to 5 pages per source
 const MAX_JOBS_PER_RUN = 50; // Per source
@@ -336,11 +339,23 @@ async function resolveEmployerUrl(jobPageUrl: string): Promise<string | null> {
     }
 }
 
-/** Generate an AI summary for a job using Claude. */
+interface AiJobEnrichment {
+    description: string;
+    department: string | null;
+    tags: string[];
+}
+
+/** Generate an AI summary + extract department and tags for a job using Claude. */
 async function generateAiSummary(
     job: ScrapedJob,
     apiKey: string
-): Promise<string> {
+): Promise<AiJobEnrichment> {
+    const fallback: AiJobEnrichment = {
+        description: `${job.title}${job.company ? ` bei ${job.company}` : ""}${job.location ? ` in ${job.location}` : ""}.`,
+        department: null,
+        tags: [],
+    };
+
     try {
         const contextParts = [
             `TITEL: ${job.title}`,
@@ -348,12 +363,18 @@ async function generateAiSummary(
             job.location ? `STANDORT: ${job.location}` : null,
         ].filter(Boolean).join("\n");
 
-        const prompt = `Basierend auf dieser Stellenanzeige, schreibe eine professionelle, einladende Zusammenfassung in 2-3 Sätzen auf Deutsch.
-Beschreibe kurz: Was für eine Stelle/Klinik ist es, was sind die Hauptaufgaben, und was macht die Position attraktiv.
+        const prompt = `Analysiere diese Stellenanzeige für einen Assistenzarzt und extrahiere strukturierte Daten.
 
 ${contextParts}
 
-Antworte NUR mit der Zusammenfassung, keine Anführungszeichen, keine Erklärungen.`;
+Antworte NUR mit validem JSON in diesem exakten Format (keine Erklärungen, kein Markdown):
+{
+  "description": "2-3 professionelle, einladende Sätze auf Deutsch. Beschreibe: Was für eine Klinik ist es, was sind die Hauptaufgaben, was macht die Stelle attraktiv.",
+  "department": "Medizinischer Fachbereich aus dem Titel, z.B. Innere Medizin, Chirurgie, Pädiatrie, Gynäkologie, Anästhesie, Notaufnahme, Psychiatrie, Radiologie, Neurologie, Orthopädie. Wenn nicht eindeutig erkennbar, gib null zurück.",
+  "tags": ["Vollzeit ODER Teilzeit (falls erkennbar)", "Weiterbildung (falls im Titel)", "weitere relevante Stichworte wie Notaufnahme, Intensivstation, max 4 Tags gesamt"]
+}
+
+WICHTIG: Das Feld 'department' soll der medizinische Fachbereich sein (z.B. 'Innere Medizin'), NICHT der vollständige Stellentitel.`;
 
         const response = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
@@ -363,26 +384,51 @@ Antworte NUR mit der Zusammenfassung, keine Anführungszeichen, keine Erklärung
                 "anthropic-version": "2023-06-01",
             },
             body: JSON.stringify({
-                model: "claude-sonnet-4-5-20250929",
-                max_tokens: 250,
-                system: "Du schreibst kurze, professionelle Stellenzusammenfassungen auf Deutsch. Antworte nur mit dem Text.",
+                model: "claude-haiku-4-5-20250929",
+                max_tokens: 400,
+                system: "Du extrahierst strukturierte Daten aus deutschen Stellenanzeigen für Ärzte. Antworte NUR mit validem JSON, keine Erklärungen, kein Markdown.",
                 messages: [{ role: "user", content: prompt }],
             }),
         });
 
         if (!response.ok) {
             console.error(`AI API error: ${response.status}`);
-            return `${job.title}${job.company ? ` bei ${job.company}` : ""}${job.location ? ` in ${job.location}` : ""}.`;
+            return fallback;
         }
 
         const data = await response.json();
-        const text = data.content?.[0]?.text?.trim();
-        return text && text.length > 10
-            ? text
-            : `${job.title}${job.company ? ` bei ${job.company}` : ""}${job.location ? ` in ${job.location}` : ""}.`;
+        let rawText = data.content?.[0]?.text?.trim() ?? "";
+
+        // Strip markdown fences if present
+        rawText = rawText.replace(/```json\n?/gi, "").replace(/```\n?/g, "").trim();
+
+        let parsed: { description?: string; department?: string | null; tags?: string[] };
+        try {
+            parsed = JSON.parse(rawText);
+        } catch {
+            console.error("AI JSON parse error:", rawText);
+            return fallback;
+        }
+
+        const description = typeof parsed.description === "string" && parsed.description.length > 10
+            ? parsed.description.trim()
+            : fallback.description;
+
+        const department = typeof parsed.department === "string" && parsed.department.length > 1
+            ? parsed.department.trim()
+            : null;
+
+        const tags = Array.isArray(parsed.tags)
+            ? parsed.tags
+                .filter((t): t is string => typeof t === "string" && t.trim().length > 0)
+                .map((t) => t.trim())
+                .slice(0, 5)
+            : [];
+
+        return { description, department, tags };
     } catch (err) {
         console.error("AI summary error:", err);
-        return `${job.title}${job.company ? ` bei ${job.company}` : ""}${job.location ? ` in ${job.location}` : ""}.`;
+        return fallback;
     }
 }
 
@@ -491,7 +537,7 @@ serve(async (req) => {
             details: { sources: [STELLENMARKT_SOURCE, AERZTEBLATT_SOURCE, PRAKTISCHARZT_SOURCE], method: "html_scrape" },
         });
 
-        // ── 1. Scrape search results pages from both sources in parallel ──
+        // ── 1. Scrape search results pages from all sources in parallel ──
         console.log(`[${runId}] Scraping Assistenzarzt listings from multiple sources...`);
 
         const [stellenmarktJobs, aerzteblattJobs, praktischArztJobs] = await Promise.all([
@@ -636,13 +682,15 @@ serve(async (req) => {
                     if (updatedEmployerUrl) console.log(`[${runId}] Resolved employer URL: ${updatedEmployerUrl}`);
                     await new Promise((r) => setTimeout(r, 1000));
 
-                    const newSummary = await generateAiSummary(job, anthropicKey);
+                    const enrichment = await generateAiSummary(job, anthropicKey);
                     const updateApplyUrl = updatedEmployerUrl || job.link;
                     const enrichedLocation = enrichLocationWithState(job.location);
                     await db
                         .from("jobs")
                         .update({
-                            description: newSummary,
+                            description: enrichment.description,
+                            department: enrichment.department,
+                            tags: enrichment.tags.length > 0 ? enrichment.tags : null,
                             hospital_name: job.company || null,
                             location: enrichedLocation || null,
                             apply_url: updateApplyUrl,
@@ -668,7 +716,7 @@ serve(async (req) => {
                     if (employerUrl) console.log(`[${runId}] Resolved employer URL: ${employerUrl}`);
                     await new Promise((r) => setTimeout(r, 1000));
 
-                    const summary = await generateAiSummary(job, anthropicKey);
+                    const enrichment = await generateAiSummary(job, anthropicKey);
                     const applyUrl = employerUrl || job.link;
                     const enrichedLocation = enrichLocationWithState(job.location);
 
@@ -676,7 +724,9 @@ serve(async (req) => {
                         .from("jobs")
                         .insert({
                             title: job.title,
-                            description: summary,
+                            description: enrichment.description,
+                            department: enrichment.department,
+                            tags: enrichment.tags.length > 0 ? enrichment.tags : null,
                             hospital_name: job.company || null,
                             location: enrichedLocation || null,
                             apply_url: applyUrl,

@@ -17,13 +17,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowUpDown } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { ArrowUpDown, SlidersHorizontal } from "lucide-react";
 
 import JobsNavBar from "@/components/jobs/JobsNavBar";
 import JobsHero from "@/components/jobs/JobsHero";
 import JobSearchBar from "@/components/jobs/JobSearchBar";
 import type { SortOption } from "@/components/jobs/JobSearchBar";
-import JobFilterChips from "@/components/jobs/JobFilterChips";
+import JobFiltersSidebar, { extractBundesland } from "@/components/jobs/JobFiltersSidebar";
 import JobCard from "@/components/jobs/JobCard";
 import { JobCardSkeletonGrid } from "@/components/jobs/JobCardSkeleton";
 import JobsEmptyState from "@/components/jobs/JobsEmptyState";
@@ -34,9 +36,11 @@ const JobsPage = () => {
   const [jobs, setJobs] = useState<Tables<"jobs">[]>([]);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("newest");
+  // Locations now stores Bundesland values (derived from job.location)
   const [activeLocations, setActiveLocations] = useState<Set<string>>(new Set());
   const [activeDepartments, setActiveDepartments] = useState<Set<string>>(new Set());
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const deferredSearch = useDeferredValue(search);
   const baseUrl =
     (import.meta.env.VITE_PUBLIC_SITE_URL as string | undefined)?.trim().replace(/\/+$/, "") ||
@@ -82,6 +86,8 @@ const JobsPage = () => {
   const hasActiveFilters =
     activeLocations.size > 0 || activeDepartments.size > 0 || activeTags.size > 0 || deferredSearch.trim().length > 0;
 
+  const activeFilterCount = activeLocations.size + activeDepartments.size + activeTags.size;
+
   const clearAllFilters = useCallback(() => {
     setSearch("");
     setActiveLocations(new Set());
@@ -110,6 +116,7 @@ const JobsPage = () => {
   const filteredJobs = useMemo(() => {
     let result = jobs;
 
+    // Full-text search across all fields
     if (deferredSearch.trim()) {
       const term = deferredSearch.toLowerCase();
       result = result.filter((job) => {
@@ -131,16 +138,32 @@ const JobsPage = () => {
       });
     }
 
+    // Bundesland filter — match against derived Bundesland from job.location
     if (activeLocations.size > 0) {
-      result = result.filter((job) => job.location && activeLocations.has(job.location));
+      result = result.filter((job) => {
+        const bl = extractBundesland(job.location);
+        return bl !== null && activeLocations.has(bl);
+      });
     }
+
+    // Department filter — case-insensitive, cross-references tags too
     if (activeDepartments.size > 0) {
-      result = result.filter((job) => job.department && activeDepartments.has(job.department));
+      result = result.filter((job) => {
+        const deptLower = job.department?.toLowerCase() ?? "";
+        const tagsLower = (job.tags ?? []).map((t) => t.toLowerCase());
+        return [...activeDepartments].some((d) => {
+          const dLower = d.toLowerCase();
+          return deptLower === dLower || tagsLower.includes(dLower);
+        });
+      });
     }
+
+    // Tag filter — case-insensitive
     if (activeTags.size > 0) {
-      result = result.filter(
-        (job) => job.tags && job.tags.some((tag) => activeTags.has(tag))
-      );
+      result = result.filter((job) => {
+        const tagsLower = (job.tags ?? []).map((t) => t.toLowerCase());
+        return [...activeTags].some((t) => tagsLower.includes(t.toLowerCase()));
+      });
     }
 
     const sorted = [...result];
@@ -240,78 +263,121 @@ const JobsPage = () => {
     [isAuthenticated]
   );
 
+  // ─── Sidebar content (shared between desktop and mobile sheet) ────────────
+  const sidebarContent = (
+    <JobFiltersSidebar
+      jobs={jobs}
+      activeLocations={activeLocations}
+      activeDepartments={activeDepartments}
+      activeTags={activeTags}
+      onToggleLocation={toggleLocation}
+      onToggleDepartment={toggleDepartment}
+      onToggleTag={toggleTag}
+      onClearAll={clearAllFilters}
+      hasActiveFilters={hasActiveFilters}
+    />
+  );
+
   return (
     <div className="min-h-screen bg-background">
       <JobsNavBar isAuthenticated={isAuthenticated} />
 
       <JobsHero jobCount={jobs.length} isLoading={isLoading} />
 
-      {/* Sticky Search & Filters Bar */}
+      {/* Sticky Search Bar */}
       <div className="sticky top-[57px] sm:top-[65px] z-40 bg-background/95 backdrop-blur-sm border-b border-border/50 shadow-[0_1px_3px_0_rgba(0,0,0,0.05)]">
-        <div className="container mx-auto px-4 sm:px-6 py-3 space-y-3">
-          <JobSearchBar
-            search={search}
-            onSearchChange={setSearch}
-            sortBy={sortBy}
-            onSortChange={setSortBy}
-          />
-          <JobFilterChips
-            jobs={jobs}
-            activeLocations={activeLocations}
-            activeDepartments={activeDepartments}
-            activeTags={activeTags}
-            onToggleLocation={toggleLocation}
-            onToggleDepartment={toggleDepartment}
-            onToggleTag={toggleTag}
-            onClearAll={clearAllFilters}
-            hasActiveFilters={hasActiveFilters}
-          />
+        <div className="container mx-auto px-4 sm:px-6 py-3">
+          <div className="flex items-center gap-2">
+            {/* Mobile filter button */}
+            <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+              <SheetTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="lg:hidden shrink-0 gap-1.5"
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Filter
+                  {activeFilterCount > 0 && (
+                    <span className="ml-1 rounded-full bg-primary text-primary-foreground text-[10px] font-medium px-1.5 py-0.5 leading-none">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-80 overflow-y-auto">
+                <SheetHeader className="mb-4">
+                  <SheetTitle>Filter</SheetTitle>
+                </SheetHeader>
+                {sidebarContent}
+              </SheetContent>
+            </Sheet>
+
+            <JobSearchBar
+              search={search}
+              onSearchChange={setSearch}
+              sortBy={sortBy}
+              onSortChange={setSortBy}
+            />
+          </div>
         </div>
       </div>
 
-      {/* Results */}
+      {/* Main Layout: Sidebar (desktop) + Job Grid */}
       <div className="container mx-auto px-4 sm:px-6 py-6">
-        {/* Results count + mobile sort */}
-        {!isLoading && (
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-muted-foreground">
-              {hasActiveFilters
-                ? `${filteredJobs.length} von ${jobs.length} Stellen`
-                : `${jobs.length} ${jobs.length === 1 ? "Stelle" : "Stellen"}`}
-            </p>
-            <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
-              <SelectTrigger className="w-[160px] sm:hidden">
-                <ArrowUpDown className="h-3.5 w-3.5 mr-2 shrink-0" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="newest">Neueste zuerst</SelectItem>
-                <SelectItem value="expiring">Bald ablaufend</SelectItem>
-                <SelectItem value="az">A &ndash; Z</SelectItem>
-              </SelectContent>
-            </Select>
+        <div className="flex gap-8">
+          {/* Desktop Sidebar */}
+          <div className="hidden lg:block w-56 xl:w-64 shrink-0">
+            <div className="sticky top-[calc(57px+57px+1rem)] sm:top-[calc(65px+57px+1rem)]">
+              {sidebarContent}
+            </div>
           </div>
-        )}
 
-        {isLoading ? (
-          <JobCardSkeletonGrid count={6} />
-        ) : filteredJobs.length === 0 ? (
-          <JobsEmptyState
-            hasActiveFilters={hasActiveFilters}
-            onClearFilters={clearAllFilters}
-            activeLocations={activeLocations}
-            activeDepartments={activeDepartments}
-            activeTags={activeTags}
-            search={search}
-            totalJobCount={jobs.length}
-          />
-        ) : (
-          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-            {filteredJobs.map((job) => (
-              <JobCard key={job.id} job={job} onApplyClick={handleApplyClick} />
-            ))}
+          {/* Results column */}
+          <div className="flex-1 min-w-0">
+            {/* Results header: count + sort */}
+            {!isLoading && (
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm text-muted-foreground">
+                  {hasActiveFilters
+                    ? `${filteredJobs.length} von ${jobs.length} Stellen`
+                    : `${jobs.length} ${jobs.length === 1 ? "Stelle" : "Stellen"}`}
+                </p>
+                <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
+                  <SelectTrigger className="w-[160px]">
+                    <ArrowUpDown className="h-3.5 w-3.5 mr-2 shrink-0" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="newest">Neueste zuerst</SelectItem>
+                    <SelectItem value="expiring">Bald ablaufend</SelectItem>
+                    <SelectItem value="az">A &ndash; Z</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {isLoading ? (
+              <JobCardSkeletonGrid count={6} />
+            ) : filteredJobs.length === 0 ? (
+              <JobsEmptyState
+                hasActiveFilters={hasActiveFilters}
+                onClearFilters={clearAllFilters}
+                activeLocations={activeLocations}
+                activeDepartments={activeDepartments}
+                activeTags={activeTags}
+                search={search}
+                totalJobCount={jobs.length}
+              />
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {filteredJobs.map((job) => (
+                  <JobCard key={job.id} job={job} onApplyClick={handleApplyClick} />
+                ))}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
