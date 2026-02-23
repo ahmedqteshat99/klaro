@@ -77,10 +77,16 @@ export const useProfile = () => {
     }
   };
 
+  /** Re-fetch all data from the database to ensure UI reflects the actual DB state. */
+  const refetchData = async () => {
+    if (!userId) return;
+    await fetchAllData(userId);
+  };
+
   // Profile CRUD
   const saveProfile = async (data: Partial<Profile>) => {
     if (!userId) return;
-    
+
     try {
       if (profile) {
         const { error } = await supabase
@@ -88,7 +94,6 @@ export const useProfile = () => {
           .update(data as TablesUpdate<"profiles">)
           .eq("id", profile.id);
         if (error) throw error;
-        setProfile({ ...profile, ...data } as Profile);
       } else {
         const insertData: TablesInsert<"profiles"> = {
           user_id: userId,
@@ -96,20 +101,21 @@ export const useProfile = () => {
           nachname: data.nachname || "",
           ...data
         };
-        const { data: newProfile, error } = await supabase
+        const { error } = await supabase
           .from("profiles")
-          .insert(insertData)
-          .select()
-          .single();
+          .insert(insertData);
         if (error) throw error;
-        setProfile(newProfile);
       }
+
+      // Re-fetch to guarantee UI shows the actual DB state
+      await refetchData();
       toast({ title: "Gespeichert", description: "Profil wurde aktualisiert." });
     } catch (error: any) {
-      toast({ 
-        title: "Fehler", 
-        description: error.message || "Speichern fehlgeschlagen.", 
-        variant: "destructive" 
+      console.error("Profile save error:", error);
+      toast({
+        title: "Fehler",
+        description: error.message || "Speichern fehlgeschlagen.",
+        variant: "destructive"
       });
     }
   };
@@ -133,11 +139,15 @@ export const useProfile = () => {
 
   const updateWorkExperience = async (id: string, data: TablesUpdate<"work_experiences">) => {
     try {
-      const { error } = await supabase.from("work_experiences").update(data).eq("id", id);
+      const { error } = await supabase
+        .from("work_experiences")
+        .update(data)
+        .eq("id", id);
       if (error) throw error;
-      setWorkExperiences(prev => prev.map(w => w.id === id ? { ...w, ...data } : w));
+      await refetchData();
       toast({ title: "Gespeichert", description: "Berufserfahrung wurde aktualisiert." });
     } catch (error: any) {
+      console.error("Work experience update error:", error);
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
     }
   };
@@ -172,11 +182,15 @@ export const useProfile = () => {
 
   const updateEducation = async (id: string, data: TablesUpdate<"education_entries">) => {
     try {
-      const { error } = await supabase.from("education_entries").update(data).eq("id", id);
+      const { error } = await supabase
+        .from("education_entries")
+        .update(data)
+        .eq("id", id);
       if (error) throw error;
-      setEducationEntries(prev => prev.map(e => e.id === id ? { ...e, ...data } : e));
+      await refetchData();
       toast({ title: "Gespeichert", description: "Ausbildung wurde aktualisiert." });
     } catch (error: any) {
+      console.error("Education update error:", error);
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
     }
   };
@@ -211,11 +225,15 @@ export const useProfile = () => {
 
   const updatePracticalExperience = async (id: string, data: TablesUpdate<"practical_experiences">) => {
     try {
-      const { error } = await supabase.from("practical_experiences").update(data).eq("id", id);
+      const { error } = await supabase
+        .from("practical_experiences")
+        .update(data)
+        .eq("id", id);
       if (error) throw error;
-      setPracticalExperiences(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
+      await refetchData();
       toast({ title: "Gespeichert", description: "Praktische Erfahrung wurde aktualisiert." });
     } catch (error: any) {
+      console.error("Practical experience update error:", error);
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
     }
   };
@@ -250,11 +268,15 @@ export const useProfile = () => {
 
   const updateCertification = async (id: string, data: TablesUpdate<"certifications">) => {
     try {
-      const { error } = await supabase.from("certifications").update(data).eq("id", id);
+      const { error } = await supabase
+        .from("certifications")
+        .update(data)
+        .eq("id", id);
       if (error) throw error;
-      setCertifications(prev => prev.map(c => c.id === id ? { ...c, ...data } : c));
+      await refetchData();
       toast({ title: "Gespeichert", description: "Zertifikat wurde aktualisiert." });
     } catch (error: any) {
+      console.error("Certification update error:", error);
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
     }
   };
@@ -289,11 +311,15 @@ export const useProfile = () => {
 
   const updatePublication = async (id: string, data: TablesUpdate<"publications">) => {
     try {
-      const { error } = await supabase.from("publications").update(data).eq("id", id);
+      const { error } = await supabase
+        .from("publications")
+        .update(data)
+        .eq("id", id);
       if (error) throw error;
-      setPublications(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
+      await refetchData();
       toast({ title: "Gespeichert", description: "Publikation wurde aktualisiert." });
     } catch (error: any) {
+      console.error("Publication update error:", error);
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
     }
   };
@@ -394,7 +420,7 @@ export const useProfile = () => {
         .single();
       if (error) throw error;
       const section = newSection as CustomSection;
-      setCustomSections([...customSections, section]);
+      setCustomSections(prev => [...prev, section]);
       toast({ title: "Hinzugefügt", description: `Sektion "${sectionName}" wurde erstellt.` });
       return section;
     } catch (error: any) {
@@ -405,11 +431,15 @@ export const useProfile = () => {
 
   const updateCustomSection = async (id: string, data: { section_name?: string; section_order?: number }) => {
     try {
-      const { error } = await supabase.from("custom_sections").update(data).eq("id", id);
+      const { error } = await supabase
+        .from("custom_sections")
+        .update(data)
+        .eq("id", id);
       if (error) throw error;
-      setCustomSections(customSections.map(s => s.id === id ? { ...s, ...data } as CustomSection : s));
+      await refetchData();
       toast({ title: "Gespeichert", description: "Sektion wurde aktualisiert." });
     } catch (error: any) {
+      console.error("Custom section update error:", error);
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
     }
   };
@@ -418,8 +448,8 @@ export const useProfile = () => {
     try {
       const { error } = await supabase.from("custom_sections").delete().eq("id", id);
       if (error) throw error;
-      setCustomSections(customSections.filter(s => s.id !== id));
-      setCustomSectionEntries(customSectionEntries.filter(e => e.section_id !== id));
+      setCustomSections(prev => prev.filter(s => s.id !== id));
+      setCustomSectionEntries(prev => prev.filter(e => e.section_id !== id));
       toast({ title: "Gelöscht", description: "Sektion wurde entfernt." });
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
@@ -439,7 +469,7 @@ export const useProfile = () => {
         .select()
         .single();
       if (error) throw error;
-      setCustomSectionEntries([newEntry as CustomSectionEntry, ...customSectionEntries]);
+      setCustomSectionEntries(prev => [newEntry as CustomSectionEntry, ...prev]);
       toast({ title: "Hinzugefügt", description: "Eintrag wurde hinzugefügt." });
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
@@ -451,11 +481,15 @@ export const useProfile = () => {
     data: Partial<Omit<CustomSectionEntry, "id" | "section_id" | "user_id" | "created_at" | "updated_at">>
   ) => {
     try {
-      const { error } = await supabase.from("custom_section_entries").update(data).eq("id", id);
+      const { error } = await supabase
+        .from("custom_section_entries")
+        .update(data)
+        .eq("id", id);
       if (error) throw error;
-      setCustomSectionEntries(customSectionEntries.map(e => e.id === id ? { ...e, ...data } as CustomSectionEntry : e));
+      await refetchData();
       toast({ title: "Gespeichert", description: "Eintrag wurde aktualisiert." });
     } catch (error: any) {
+      console.error("Custom section entry update error:", error);
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
     }
   };
@@ -464,7 +498,7 @@ export const useProfile = () => {
     try {
       const { error } = await supabase.from("custom_section_entries").delete().eq("id", id);
       if (error) throw error;
-      setCustomSectionEntries(customSectionEntries.filter(e => e.id !== id));
+      setCustomSectionEntries(prev => prev.filter(e => e.id !== id));
       toast({ title: "Gelöscht", description: "Eintrag wurde entfernt." });
     } catch (error: any) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });

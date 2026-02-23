@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { GraduationCap, Plus, Pencil, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import MonthYearPicker from "@/components/ui/MonthYearPicker";
+import { toLocalDateString } from "@/lib/date-utils";
 import type { EducationEntry } from "@/hooks/useProfile";
 
 interface EducationFormProps {
@@ -53,12 +54,12 @@ const EducationForm = ({ educationEntries, onAdd, onUpdate, onDelete }: Educatio
   const handleSubmit = async () => {
     if (!formData.universitaet) return;
     setIsSaving(true);
-    
+
     const data = {
       universitaet: formData.universitaet,
       abschluss: formData.abschluss || null,
-      zeitraum_von: formData.zeitraum_von?.toISOString().split("T")[0] || null,
-      zeitraum_bis: formData.zeitraum_bis?.toISOString().split("T")[0] || null,
+      zeitraum_von: formData.zeitraum_von ? toLocalDateString(formData.zeitraum_von) : null,
+      zeitraum_bis: formData.zeitraum_bis ? toLocalDateString(formData.zeitraum_bis) : null,
       abschlussarbeit: formData.abschlussarbeit || null
     };
 
@@ -67,7 +68,7 @@ const EducationForm = ({ educationEntries, onAdd, onUpdate, onDelete }: Educatio
     } else {
       await onAdd(data);
     }
-    
+
     setFormData(emptyFormData);
     setEditingId(null);
     setIsDialogOpen(false);

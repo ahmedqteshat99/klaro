@@ -29,7 +29,8 @@ const XING_SOURCE = "xing";
 // they use JavaScript rendering, Cloudflare protection, or the domain does not exist.
 
 // Shared config
-const MAX_PAGES = 5; // Scrape up to 5 pages per source
+const MAX_PAGES = 5; // Scrape up to 5 pages per source (HTTP scrapers)
+const MAX_BROWSER_PAGES = 1; // Browser-based scraping is slow; limit to 1 page
 const MAX_JOBS_PER_RUN = 50; // Per source
 const EXPIRATION_GRACE_HOURS = 48;
 
@@ -292,7 +293,14 @@ function parseXingPage(html: string): ScrapedJob[] {
 
                     const company = jobData.hiringOrganization?.name || "";
                     const location = jobData.jobLocation?.address?.addressLocality ||
-                                   jobData.jobLocation?.address?.addressRegion || "";
+                        jobData.jobLocation?.address?.addressRegion || "";
+
+                    // Extract employer's direct URL (not the XING ad link)
+                    const orgUrl = jobData.hiringOrganization?.url
+                        || jobData.hiringOrganization?.sameAs
+                        || "";
+                    // Only use it if it's a real external URL (not xing.com)
+                    const employerUrl = orgUrl && !orgUrl.includes("xing.com") ? orgUrl : undefined;
 
                     jobs.push({
                         title: cleanText(title),
@@ -300,6 +308,7 @@ function parseXingPage(html: string): ScrapedJob[] {
                         company: cleanText(company),
                         location: cleanText(location),
                         guid: url,
+                        employerUrl,
                     });
                 }
             }
@@ -423,15 +432,16 @@ async function scrapeBrowserJobBoard(
         return [];
     }
 
-    for (let page = 1; page <= MAX_PAGES; page++) {
+    for (let page = 1; page <= MAX_BROWSER_PAGES; page++) {
         const url = getNextPageUrl(baseUrl, page);
 
         try {
             console.log(`[${runId}] Browser scraping page ${page}: ${url}`);
 
             // Use browser scraper to bypass Cloudflare
+            // Timeout reduced to 45s to stay within edge function limits
             const scraped = await scrapeWithBrowser(url, {
-                timeout: 30000,
+                timeout: 45000,
                 waitForSelector: "article, .job-card, .job-listing, [data-testid='job-card'], [class*='job-teaser'], a[href*='/jobs/']",
             });
 
@@ -444,7 +454,7 @@ async function scrapeBrowserJobBoard(
             if (jobs.length === 0) break;
 
             // Delay between pages (polite scraping + avoid detection)
-            if (page < MAX_PAGES) {
+            if (page < MAX_BROWSER_PAGES) {
                 await new Promise((r) => setTimeout(r, 3000)); // Longer delay for browser scraping
             }
         } catch (error) {
@@ -909,7 +919,7 @@ serve(async (req) => {
                             aggregatorDomains.some((d) => currentUrl.includes(d));
 
                         if (needsUrlBackfill && urlBackfillCount < MAX_URL_BACKFILLS_PER_RUN) {
-                            const backfilledUrl = await resolveEmployerUrl(job.link);
+                            const backfilledUrl = job.employerUrl || await resolveEmployerUrl(job.link);
                             if (backfilledUrl) {
                                 await db
                                     .from("jobs")
@@ -946,10 +956,10 @@ serve(async (req) => {
                         continue;
                     }
 
-                    // Content changed — re-resolve employer URL
-                    const updatedEmployerUrl = await resolveEmployerUrl(job.link);
+                    // Content changed — re-resolve employer URL (prefer pre-extracted employer URL)
+                    const updatedEmployerUrl = job.employerUrl || await resolveEmployerUrl(job.link);
                     if (updatedEmployerUrl) console.log(`[${runId}] Resolved employer URL: ${updatedEmployerUrl}`);
-                    await new Promise((r) => setTimeout(r, 1000));
+                    if (!job.employerUrl) await new Promise((r) => setTimeout(r, 1000));
 
                     const enrichment = await generateAiSummary(job, anthropicKey);
                     const updateApplyUrl = updatedEmployerUrl || job.link;
@@ -980,10 +990,10 @@ serve(async (req) => {
                     });
                     console.log(`[${runId}] Updated (${sourceName}): ${job.title}`);
                 } else {
-                    // New job — resolve employer URL from detail page
-                    const employerUrl = await resolveEmployerUrl(job.link);
+                    // New job — prefer pre-extracted employer URL, fall back to resolving from detail page
+                    const employerUrl = job.employerUrl || await resolveEmployerUrl(job.link);
                     if (employerUrl) console.log(`[${runId}] Resolved employer URL: ${employerUrl}`);
-                    await new Promise((r) => setTimeout(r, 1000));
+                    if (!job.employerUrl) await new Promise((r) => setTimeout(r, 1000));
 
                     const enrichment = await generateAiSummary(job, anthropicKey);
                     const applyUrl = employerUrl || job.link;

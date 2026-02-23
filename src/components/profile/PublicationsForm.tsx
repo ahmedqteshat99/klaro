@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { BookOpen, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { MonthYearPicker } from "@/components/ui/MonthYearPicker";
+import { toLocalDateString } from "@/lib/date-utils";
 import { useToast } from "@/hooks/use-toast";
 import type { Publication } from "@/hooks/useProfile";
 
@@ -83,15 +84,15 @@ const PublicationsForm = ({ publications, onAdd, onUpdate, onDelete }: Publicati
       });
       return;
     }
-    
+
     setIsSaving(true);
-    
+
     try {
       const data = {
         typ: formData.typ || null,
         titel: formData.titel.trim(),
         journal_ort: formData.journal_ort?.trim() || null,
-        datum: formData.datum?.toISOString().split("T")[0] || null,
+        datum: formData.datum ? toLocalDateString(formData.datum) : null,
         beschreibung: formData.beschreibung?.trim() || null
       };
 
@@ -100,7 +101,7 @@ const PublicationsForm = ({ publications, onAdd, onUpdate, onDelete }: Publicati
       } else {
         await onAdd(data);
       }
-      
+
       setFormData(emptyFormData);
       setEditingId(null);
       setIsDialogOpen(false);

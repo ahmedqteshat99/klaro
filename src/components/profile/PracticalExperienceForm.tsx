@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Stethoscope, Plus, Pencil, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import MonthYearPicker from "@/components/ui/MonthYearPicker";
+import { toLocalDateString } from "@/lib/date-utils";
 import type { PracticalExperience } from "@/hooks/useProfile";
 
 interface PracticalExperienceFormProps {
@@ -66,13 +67,13 @@ const PracticalExperienceForm = ({ practicalExperiences, onAdd, onUpdate, onDele
   const handleSubmit = async () => {
     if (!formData.einrichtung) return;
     setIsSaving(true);
-    
+
     const data = {
       typ: formData.typ || null,
       einrichtung: formData.einrichtung,
       fachbereich: formData.fachbereich || null,
-      zeitraum_von: formData.zeitraum_von?.toISOString().split("T")[0] || null,
-      zeitraum_bis: formData.zeitraum_bis?.toISOString().split("T")[0] || null,
+      zeitraum_von: formData.zeitraum_von ? toLocalDateString(formData.zeitraum_von) : null,
+      zeitraum_bis: formData.zeitraum_bis ? toLocalDateString(formData.zeitraum_bis) : null,
       beschreibung: formData.beschreibung || null
     };
 
@@ -81,7 +82,7 @@ const PracticalExperienceForm = ({ practicalExperiences, onAdd, onUpdate, onDele
     } else {
       await onAdd(data);
     }
-    
+
     setFormData(emptyFormData);
     setEditingId(null);
     setIsDialogOpen(false);

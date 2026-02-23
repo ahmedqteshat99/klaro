@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Building2, Plus, Pencil, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import MonthYearPicker from "@/components/ui/MonthYearPicker";
+import { toLocalDateString } from "@/lib/date-utils";
 import type { WorkExperience } from "@/hooks/useProfile";
 
 interface WorkExperienceFormProps {
@@ -54,12 +55,12 @@ const WorkExperienceForm = ({ workExperiences, onAdd, onUpdate, onDelete }: Work
   const handleSubmit = async () => {
     if (!formData.klinik) return;
     setIsSaving(true);
-    
+
     const data = {
       klinik: formData.klinik,
       station: formData.station || null,
-      zeitraum_von: formData.zeitraum_von?.toISOString().split("T")[0] || null,
-      zeitraum_bis: formData.zeitraum_bis?.toISOString().split("T")[0] || null,
+      zeitraum_von: formData.zeitraum_von ? toLocalDateString(formData.zeitraum_von) : null,
+      zeitraum_bis: formData.zeitraum_bis ? toLocalDateString(formData.zeitraum_bis) : null,
       taetigkeiten: formData.taetigkeiten || null
     };
 
@@ -68,7 +69,7 @@ const WorkExperienceForm = ({ workExperiences, onAdd, onUpdate, onDelete }: Work
     } else {
       await onAdd(data);
     }
-    
+
     setFormData(emptyFormData);
     setEditingId(null);
     setIsDialogOpen(false);

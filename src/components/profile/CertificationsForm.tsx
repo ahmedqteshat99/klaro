@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Award, Plus, Pencil, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import MonthYearPicker from "@/components/ui/MonthYearPicker";
+import { toLocalDateString } from "@/lib/date-utils";
 import type { Certification } from "@/hooks/useProfile";
 
 interface CertificationsFormProps {
@@ -47,11 +48,11 @@ const CertificationsForm = ({ certifications, onAdd, onUpdate, onDelete }: Certi
   const handleSubmit = async () => {
     if (!formData.name) return;
     setIsSaving(true);
-    
+
     const data = {
       name: formData.name,
       aussteller: formData.aussteller || null,
-      datum: formData.datum?.toISOString().split("T")[0] || null
+      datum: formData.datum ? toLocalDateString(formData.datum) : null
     };
 
     if (editingId) {
@@ -59,7 +60,7 @@ const CertificationsForm = ({ certifications, onAdd, onUpdate, onDelete }: Certi
     } else {
       await onAdd(data);
     }
-    
+
     setFormData(emptyFormData);
     setEditingId(null);
     setIsDialogOpen(false);
@@ -120,7 +121,9 @@ const CertificationsForm = ({ certifications, onAdd, onUpdate, onDelete }: Certi
                 <MonthYearPicker
                   label="Datum"
                   value={formData.datum}
-                  onChange={(date) => setFormData({ ...formData, datum: date })}
+                  onChange={(date) => {
+                    setFormData({ ...formData, datum: date });
+                  }}
                 />
               </div>
               <DialogFooter>

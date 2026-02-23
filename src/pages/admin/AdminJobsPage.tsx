@@ -155,6 +155,13 @@ const AdminJobsPage = () => {
   const [xingDialogResults, setXingDialogResults] = useState<{
     imported?: number; updated?: number; skipped?: number; expired?: number; totalListings?: number;
   } | null>(null);
+  const [isPraktischArztImporting, setIsPraktischArztImporting] = useState(false);
+  const [praktischArztDialogOpen, setPraktischArztDialogOpen] = useState(false);
+  const [praktischArztDialogState, setPraktischArztDialogState] = useState<"running" | "success" | "error">("running");
+  const [praktischArztDialogMessage, setPraktischArztDialogMessage] = useState("");
+  const [praktischArztDialogResults, setPraktischArztDialogResults] = useState<{
+    imported?: number; updated?: number; skipped?: number; expired?: number; totalListings?: number;
+  } | null>(null);
   const [isCheckingLinks, setIsCheckingLinks] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
@@ -549,11 +556,58 @@ const AdminJobsPage = () => {
       );
 
       await loadJobs();
-    } catch (error) {
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : "Unbekannter Fehler";
+      const isTimeout = msg.includes("non-2xx") || msg.includes("timeout") || msg.includes("504");
       setXingDialogState("error");
-      setXingDialogMessage(error instanceof Error ? error.message : "Unbekannter Fehler");
+      setXingDialogMessage(
+        isTimeout
+          ? "Die XING-Abfrage hat zu lange gedauert (Timeout). Bitte versuchen Sie es später erneut."
+          : msg
+      );
     } finally {
       setIsXingImporting(false);
+    }
+  };
+
+  const handlePraktischArztImport = async () => {
+    setIsPraktischArztImporting(true);
+    setPraktischArztDialogState("running");
+    setPraktischArztDialogMessage("Stellenangebote werden von PraktischArzt geladen...");
+    setPraktischArztDialogResults(null);
+    setPraktischArztDialogOpen(true);
+
+    try {
+      const { triggerPraktischArztImport } = await import("@/lib/api/generation");
+      const result = await triggerPraktischArztImport();
+
+      if (!result.success) {
+        setPraktischArztDialogState("error");
+        setPraktischArztDialogMessage(result.error || "Unbekannter Fehler");
+        return;
+      }
+
+      setPraktischArztDialogState("success");
+      setPraktischArztDialogResults({
+        imported: result.imported,
+        updated: result.updated,
+        skipped: result.skipped,
+        expired: result.expired,
+        totalListings: result.totalFeedItems,
+      });
+      setPraktischArztDialogMessage(
+        result.imported || result.updated
+          ? "Neue PraktischArzt Stellen wurden erfolgreich importiert."
+          : "Keine neuen PraktischArzt Assistenzarzt-Stellen gefunden."
+      );
+
+      await loadJobs();
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : "Unbekannter Fehler";
+      setPraktischArztDialogState("error");
+      setPraktischArztDialogMessage(msg);
+    } finally {
+      setIsPraktischArztImporting(false);
     }
   };
 
@@ -833,6 +887,25 @@ const AdminJobsPage = () => {
               <>
                 <ExternalLink className="mr-2 h-4 w-4" />
                 XING importieren
+              </>
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handlePraktischArztImport}
+            disabled={isPraktischArztImporting}
+            className="bg-orange-50 hover:bg-orange-100 text-orange-700 border-orange-200"
+          >
+            {isPraktischArztImporting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Importiere...
+              </>
+            ) : (
+              <>
+                <ExternalLink className="mr-2 h-4 w-4" />
+                PraktischArzt
               </>
             )}
           </Button>
@@ -1564,6 +1637,102 @@ const AdminJobsPage = () => {
           {!isXingImporting && (
             <DialogFooter>
               <Button onClick={() => setXingDialogOpen(false)}>Schließen</Button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* PraktischArzt Import Progress Dialog */}
+      <Dialog open={praktischArztDialogOpen} onOpenChange={(open) => { if (!isPraktischArztImporting) setPraktischArztDialogOpen(open); }}>
+        <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => { if (isPraktischArztImporting) e.preventDefault(); }}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ExternalLink className="h-5 w-5 text-orange-600" />
+              PraktischArzt-Import
+            </DialogTitle>
+            <DialogDescription>
+              {praktischArztDialogState === "running"
+                ? "Import läuft..."
+                : praktischArztDialogState === "success"
+                  ? "Import abgeschlossen"
+                  : "Import fehlgeschlagen"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {praktischArztDialogState === "running" && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="h-5 w-5 animate-spin text-orange-600 shrink-0" />
+                  <p className="text-sm">{praktischArztDialogMessage}</p>
+                </div>
+                <div className="space-y-2 pl-8 text-xs text-muted-foreground">
+                  <p>PraktischArzt Jobs werden durchsucht</p>
+                  <p>Arbeitgeber-Links werden aufgelöst</p>
+                  <p>KI-Zusammenfassungen werden generiert</p>
+                </div>
+              </div>
+            )}
+
+            {praktischArztDialogState === "success" && praktischArztDialogResults && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30 shrink-0">
+                    <Check className="h-4 w-4 text-orange-600" />
+                  </div>
+                  <p className="text-sm">{praktischArztDialogMessage}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 rounded-lg border border-orange-200 p-3 bg-orange-50/50">
+                  {praktischArztDialogResults.imported != null && (
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-orange-600">{praktischArztDialogResults.imported}</div>
+                      <div className="text-xs text-muted-foreground">Neu importiert</div>
+                    </div>
+                  )}
+                  {praktischArztDialogResults.updated != null && (
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-orange-500">{praktischArztDialogResults.updated}</div>
+                      <div className="text-xs text-muted-foreground">Aktualisiert</div>
+                    </div>
+                  )}
+                  {praktischArztDialogResults.skipped != null && (
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-muted-foreground">{praktischArztDialogResults.skipped}</div>
+                      <div className="text-xs text-muted-foreground">Übersprungen</div>
+                    </div>
+                  )}
+                  {praktischArztDialogResults.expired != null && (
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-orange-500">{praktischArztDialogResults.expired}</div>
+                      <div className="text-xs text-muted-foreground">Abgelaufen</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {praktischArztDialogState === "success" && !praktischArztDialogResults && (
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30 shrink-0">
+                  <Check className="h-4 w-4 text-orange-600" />
+                </div>
+                <p className="text-sm">{praktischArztDialogMessage}</p>
+              </div>
+            )}
+
+            {praktischArztDialogState === "error" && (
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30 shrink-0">
+                  <X className="h-4 w-4 text-red-600" />
+                </div>
+                <p className="text-sm text-red-600">{praktischArztDialogMessage}</p>
+              </div>
+            )}
+          </div>
+
+          {!isPraktischArztImporting && (
+            <DialogFooter>
+              <Button onClick={() => setPraktischArztDialogOpen(false)}>Schließen</Button>
             </DialogFooter>
           )}
         </DialogContent>
