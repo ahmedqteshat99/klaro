@@ -33,7 +33,7 @@ const MAX_PAGES = 5; // Scrape up to 5 pages per source (HTTP scrapers)
 const MAX_PAGES_AERZTEBLATT = 100; // Ärzteblatt has many pages; scrape deeper
 const MAX_PAGES_PRAKTISCHARZT = 105; // PraktischArzt has many pages; scrape deeper
 const MAX_BROWSER_PAGES = 1; // Browser-based scraping is slow; limit to 1 page
-const MAX_JOBS_PER_RUN = 50; // Per source
+const MAX_JOBS_PER_RUN = 500; // Increased to accommodate larger sources (Ärzteblatt: 226, PraktischArzt: 300+)
 const EXPIRATION_GRACE_HOURS = 48;
 
 // ─── Helpers ─────────────────────────────────────────────────────
