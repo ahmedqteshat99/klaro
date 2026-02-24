@@ -30,6 +30,8 @@ const XING_SOURCE = "xing";
 
 // Shared config
 const MAX_PAGES = 5; // Scrape up to 5 pages per source (HTTP scrapers)
+const MAX_PAGES_AERZTEBLATT = 100; // Ärzteblatt has many pages; scrape deeper
+const MAX_PAGES_PRAKTISCHARZT = 105; // PraktischArzt has many pages; scrape deeper
 const MAX_BROWSER_PAGES = 1; // Browser-based scraping is slow; limit to 1 page
 const MAX_JOBS_PER_RUN = 50; // Per source
 const EXPIRATION_GRACE_HOURS = 48;
@@ -371,11 +373,12 @@ async function scrapeJobBoard(
     baseUrl: string,
     parsePageFn: (html: string) => ScrapedJob[],
     getNextPageUrl: (baseUrl: string, page: number) => string,
-    runId: string
+    runId: string,
+    maxPages: number = MAX_PAGES
 ): Promise<ScrapedJob[]> {
     const allJobs: ScrapedJob[] = [];
 
-    for (let page = 1; page <= MAX_PAGES; page++) {
+    for (let page = 1; page <= maxPages; page++) {
         const url = getNextPageUrl(baseUrl, page);
 
         try {
@@ -589,7 +592,7 @@ WICHTIG: Das Feld 'department' soll der medizinische Fachbereich sein (z.B. 'Inn
                 "anthropic-version": "2023-06-01",
             },
             body: JSON.stringify({
-                model: "claude-haiku-4-5-20250929",
+                model: "claude-haiku-4-5",
                 max_tokens: 400,
                 system: "Du extrahierst strukturierte Daten aus deutschen Stellenanzeigen für Ärzte. Antworte NUR mit validem JSON, keine Erklärungen, kein Markdown.",
                 messages: [{ role: "user", content: prompt }],
@@ -790,23 +793,25 @@ serve(async (req) => {
                 )
                 : Promise.resolve([]),
 
-            // Ärzteblatt
+            // Ärzteblatt (deeper scrape — many pages available)
             sourcesToScrape.includes(AERZTEBLATT_SOURCE)
                 ? scrapeJobBoard(
                     AERZTEBLATT_URL,
                     parseAerzteblattPage,
                     (base, page) => page === 1 ? base : `${base}?page=${page}`,
-                    runId
+                    runId,
+                    MAX_PAGES_AERZTEBLATT
                 )
                 : Promise.resolve([]),
 
-            // PraktischArzt
+            // PraktischArzt (deeper scrape — many pages available)
             sourcesToScrape.includes(PRAKTISCHARZT_SOURCE)
                 ? scrapeJobBoard(
                     PRAKTISCHARZT_URL,
                     parsePraktischArztPage,
                     (base, page) => page === 1 ? base : `${base}${page}/`,
-                    runId
+                    runId,
+                    MAX_PAGES_PRAKTISCHARZT
                 )
                 : Promise.resolve([]),
 
