@@ -270,6 +270,22 @@ const AnschreibenPage = () => {
 
   const handleLoadVersion = (doc: AnschreibenVersion) => {
     setAnschreibenHtml(applyAnschreibenDate(doc.html_content, doc.created_at));
+
+    // Reconstruct jobData from version metadata
+    setJobData({
+      krankenhaus: doc.hospital_name,
+      position: doc.position_title,
+      standort: null,
+      fachabteilung: null,
+      ansprechpartner: null,
+      anforderungen: null,
+    });
+
+    // Set job URL if available
+    if (doc.job_url) {
+      setJobUrl(doc.job_url);
+    }
+
     toast({
       title: "Version geladen",
       description: "Die ausgewählte Version ist jetzt in der Vorschau sichtbar.",
