@@ -42,6 +42,18 @@ type AnschreibenVersion = Pick<
   "id" | "name" | "hospital_name" | "position_title" | "job_url" | "created_at" | "html_content"
 >;
 
+/**
+ * Sanitize a filename by removing invalid characters and replacing spaces
+ */
+function sanitizeFilename(filename: string): string {
+  return filename
+    .replace(/\s+/g, '_')                    // Replace spaces with underscores
+    .replace(/[\/\\:*?"<>|]/g, '')           // Remove invalid filesystem characters
+    .replace(/_+/g, '_')                     // Replace multiple underscores with single
+    .replace(/^_+|_+$/g, '')                 // Trim underscores from start/end
+    .substring(0, 255);                      // Limit to 255 chars (filesystem limit)
+}
+
 const formatDateTime = (value: string | null) => {
   if (!value) return "-";
   return new Date(value).toLocaleString("de-DE", {
@@ -305,7 +317,9 @@ const AnschreibenPage = () => {
         showSignatur,
         signaturUrl,
         stadt: profile?.stadt,
-        fileName: `Anschreiben_${profile?.nachname || "Arzt"}.pdf`,
+        fileName: sanitizeFilename(
+          `Anschreiben_${profile?.vorname || "Arzt"}_${profile?.nachname || "Arzt"}_${jobData?.krankenhaus || "Klinik"}.pdf`
+        ),
       });
 
       void logEvent("export", { format: "PDF", docType: "ANSCHREIBEN", source: "anschreiben_page" }, userId);
