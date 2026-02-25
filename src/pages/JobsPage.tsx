@@ -8,6 +8,16 @@ import {
   rememberCtaClick,
 } from "@/lib/attribution";
 import { LANDING_HERO_CTA_EXPERIMENT_ID } from "@/lib/experiments";
+import {
+  INTERNAL_MEDICINE_ALL_LABEL,
+  INTERNAL_MEDICINE_FILTER_ALL,
+  INTERNAL_MEDICINE_SUBSPECIALTY_FILTERS,
+  classifyInternalMedicineJob,
+  isInternalMedicineDepartmentLabel,
+  isInternalMedicineFilterValue,
+  isInternalMedicineSubspecialtyFilterValue,
+  matchesInternalMedicineFilter,
+} from "@/lib/internal-medicine-taxonomy";
 import { applySeoMeta } from "@/lib/seo";
 import { buildJobPath } from "@/lib/slug";
 import {
@@ -71,6 +81,10 @@ const jobMatchesLocationFilters = (job: JobRow, activeLocations: Set<string>): b
 };
 
 const jobMatchesDepartmentValue = (job: JobRow, departmentValue: string): boolean => {
+  if (isInternalMedicineFilterValue(departmentValue)) {
+    return matchesInternalMedicineFilter(job, departmentValue);
+  }
+
   const departmentLower = job.department?.toLowerCase() ?? "";
   const needle = departmentValue.toLowerCase();
   if (departmentLower.startsWith(needle)) return true;
@@ -168,7 +182,39 @@ const JobsPage = () => {
   );
 
   const toggleLocation = useMemo(() => makeToggle(setActiveLocations), [makeToggle]);
-  const toggleDepartment = useMemo(() => makeToggle(setActiveDepartments), [makeToggle]);
+  const toggleDepartment = useCallback((value: string) => {
+    setActiveDepartments((prev) => {
+      const next = new Set(prev);
+
+      if (value === INTERNAL_MEDICINE_FILTER_ALL) {
+        if (next.has(value)) {
+          next.delete(value);
+          return next;
+        }
+
+        next.add(value);
+        for (const subspecialty of INTERNAL_MEDICINE_SUBSPECIALTY_FILTERS) {
+          next.delete(subspecialty.value);
+        }
+        return next;
+      }
+
+      if (isInternalMedicineSubspecialtyFilterValue(value)) {
+        if (next.has(value)) {
+          next.delete(value);
+          return next;
+        }
+
+        next.delete(INTERNAL_MEDICINE_FILTER_ALL);
+        next.add(value);
+        return next;
+      }
+
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+  }, []);
   const toggleTag = useMemo(() => makeToggle(setActiveTags), [makeToggle]);
 
   const filterFacetCounts = useMemo(() => {
@@ -206,10 +252,14 @@ const JobsPage = () => {
 
     const departmentValues = new Set<string>();
     for (const job of jobs) {
-      if (job.department) departmentValues.add(job.department);
+      if (job.department && !isInternalMedicineDepartmentLabel(job.department)) {
+        departmentValues.add(job.department);
+      }
     }
     for (const activeDepartment of activeDepartments) {
-      departmentValues.add(activeDepartment);
+      if (!isInternalMedicineFilterValue(activeDepartment)) {
+        departmentValues.add(activeDepartment);
+      }
     }
 
     const departmentCounts = new Map<string, number>();
@@ -220,6 +270,50 @@ const JobsPage = () => {
       }
       departmentCounts.set(department, count);
     }
+
+    const internalCounts = new Map<string, number>();
+    internalCounts.set(INTERNAL_MEDICINE_FILTER_ALL, 0);
+    for (const subspecialty of INTERNAL_MEDICINE_SUBSPECIALTY_FILTERS) {
+      internalCounts.set(subspecialty.value, 0);
+    }
+
+    for (const job of departmentFacetJobs) {
+      const classification = classifyInternalMedicineJob(job);
+      if (!classification.isInternalMedicine) continue;
+
+      internalCounts.set(
+        INTERNAL_MEDICINE_FILTER_ALL,
+        (internalCounts.get(INTERNAL_MEDICINE_FILTER_ALL) ?? 0) + 1
+      );
+
+      for (const matchedSubspecialtyId of classification.matchedSubspecialtyIds) {
+        const subspecialty = INTERNAL_MEDICINE_SUBSPECIALTY_FILTERS.find(
+          (entry) => entry.id === matchedSubspecialtyId
+        );
+        if (!subspecialty) continue;
+        internalCounts.set(
+          subspecialty.value,
+          (internalCounts.get(subspecialty.value) ?? 0) + 1
+        );
+      }
+    }
+
+    const hasInternalSelection = [...activeDepartments].some((value) => isInternalMedicineFilterValue(value));
+    const hasAnyInternalJobs = [...internalCounts.values()].some((count) => count > 0);
+    const internalMedicineItems: FilterItem[] = hasAnyInternalJobs || hasInternalSelection
+      ? [
+        {
+          value: INTERNAL_MEDICINE_FILTER_ALL,
+          label: INTERNAL_MEDICINE_ALL_LABEL,
+          count: internalCounts.get(INTERNAL_MEDICINE_FILTER_ALL) ?? 0,
+        },
+        ...INTERNAL_MEDICINE_SUBSPECIALTY_FILTERS.map((subspecialty) => ({
+          value: subspecialty.value,
+          label: `↳ ${subspecialty.label}`,
+          count: internalCounts.get(subspecialty.value) ?? 0,
+        })),
+      ]
+      : [];
 
     const tagCounts = new Map<string, number>();
     for (const job of tagFacetJobs) {
@@ -235,6 +329,7 @@ const JobsPage = () => {
 
     return {
       locationItems: sortFilterItems(locationCounts),
+      internalMedicineItems,
       departmentItems: sortFilterItems(departmentCounts),
       stellenartItems: allTagItems.filter((item) => STELLENART_TAGS.has(item.value.toLowerCase())),
       otherTagItems: allTagItems.filter((item) => !STELLENART_TAGS.has(item.value.toLowerCase())),
@@ -352,6 +447,7 @@ const JobsPage = () => {
   const sidebarContent = (
     <JobFiltersSidebar
       locationItems={filterFacetCounts.locationItems}
+      internalMedicineItems={filterFacetCounts.internalMedicineItems}
       departmentItems={filterFacetCounts.departmentItems}
       stellenartItems={filterFacetCounts.stellenartItems}
       otherTagItems={filterFacetCounts.otherTagItems}

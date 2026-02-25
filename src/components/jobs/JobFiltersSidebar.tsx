@@ -61,6 +61,7 @@ export function getJobStellenstartTags(tags: string[] | null): string[] {
 export interface FilterItem {
     value: string;
     count: number;
+    label?: string;
 }
 
 interface FilterSectionProps {
@@ -133,7 +134,7 @@ const FilterSection = ({
                         </div>
                     )}
 
-                    {visible.map(({ value, count }) => (
+                    {visible.map(({ value, count, label: displayLabel }) => (
                         <label
                             key={value}
                             className="flex items-center justify-between gap-2 cursor-pointer group rounded-md px-1 py-0.5 hover:bg-muted/50 transition-colors"
@@ -150,7 +151,7 @@ const FilterSection = ({
                                             : "text-muted-foreground group-hover:text-foreground"
                                         }`}
                                 >
-                                    {value}
+                                    {displayLabel ?? value}
                                 </span>
                             </div>
                             <span className="text-[11px] text-muted-foreground/60 tabular-nums shrink-0">
@@ -186,6 +187,7 @@ const FilterSection = ({
 
 export interface JobFiltersSidebarProps {
     locationItems: FilterItem[];
+    internalMedicineItems: FilterItem[];
     departmentItems: FilterItem[];
     stellenartItems: FilterItem[];
     otherTagItems: FilterItem[];
@@ -201,6 +203,7 @@ export interface JobFiltersSidebarProps {
 
 const JobFiltersSidebar = ({
     locationItems,
+    internalMedicineItems,
     departmentItems,
     stellenartItems,
     otherTagItems,
@@ -218,6 +221,7 @@ const JobFiltersSidebar = ({
 
     if (
         locationItems.length === 0 &&
+        internalMedicineItems.length === 0 &&
         departmentItems.length === 0 &&
         stellenartItems.length === 0 &&
         otherTagItems.length === 0
@@ -246,6 +250,15 @@ const JobFiltersSidebar = ({
             </div>
 
             <div className="space-y-0 divide-y-0">
+                {internalMedicineItems.length > 0 && (
+                    <FilterSection
+                        label="Innere Medizin"
+                        icon={<Stethoscope className="h-3.5 w-3.5 text-muted-foreground" />}
+                        items={internalMedicineItems}
+                        activeSet={activeDepartments}
+                        onToggle={onToggleDepartment}
+                    />
+                )}
                 <FilterSection
                     label="Fachbereich"
                     icon={<Stethoscope className="h-3.5 w-3.5 text-muted-foreground" />}

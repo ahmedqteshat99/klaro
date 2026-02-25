@@ -165,8 +165,29 @@ const NewLandingPage = () => {
               </Alert>
             )}
 
-            <ScrollSection animation="scroll-fade-in">
-              <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full text-sm font-medium mb-8" style={{ background: 'var(--notion-bg-subtle)', border: '1px solid var(--notion-border-strong)' }}>
+            <ScrollSection animation="scroll-fade-in" className="relative inline-block">
+              {/* Hand-drawn Arrow to Top CTA (Responsive & Transparent SVG) */}
+              <div className="absolute hidden lg:block top-[-100px] right-[-190px] w-[200px] h-[120px] pointer-events-none z-0">
+                <svg viewBox="0 0 200 120" className="w-full h-full text-slate-400/80" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.06))' }}>
+                  {/* Concave hand-drawn path (dips down then swoops up) */}
+                  <path d="M 10 100 Q 120 110, 180 20" />
+                  <path d="M 9 101 Q 121 112, 179 21" strokeWidth="1" opacity="0.6" />
+
+                  {/* Imperfect arrowhead */}
+                  <path d="M 155 25 L 185 15 L 170 45" />
+                  <path d="M 154 26 L 186 14 L 171 44" strokeWidth="1" opacity="0.6" />
+                </svg>
+              </div>
+              <div className="absolute hidden md:block lg:hidden top-[-70px] right-[-140px] w-[150px] h-[90px] pointer-events-none z-0">
+                <svg viewBox="0 0 150 90" className="w-full h-full text-slate-400/80" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.06))' }}>
+                  <path d="M 5 70 Q 90 80, 130 15" />
+                  <path d="M 4 71 Q 91 81, 129 16" strokeWidth="1" opacity="0.6" />
+                  <path d="M 105 20 L 135 10 L 120 40" />
+                  <path d="M 104 21 L 136 9 L 121 41" strokeWidth="1" opacity="0.6" />
+                </svg>
+              </div>
+
+              <div className="relative z-10 inline-flex items-center gap-2.5 px-4 py-2 rounded-full text-sm font-medium mb-8" style={{ background: 'var(--notion-bg-surface)', border: '1px solid var(--notion-border-strong)', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
                 <div className="flex -space-x-1.5">
                   {[1, 2, 3, 4].map(i => (
                     <img
@@ -184,9 +205,22 @@ const NewLandingPage = () => {
               </div>
             </ScrollSection>
 
+
+
+            {/* Hero Medical Illustration */}
+            <ScrollSection animation="scroll-fade-in" className="delay-50 mb-8 flex justify-center">
+              <div className="relative max-w-[400px] sm:max-w-[480px] w-full flex justify-center px-4">
+                <img
+                  src="/images/hero_user_transparent.min.png"
+                  alt="Klaro für Ärzte"
+                  className="w-full h-auto object-contain drop-shadow-sm"
+                />
+              </div>
+            </ScrollSection>
+
             <ScrollSection animation="scroll-fade-in" className="delay-100">
               <h1 className="text-[2.5rem] sm:text-[3.25rem] md:text-[4rem] lg:text-[4.5rem] font-bold mb-6 leading-[1.08] tracking-[-0.03em]" style={{ color: 'var(--notion-text-dark)' }}>
-                Ihre Karriere.{' '}
+                Ihre ärztliche Laufbahn.{' '}
                 <span style={{ color: 'var(--notion-blue)' }}>
                   Null Papierkram.
                 </span>
@@ -207,7 +241,7 @@ const NewLandingPage = () => {
                   className="inline-flex items-center gap-2 px-7 py-3.5 text-base font-semibold rounded-xl transition-all hover:opacity-90 hover:translate-y-[-1px]"
                   style={{ background: 'var(--notion-text-dark)', color: '#fff' }}
                 >
-                  Jetzt kostenlos starten
+                  Lebenslauf kostenlos erstellen
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
@@ -227,6 +261,23 @@ const NewLandingPage = () => {
                   <Check className="h-3.5 w-3.5" style={{ color: 'var(--notion-blue)' }} />
                   Keine Kreditkarte
                 </span>
+                <span className="flex items-center gap-1.5 font-medium ml-2 px-2.5 py-1 rounded-md" style={{ background: 'var(--notion-bg-elevated)', border: '1px solid var(--notion-border-strong)' }}>
+                  <Shield className="h-3.5 w-3.5" style={{ color: 'var(--notion-blue)' }} />
+                  100% DSGVO-konform & Hosted in DE
+                </span>
+              </div>
+            </ScrollSection>
+
+            {/* Clinic Trust Banner */}
+            <ScrollSection animation="scroll-fade-in" className="delay-400 mt-14 md:mt-20 border-t pt-8 pb-4" style={{ borderColor: 'var(--notion-border)' }}>
+              <p className="text-xs font-semibold uppercase tracking-widest mb-6" style={{ color: 'var(--notion-text-muted)' }}>
+                Ärzte unserer Plattform arbeiten erfolgreich bei
+              </p>
+              <div className="flex flex-wrap justify-center items-center gap-x-8 sm:gap-x-14 gap-y-6 opacity-60 grayscale hover:opacity-100 transition-opacity">
+                <div className="text-xl sm:text-2xl font-serif font-bold tracking-tight text-gray-800">CHARITÉ</div>
+                <div className="text-xl sm:text-2xl font-sans font-black tracking-tighter text-gray-800">ASKLEPIOS</div>
+                <div className="text-xl sm:text-2xl font-sans font-bold text-gray-800">Helios</div>
+                <div className="text-xl sm:text-2xl font-sans font-medium tracking-wide text-gray-800">Sana Kliniken</div>
               </div>
             </ScrollSection>
           </div>
@@ -564,37 +615,43 @@ const NewLandingPage = () => {
                 quote: "Innerhalb von 2 Wochen hatte ich 5 Vorstellungsgespräche. Die automatische Anschreiben-Erstellung hat mir so viel Zeit gespart!",
                 author: "Dr. Lisa Schmidt",
                 role: "Assistenzärztin Kardiologie",
-                location: "Berlin"
+                location: "Berlin",
+                image: "/images/avatar_dr_schmidt_1772034991277.png"
               },
               {
                 quote: "Klaro hat meinen Lebenslauf perfekt formatiert – genau nach deutschem Standard mit Foto und Unterschrift.",
                 author: "Dr. Michael Weber",
                 role: "Assistenzarzt Chirurgie",
-                location: "München"
+                location: "München",
+                image: "/images/avatar_dr_weber_1772035611085.png"
               },
               {
                 quote: "Die perfekt vorbereiteten Unterlagen haben mir sehr geholfen. Alles war professionell formatiert.",
                 author: "Dr. Anna Hoffmann",
                 role: "Fachärztin Pädiatrie",
-                location: "Hamburg"
+                location: "Hamburg",
+                image: "https://images.unsplash.com/photo-1594824436998-d8abc9c9bcd8?q=80&w=200&auto=format&fit=crop"
               },
               {
                 quote: "Als ausländischer Arzt war die deutsche Bewerbung eine Herausforderung. Klaro hat alles perfekt auf C1-Niveau formuliert.",
                 author: "Dr. Thomas Bauer",
                 role: "Assistenzarzt Innere Medizin",
-                location: "Heidelberg"
+                location: "Heidelberg",
+                image: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?q=80&w=200&auto=format&fit=crop"
               },
               {
                 quote: "Ich habe mich bei 47 Kliniken beworben und 8 Zusagen erhalten. Ohne Klaro wäre das unmöglich gewesen.",
                 author: "Dr. Julia Schneider",
                 role: "Assistenzärztin Neurologie",
-                location: "Frankfurt"
+                location: "Frankfurt",
+                image: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?q=80&w=200&auto=format&fit=crop"
               },
               {
                 quote: "Die automatische Stellensuche findet genau die Positionen, die zu meiner Fachrichtung passen.",
                 author: "Dr. Daniel Koch",
                 role: "Facharzt Anästhesie",
-                location: "Stuttgart"
+                location: "Stuttgart",
+                image: "https://images.unsplash.com/photo-1622253692010-333f2da6031d?q=80&w=200&auto=format&fit=crop"
               }
             ].map((testimonial, index) => (
               <ScrollSection key={index} className={`delay-${index * 50}`}>
@@ -611,8 +668,8 @@ const NewLandingPage = () => {
                     „{testimonial.quote}"
                   </p>
                   <div className="flex items-center gap-3 pt-4" style={{ borderTop: '1px solid var(--notion-border)' }}>
-                    <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: 'var(--notion-bg-subtle)', color: 'var(--notion-text-muted)' }}>
-                      {testimonial.author.split(' ').slice(-1)[0][0]}
+                    <div className="h-10 w-10 rounded-full overflow-hidden border-2" style={{ borderColor: 'var(--notion-bg-subtle)' }}>
+                      <img src={testimonial.image} alt={testimonial.author} className="h-full w-full object-cover" />
                     </div>
                     <div>
                       <div className="text-sm font-semibold" style={{ color: 'var(--notion-text-dark)' }}>{testimonial.author}</div>
@@ -792,7 +849,7 @@ const NewLandingPage = () => {
                 className="inline-flex items-center gap-2 px-8 py-4 text-base font-semibold rounded-xl transition-all hover:opacity-90 hover:translate-y-[-1px]"
                 style={{ background: 'var(--notion-text-dark)', color: '#fff' }}
               >
-                Jetzt kostenlos starten
+                Lebenslauf kostenlos erstellen
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
