@@ -131,6 +131,7 @@ const IMPORT_SOURCES = [
   { id: "praktischarzt", label: "PraktischArzt", icon: "⚕️" },
   { id: "medijobs", label: "MediJobs", icon: "💼" },
   { id: "xing", label: "XING", icon: "🔗" },
+  { id: "ethimedis", label: "Ethimedis", icon: "🏥" },
 ] as const;
 
 const AdminJobsPage = () => {
