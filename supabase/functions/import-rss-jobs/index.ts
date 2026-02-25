@@ -1021,8 +1021,25 @@ serve(async (req) => {
                     if (employerUrl) console.log(`[${runId}] Resolved employer URL: ${employerUrl}`);
                     if (!job.employerUrl) await new Promise((r) => setTimeout(r, 1000));
 
-                    const enrichment = await generateAiSummary(job, anthropicKey);
                     const applyUrl = employerUrl || job.link;
+
+                    // Check if a published job with this URL already exists (prevent duplicate imports)
+                    if (applyUrl) {
+                        const { data: existingPublished } = await db
+                            .from("jobs")
+                            .select("id, title")
+                            .eq("apply_url", applyUrl)
+                            .eq("is_published", true)
+                            .limit(1);
+
+                        if (existingPublished && existingPublished.length > 0) {
+                            console.log(`[${runId}] Skipping duplicate (already published): ${job.title}`);
+                            results.skipped++;
+                            continue;
+                        }
+                    }
+
+                    const enrichment = await generateAiSummary(job, anthropicKey);
                     const enrichedLocation = enrichLocationWithState(job.location);
 
                     const { data: inserted, error: insertErr } = await db
