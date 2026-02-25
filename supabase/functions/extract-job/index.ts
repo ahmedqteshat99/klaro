@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { enforceRateLimit, RATE_LIMITS, RateLimitError, rateLimitResponse } from "../_shared/rate-limit.ts";
+import { fetchAnthropicWithRetry } from "../_shared/anthropic-retry.ts";
 
 const normalizeUrl = (value: string) => {
   const trimmed = value.trim();
@@ -228,7 +229,7 @@ ${normalizedInputUrl || "keine URL angegeben"}
 STELLENANZEIGE:
     ${pageContent.substring(0, 10000)}`;
 
-    const aiResponse = await fetch('https://api.anthropic.com/v1/messages', {
+    const aiResponse = await fetchAnthropicWithRetry('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -236,7 +237,7 @@ STELLENANZEIGE:
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5-20250929',
+        model: 'claude-sonnet-4-6',
         max_tokens: 900,
         system: 'Du extrahierst strukturierte Daten aus deutschen Stellenanzeigen für Ärzte. Antworte NUR mit validem JSON, keine Erklärungen. Das Feld "description" soll eine kurze, professionelle Zusammenfassung der Stelle sein (2-3 Sätze), nicht der vollständige Originaltext.',
         messages: [
@@ -248,7 +249,7 @@ STELLENANZEIGE:
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
       console.error('AI extraction error:', aiResponse.status, errorText);
-      throw new Error('Extraktion fehlgeschlagen');
+      throw new Error('Die KI-Extraktion ist vorübergehend nicht verfügbar. Bitte geben Sie die Daten manuell ein.');
     }
 
     const aiData = await aiResponse.json();

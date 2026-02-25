@@ -196,7 +196,7 @@ Antworte NUR mit validem JSON (kein Markdown):
                 "anthropic-version": "2023-06-01",
             },
             body: JSON.stringify({
-                model: "claude-haiku-4-5-20250929",
+                model: "claude-haiku-4-5",
                 max_tokens: 200,
                 system: "Du extrahierst medizinische Fachbereiche aus deutschen Stellenanzeigen. Antworte NUR mit JSON.",
                 messages: [{ role: "user", content: prompt }],

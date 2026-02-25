@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { enforceRateLimit, RATE_LIMITS, RateLimitError, rateLimitResponse } from "../_shared/rate-limit.ts";
+import { fetchAnthropicWithRetry } from "../_shared/anthropic-retry.ts";
 
 const normalizeEmailAddress = (value: string | null | undefined) => {
   const normalized = (value ?? "").trim().toLowerCase();
@@ -134,7 +135,7 @@ serve(async (req) => {
     }
 
     if (workExperiences && workExperiences.length > 0) {
-      const expList = workExperiences.map((w: any) => 
+      const expList = workExperiences.map((w: any) =>
         `- ${w.klinik} (${w.zeitraum_von || '?'} - ${w.zeitraum_bis || 'heute'}): ${w.station || ''} ${w.taetigkeiten || ''}`
       ).join('\n');
       sections.push(`BERUFSERFAHRUNG:\n${expList}`);
@@ -306,7 +307,7 @@ BEISPIEL-OUTPUT
 
 Beginne DIREKT mit dem HTML-Output. Keine Einleitung oder Erklärung.`;
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetchAnthropicWithRetry('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -314,7 +315,7 @@ Beginne DIREKT mit dem HTML-Output. Keine Einleitung oder Erklärung.`;
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5-20250929',
+        model: 'claude-sonnet-4-6',
         max_tokens: 2400,
         system: systemPrompt,
         messages: [

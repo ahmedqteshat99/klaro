@@ -142,7 +142,8 @@ function parseAerzteblattPage(html: string): ScrapedJob[] {
 
     // Hrefs are absolute URLs: https://aerztestellen.aerzteblatt.de/de/stelle/[slug]
     // Title is reliably in the title="" attribute on the same <a> tag
-    const jobLinkRegex = /<a\s+href="(https:\/\/aerztestellen\.aerzteblatt\.de\/de\/stelle\/[^"]+)"\s+title="([^"]+)"/g;
+    // Note: Allow any attributes (like class="recruiter-job-link") between href and title
+    const jobLinkRegex = /<a\s+href="(https:\/\/aerztestellen\.aerzteblatt\.de\/de\/stelle\/[^"]+)"[^>]*title="([^"]+)"/g;
     const matches = [...html.matchAll(jobLinkRegex)];
 
     for (const match of matches) {
