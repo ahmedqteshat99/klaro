@@ -124,6 +124,15 @@ const mapJobToForm = (job: Tables<"jobs">): JobFormState => ({
   is_published: job.is_published,
 });
 
+// RSS Import Sources Configuration
+const IMPORT_SOURCES = [
+  { id: "stellenmarkt_medizin", label: "Stellenmarkt", icon: "📰" },
+  { id: "aerzteblatt", label: "Ärzteblatt", icon: "📋" },
+  { id: "praktischarzt", label: "PraktischArzt", icon: "⚕️" },
+  { id: "medijobs", label: "MediJobs", icon: "💼" },
+  { id: "xing", label: "XING", icon: "🔗" },
+] as const;
+
 const AdminJobsPage = () => {
   const { toast } = useToast();
   const [jobs, setJobs] = useState<Tables<"jobs">[]>([]);
