@@ -484,16 +484,21 @@ const AdminJobsPage = () => {
     }
   };
 
-  const handleRssImport = async () => {
+  const handleRssImport = async (source?: string) => {
     setIsRssImporting(true);
     setRssDialogState("running");
-    setRssDialogMessage("Stellenangebote werden von Stellenmarkt.de, Ärzteblatt, PraktischArzt und MediJobs geladen...");
+
+    // Customize message based on source
+    const sourceName = source
+      ? IMPORT_SOURCES.find(s => s.id === source)?.label || source
+      : "allen Quellen";
+    setRssDialogMessage(`Stellenangebote werden von ${sourceName} geladen...`);
     setRssDialogResults(null);
     setRssDialogOpen(true);
 
     try {
       const { triggerRssImport } = await import("@/lib/api/generation");
-      const result = await triggerRssImport();
+      const result = await triggerRssImport(source ? [source] : undefined);
 
       if (!result.success) {
         setRssDialogState("error");
@@ -512,7 +517,9 @@ const AdminJobsPage = () => {
       setRssDialogMessage(
         result.imported || result.updated
           ? "Neue Stellen wurden erfolgreich importiert."
-          : "Keine neuen Assistenzarzt-Stellen gefunden."
+          : result.totalFeedItems
+            ? `${result.totalFeedItems} Stellen gefunden, alle bereits in der Datenbank vorhanden.`
+            : "Keine Stellen gefunden. Möglicherweise sind die Seiten nicht erreichbar."
       );
 
       await loadJobs();
@@ -552,7 +559,9 @@ const AdminJobsPage = () => {
       setXingDialogMessage(
         result.imported || result.updated
           ? "Neue XING Stellen wurden erfolgreich importiert."
-          : "Keine neuen XING Assistenzarzt-Stellen gefunden."
+          : result.totalFeedItems
+            ? `${result.totalFeedItems} Stellen gefunden, alle bereits in der Datenbank vorhanden.`
+            : "Keine XING Stellen gefunden. Möglicherweise ist die Seite nicht erreichbar."
       );
 
       await loadJobs();
@@ -598,7 +607,9 @@ const AdminJobsPage = () => {
       setPraktischArztDialogMessage(
         result.imported || result.updated
           ? "Neue PraktischArzt Stellen wurden erfolgreich importiert."
-          : "Keine neuen PraktischArzt Assistenzarzt-Stellen gefunden."
+          : result.totalFeedItems
+            ? `${result.totalFeedItems} Stellen gefunden, alle bereits in der Datenbank vorhanden.`
+            : "Keine PraktischArzt Stellen gefunden. Möglicherweise ist die Seite nicht erreichbar."
       );
 
       await loadJobs();
@@ -817,6 +828,7 @@ const AdminJobsPage = () => {
     if (statusFilter === "all") return jobs;
     if (statusFilter === "draft") return jobs.filter((j) => !(j as any).import_status || (j as any).import_status === "manual");
     if (statusFilter === "stale_links") return jobs.filter((j) => (j as any).link_status === "stale");
+    if (statusFilter === "error_links") return jobs.filter((j) => (j as any).link_status === "error");
     return jobs.filter((j) => (j as any).import_status === statusFilter);
   }, [jobs, statusFilter]);
 
@@ -853,62 +865,42 @@ const AdminJobsPage = () => {
               </>
             )}
           </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={handleRssImport}
-            disabled={isRssImporting}
-          >
-            {isRssImporting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Importiere...
-              </>
-            ) : (
-              <>
-                <Rss className="mr-2 h-4 w-4" />
-                RSS importieren
-              </>
-            )}
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={handleXingImport}
-            disabled={isXingImporting}
-            className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
-          >
-            {isXingImporting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Importiere...
-              </>
-            ) : (
-              <>
-                <ExternalLink className="mr-2 h-4 w-4" />
-                XING importieren
-              </>
-            )}
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={handlePraktischArztImport}
-            disabled={isPraktischArztImporting}
-            className="bg-orange-50 hover:bg-orange-100 text-orange-700 border-orange-200"
-          >
-            {isPraktischArztImporting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Importiere...
-              </>
-            ) : (
-              <>
-                <ExternalLink className="mr-2 h-4 w-4" />
-                PraktischArzt
-              </>
-            )}
-          </Button>
+          {/* Source-specific import buttons */}
+          <div className="col-span-full grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+            {IMPORT_SOURCES.map((source) => (
+              <Button
+                key={source.id}
+                type="button"
+                variant="outline"
+                onClick={() => handleRssImport(source.id)}
+                disabled={isRssImporting}
+                className="flex flex-col items-center gap-1 h-auto py-3"
+              >
+                <span className="text-xl">{source.icon}</span>
+                <span className="text-xs">{source.label}</span>
+              </Button>
+            ))}
+            {/* Import all sources button */}
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => handleRssImport()}
+              disabled={isRssImporting}
+              className="flex flex-col items-center gap-1 h-auto py-3"
+            >
+              {isRssImporting ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="text-xs">Importiere...</span>
+                </>
+              ) : (
+                <>
+                  <Rss className="h-5 w-5" />
+                  <span className="text-xs">Alle</span>
+                </>
+              )}
+            </Button>
+          </div>
           <Button
             type="button"
             variant="secondary"
@@ -1196,6 +1188,7 @@ const AdminJobsPage = () => {
                 <SelectItem value="expired">Abgelaufen</SelectItem>
                 <SelectItem value="draft">Manuell/Entwurf</SelectItem>
                 <SelectItem value="stale_links">🔴 Inaktive Links</SelectItem>
+                <SelectItem value="error_links">⚠️ Fehlerhafte Links</SelectItem>
               </SelectContent>
             </Select>
             {statusFilter === "stale_links" && staleCount > 0 && (
@@ -1683,28 +1676,28 @@ const AdminJobsPage = () => {
                   <p className="text-sm">{praktischArztDialogMessage}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-2 rounded-lg border border-orange-200 p-3 bg-orange-50/50">
+                  {praktischArztDialogResults.totalListings != null && (
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-orange-700">{praktischArztDialogResults.totalListings}</div>
+                      <div className="text-xs text-muted-foreground">Gefunden</div>
+                    </div>
+                  )}
                   {praktischArztDialogResults.imported != null && (
                     <div className="text-center">
                       <div className="text-2xl font-bold text-orange-600">{praktischArztDialogResults.imported}</div>
                       <div className="text-xs text-muted-foreground">Neu importiert</div>
                     </div>
                   )}
+                  {praktischArztDialogResults.skipped != null && (
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-muted-foreground">{praktischArztDialogResults.skipped}</div>
+                      <div className="text-xs text-muted-foreground">Bereits vorhanden</div>
+                    </div>
+                  )}
                   {praktischArztDialogResults.updated != null && (
                     <div className="text-center">
                       <div className="text-2xl font-bold text-orange-500">{praktischArztDialogResults.updated}</div>
                       <div className="text-xs text-muted-foreground">Aktualisiert</div>
-                    </div>
-                  )}
-                  {praktischArztDialogResults.skipped != null && (
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-muted-foreground">{praktischArztDialogResults.skipped}</div>
-                      <div className="text-xs text-muted-foreground">Übersprungen</div>
-                    </div>
-                  )}
-                  {praktischArztDialogResults.expired != null && (
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-orange-500">{praktischArztDialogResults.expired}</div>
-                      <div className="text-xs text-muted-foreground">Abgelaufen</div>
                     </div>
                   )}
                 </div>

@@ -29,11 +29,14 @@ const XING_SOURCE = "xing";
 // they use JavaScript rendering, Cloudflare protection, or the domain does not exist.
 
 // Shared config
-const MAX_PAGES = 5; // Scrape up to 5 pages per source (HTTP scrapers)
+const MAX_PAGES = 5; // Legacy default (unused now, each source has its own MAX_PAGES)
+const MAX_PAGES_STELLENMARKT = 100; // Stellenmarkt scraping depth
 const MAX_PAGES_AERZTEBLATT = 100; // Ärzteblatt has many pages; scrape deeper
-const MAX_PAGES_PRAKTISCHARZT = 105; // PraktischArzt has many pages; scrape deeper
-const MAX_BROWSER_PAGES = 1; // Browser-based scraping is slow; limit to 1 page
-const MAX_JOBS_PER_RUN = 500; // Increased to accommodate larger sources (Ärzteblatt: 226, PraktischArzt: 300+)
+const MAX_PAGES_PRAKTISCHARZT = 100; // PraktischArzt has many pages; scrape deeper
+const MAX_PAGES_MEDIJOBS = 100; // MediJobs scraping depth
+const MAX_PAGES_XING = 100; // XING scraping depth (browser-based)
+const MAX_BROWSER_PAGES = 1; // Browser-based scraping is slow; limit to 1 page (DEPRECATED)
+const MAX_JOBS_PER_RUN = 300; // Safe for single source imports (with timeout safety)
 const EXPIRATION_GRACE_HOURS = 48;
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -424,7 +427,8 @@ async function scrapeBrowserJobBoard(
     baseUrl: string,
     parsePageFn: (html: string) => ScrapedJob[],
     getNextPageUrl: (baseUrl: string, page: number) => string,
-    runId: string
+    runId: string,
+    maxPages: number = MAX_BROWSER_PAGES
 ): Promise<ScrapedJob[]> {
     const allJobs: ScrapedJob[] = [];
 
@@ -435,7 +439,7 @@ async function scrapeBrowserJobBoard(
         return [];
     }
 
-    for (let page = 1; page <= MAX_BROWSER_PAGES; page++) {
+    for (let page = 1; page <= maxPages; page++) {
         const url = getNextPageUrl(baseUrl, page);
 
         try {
@@ -457,7 +461,7 @@ async function scrapeBrowserJobBoard(
             if (jobs.length === 0) break;
 
             // Delay between pages (polite scraping + avoid detection)
-            if (page < MAX_BROWSER_PAGES) {
+            if (page < maxPages) {
                 await new Promise((r) => setTimeout(r, 3000)); // Longer delay for browser scraping
             }
         } catch (error) {
@@ -657,6 +661,12 @@ serve(async (req) => {
     }
 
     const runId = generateRunId();
+
+    // Timeout safety: Track execution time to exit gracefully before Edge Function timeout
+    const FUNCTION_START_TIME = Date.now();
+    const MAX_EXECUTION_TIME = 140000; // 140 seconds (10s buffer before 150s timeout)
+    const shouldContinueProcessing = () => (Date.now() - FUNCTION_START_TIME) < MAX_EXECUTION_TIME;
+
     const results = {
         runId,
         totalListings: 0,
@@ -789,7 +799,8 @@ serve(async (req) => {
                     STELLENMARKT_URL,
                     parseStellemarktPage,
                     (base, page) => page === 1 ? base : `${base}?page=${page}`,
-                    runId
+                    runId,
+                    MAX_PAGES_STELLENMARKT
                 )
                 : Promise.resolve([]),
 
@@ -821,7 +832,8 @@ serve(async (req) => {
                     MEDIJOBS_URL,
                     parseMediJobsPage,
                     (base, page) => page === 1 ? base : `${base}&page=${page}`,
-                    runId
+                    runId,
+                    MAX_PAGES_MEDIJOBS
                 )
                 : Promise.resolve([]),
 
@@ -831,7 +843,8 @@ serve(async (req) => {
                     XING_URL,
                     parseXingPage,
                     (base, page) => page === 1 ? base : `${base}&page=${page}`,
-                    runId
+                    runId,
+                    MAX_PAGES_XING
                 )
                 : Promise.resolve([]),
         ]);
@@ -893,6 +906,13 @@ serve(async (req) => {
 
         // ── 3. Process each listing ──
         for (const job of itemsToProcess) {
+            // Check if approaching timeout - exit gracefully to avoid Edge Function timeout
+            if (!shouldContinueProcessing()) {
+                console.log(`[${runId}] ⏱️ Approaching timeout, stopping processing early`);
+                console.log(`[${runId}] ✅ Processed ${results.imported + results.updated} jobs before timeout`);
+                break;
+            }
+
             seenGuids.add(job.guid);
 
             try {
