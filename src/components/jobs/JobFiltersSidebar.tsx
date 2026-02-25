@@ -1,5 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
-import type { Tables } from "@/integrations/supabase/types";
+import { useState } from "react";
 import {
     MapPin,
     Stethoscope,
@@ -35,9 +34,14 @@ const BUNDESLAND_KEYWORDS: Record<string, string> = {
     "Schweiz": "Schweiz",
 };
 
+const SORTED_BUNDESLAND_ENTRIES = Object.entries(BUNDESLAND_KEYWORDS).sort(
+    (a, b) => b[0].length - a[0].length
+);
+
 export function extractBundesland(location: string | null): string | null {
     if (!location) return null;
-    for (const [keyword, state] of Object.entries(BUNDESLAND_KEYWORDS)) {
+    // More specific names (e.g. "Sachsen-Anhalt") are checked before "Sachsen".
+    for (const [keyword, state] of SORTED_BUNDESLAND_ENTRIES) {
         if (location.includes(keyword)) return state;
     }
     return null;
@@ -54,7 +58,7 @@ export function getJobStellenstartTags(tags: string[] | null): string[] {
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────
-interface FilterItem {
+export interface FilterItem {
     value: string;
     count: number;
 }
@@ -181,7 +185,10 @@ const FilterSection = ({
 // ─── Main Sidebar ────────────────────────────────────────────────────────────
 
 export interface JobFiltersSidebarProps {
-    jobs: Tables<"jobs">[];
+    locationItems: FilterItem[];
+    departmentItems: FilterItem[];
+    stellenartItems: FilterItem[];
+    otherTagItems: FilterItem[];
     activeLocations: Set<string>;
     activeDepartments: Set<string>;
     activeTags: Set<string>;
@@ -193,7 +200,10 @@ export interface JobFiltersSidebarProps {
 }
 
 const JobFiltersSidebar = ({
-    jobs,
+    locationItems,
+    departmentItems,
+    stellenartItems,
+    otherTagItems,
     activeLocations,
     activeDepartments,
     activeTags,
@@ -203,61 +213,14 @@ const JobFiltersSidebar = ({
     onClearAll,
     hasActiveFilters,
 }: JobFiltersSidebarProps) => {
-    const counts = useMemo(() => {
-        const bundeslandCounts = new Map<string, number>();
-        const departmentCounts = new Map<string, number>();
-        const tagCounts = new Map<string, number>();
-
-        for (const job of jobs) {
-            // Bundesland from location
-            const bl = extractBundesland(job.location);
-            if (bl) bundeslandCounts.set(bl, (bundeslandCounts.get(bl) ?? 0) + 1);
-
-            // Department
-            if (job.department) {
-                departmentCounts.set(
-                    job.department,
-                    (departmentCounts.get(job.department) ?? 0) + 1
-                );
-            }
-
-            // Tags — split into Stellenart vs. rest
-            if (job.tags) {
-                for (const tag of job.tags) {
-                    tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
-                }
-            }
-        }
-
-        const toSorted = (map: Map<string, number>): FilterItem[] =>
-            Array.from(map.entries())
-                .map(([value, count]) => ({ value, count }))
-                .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value, "de"));
-
-        // Split tags into Stellenart (work type) and other
-        const allTags = toSorted(tagCounts);
-        const stellenart = allTags.filter((t) =>
-            STELLENART_TAGS.has(t.value.toLowerCase())
-        );
-        const otherTags = allTags.filter(
-            (t) => !STELLENART_TAGS.has(t.value.toLowerCase())
-        );
-
-        return {
-            bundesland: toSorted(bundeslandCounts),
-            departments: toSorted(departmentCounts),
-            stellenart,
-            otherTags,
-        };
-    }, [jobs]);
-
     const activeCount =
         activeLocations.size + activeDepartments.size + activeTags.size;
 
     if (
-        counts.bundesland.length === 0 &&
-        counts.departments.length === 0 &&
-        counts.stellenart.length === 0
+        locationItems.length === 0 &&
+        departmentItems.length === 0 &&
+        stellenartItems.length === 0 &&
+        otherTagItems.length === 0
     ) {
         return null;
     }
@@ -286,7 +249,7 @@ const JobFiltersSidebar = ({
                 <FilterSection
                     label="Fachbereich"
                     icon={<Stethoscope className="h-3.5 w-3.5 text-muted-foreground" />}
-                    items={counts.departments}
+                    items={departmentItems}
                     activeSet={activeDepartments}
                     onToggle={onToggleDepartment}
                     searchable
@@ -294,24 +257,24 @@ const JobFiltersSidebar = ({
                 <FilterSection
                     label="Bundesland"
                     icon={<MapPin className="h-3.5 w-3.5 text-muted-foreground" />}
-                    items={counts.bundesland}
+                    items={locationItems}
                     activeSet={activeLocations}
                     onToggle={onToggleLocation}
                 />
-                {counts.stellenart.length > 0 && (
+                {stellenartItems.length > 0 && (
                     <FilterSection
                         label="Stellenart"
                         icon={<Briefcase className="h-3.5 w-3.5 text-muted-foreground" />}
-                        items={counts.stellenart}
+                        items={stellenartItems}
                         activeSet={activeTags}
                         onToggle={onToggleTag}
                     />
                 )}
-                {counts.otherTags.length > 0 && (
+                {otherTagItems.length > 0 && (
                     <FilterSection
                         label="Weitere Tags"
                         icon={<Stethoscope className="h-3.5 w-3.5 text-muted-foreground" />}
-                        items={counts.otherTags}
+                        items={otherTagItems}
                         activeSet={activeTags}
                         onToggle={onToggleTag}
                     />

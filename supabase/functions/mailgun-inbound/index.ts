@@ -431,6 +431,63 @@ serve(async (req) => {
     return new Response("Recipient not recognized", { status: 400 });
   }
 
+  // --- SOCIAL MEDIA CATCH-ALL: Forward non-reply emails to personal inbox ---
+  // If this is NOT a reply+ email (for applications), just forward it to personal email
+  const isReplyEmail = /^reply\+/i.test(extractEmailLocalPart(recipient));
+  const personalForwardEmail = Deno.env.get("PERSONAL_FORWARD_EMAIL");
+
+  if (!isReplyEmail && personalForwardEmail) {
+    console.log("Non-reply email detected, forwarding to personal inbox:", recipient);
+
+    try {
+      // Forward the email to personal inbox
+      const form = new FormData();
+      form.append("from", `Klaro Mail <noreply@${mailgunDomain}>`);
+      form.append("to", personalForwardEmail);
+      form.append("subject", `[${recipient}] ${subject}`);
+      form.append("text", `Email received at: ${recipient}\nFrom: ${sender}\n\n${textBody}`);
+      if (htmlBody) {
+        form.append(
+          "html",
+          `<div style="background: #f3f4f6; padding: 12px; margin-bottom: 20px; border-left: 4px solid #3b82f6;">
+            <strong>Email received at:</strong> ${recipient}<br/>
+            <strong>From:</strong> ${sender}
+          </div>${htmlBody}`
+        );
+      }
+      form.append("h:Reply-To", sender);
+
+      // Forward attachments if any
+      const attachmentCount = Number(formData.get("attachment-count")?.toString() ?? "0");
+      for (let i = 1; i <= attachmentCount; i += 1) {
+        const file = formData.get(`attachment-${i}`);
+        if (file instanceof File) {
+          form.append("attachment", file, file.name || "attachment");
+        }
+      }
+
+      const auth = btoa(`api:${mailgunApiKey}`);
+      const base = mailgunApiBaseUrl.replace(/\/+$/, "");
+      const forwardResponse = await fetch(`${base}/v3/${mailgunDomain}/messages`, {
+        method: "POST",
+        headers: { Authorization: `Basic ${auth}` },
+        body: form,
+      });
+
+      if (forwardResponse.ok) {
+        console.log("Successfully forwarded to personal email");
+        return new Response(JSON.stringify({ success: true, forwarded: true }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      } else {
+        const errorText = await forwardResponse.text();
+        console.error("Failed to forward to personal email:", errorText);
+      }
+    } catch (error) {
+      console.error("Error forwarding to personal email:", error);
+    }
+  }
+
   const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
   let application: { id: string; user_id: string; reply_token: string | null } | null = null;
   let replyToken: string | null = null;

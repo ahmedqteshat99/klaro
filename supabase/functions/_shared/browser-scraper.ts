@@ -30,7 +30,7 @@ export async function scrapeWithBrowser(
 ): Promise<ScrapedPage> {
   const {
     puppeteerEndpoint = Deno.env.get("PUPPETEER_SERVICE_URL") || "http://localhost:3001/scrape",
-    timeout = 30000,
+    timeout = 90000, // Increased default timeout for cloud services (Render free tier)
     waitForSelector,
   } = config;
 
@@ -45,7 +45,7 @@ export async function scrapeWithBrowser(
         timeout,
         waitForSelector,
       }),
-      signal: AbortSignal.timeout(timeout + 5000),
+      signal: AbortSignal.timeout(timeout + 10000), // Extra time for network overhead
     });
 
     if (!response.ok) {

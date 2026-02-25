@@ -703,7 +703,17 @@ const AdminJobsPage = () => {
     setBusyJobId(null);
 
     if (error) {
-      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+      // Check if it's a duplicate constraint error
+      if (error.message.includes("idx_jobs_unique_apply_url") ||
+          error.message.includes("duplicate key")) {
+        toast({
+          title: "Duplikat erkannt",
+          description: "Eine andere Stelle mit dieser URL ist bereits veröffentlicht. Bitte verwenden Sie den Filter 'Duplikate', um ähnliche Stellen zu finden.",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Fehler beim Genehmigen", description: error.message, variant: "destructive" });
+      }
       return;
     }
     toast({ title: "Job genehmigt", description: "Der Job ist jetzt öffentlich sichtbar." });
@@ -750,6 +760,9 @@ const AdminJobsPage = () => {
     if (selectedJobIds.size === 0) return;
     setIsBulkProcessing(true);
     let count = 0;
+    let duplicates = 0;
+    let errors = 0;
+
     for (const jobId of selectedJobIds) {
       const { error } = await supabase
         .from("jobs")
@@ -759,11 +772,24 @@ const AdminJobsPage = () => {
           published_at: new Date().toISOString(),
         })
         .eq("id", jobId);
-      if (!error) count++;
+
+      if (!error) {
+        count++;
+      } else if (error.message.includes("idx_jobs_unique_apply_url") ||
+                 error.message.includes("duplicate key")) {
+        duplicates++;
+      } else {
+        errors++;
+      }
     }
+
     setIsBulkProcessing(false);
     setSelectedJobIds(new Set());
-    toast({ title: "Jobs genehmigt", description: `${count} Jobs wurden veröffentlicht.` });
+    toast({
+      title: "Massenfreigabe abgeschlossen",
+      description: `${count} Jobs wurden veröffentlicht.${duplicates > 0 ? ` ${duplicates} Duplikate übersprungen.` : ''}${errors > 0 ? ` ${errors} Fehler aufgetreten.` : ''}`,
+      variant: duplicates > 0 || errors > 0 ? "destructive" : "default",
+    });
     void loadJobs();
   };
 
@@ -838,6 +864,18 @@ const AdminJobsPage = () => {
     if (statusFilter === "draft") return jobs.filter((j) => !(j as any).import_status || (j as any).import_status === "manual");
     if (statusFilter === "stale_links") return jobs.filter((j) => (j as any).link_status === "stale");
     if (statusFilter === "error_links") return jobs.filter((j) => (j as any).link_status === "error");
+    if (statusFilter === "duplicates") {
+      // Show jobs that would fail approval due to duplicates
+      const publishedHashes = new Set(
+        jobs.filter(j => j.is_published && (j as any).apply_url_hash)
+          .map(j => (j as any).apply_url_hash)
+      );
+      return jobs.filter((j) =>
+        !j.is_published &&
+        (j as any).apply_url_hash &&
+        publishedHashes.has((j as any).apply_url_hash)
+      );
+    }
     return jobs.filter((j) => (j as any).import_status === statusFilter);
   }, [jobs, statusFilter]);
 
@@ -1196,6 +1234,7 @@ const AdminJobsPage = () => {
                 <SelectItem value="rejected">Abgelehnt</SelectItem>
                 <SelectItem value="expired">Abgelaufen</SelectItem>
                 <SelectItem value="draft">Manuell/Entwurf</SelectItem>
+                <SelectItem value="duplicates">🔄 Duplikate</SelectItem>
                 <SelectItem value="stale_links">🔴 Inaktive Links</SelectItem>
                 <SelectItem value="error_links">⚠️ Fehlerhafte Links</SelectItem>
               </SelectContent>

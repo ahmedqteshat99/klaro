@@ -345,6 +345,26 @@ export async function triggerXingImport(): Promise<{
 }
 
 /**
+ * Trigger PraktischArzt job import specifically.
+ * Admin-only operation.
+ */
+export async function triggerPraktischArztImport(): Promise<{
+  success: boolean;
+  runId?: string;
+  totalFeedItems?: number;
+  matchingItems?: number;
+  imported?: number;
+  updated?: number;
+  skipped?: number;
+  expired?: number;
+  errors?: number;
+  errorMessages?: string[];
+  error?: string;
+}> {
+  return triggerRssImport(['praktischarzt']);
+}
+
+/**
  * Check all published job URLs for dead links.
  */
 export async function checkStaleJobs(): Promise<{

@@ -73,7 +73,7 @@ function isValidJobUrlPattern(url: string): { valid: boolean; reason?: string } 
     }
   }
 
-  // WHITELIST: URL must contain job-specific indicators
+  // WHITELIST: URL should look like a job posting (relaxed - allow more patterns)
   const hasJobIndicator =
     // Numeric job ID
     /\/(job|stelle|position|vacancy)[/-]?\d+/i.test(url) ||
@@ -85,7 +85,11 @@ function isValidJobUrlPattern(url: string): { valid: boolean; reason?: string } 
     /rexx.*\/jobs\//i.test(url) ||
     /successfactors.*\/jobReq/i.test(url) ||
     // Anzeige/detail pages with IDs
-    /\/(anzeige|detail|view)[/-]?\d+/i.test(url);
+    /\/(anzeige|detail|view)[/-]?\d+/i.test(url) ||
+    // RELAXED: URLs containing job-related keywords with paths
+    (/\/(stelle|job|position)[ns]?\/[^\/]+/i.test(url) && !/\/(stelle|job|position)[ns]?\/?$/i.test(url)) ||
+    // URLs with assistenzarzt in path (not root)
+    (/assistenzarzt/i.test(url) && url.split('/').length > 4);
 
   if (!hasJobIndicator) {
     return { valid: false, reason: "No job ID or specific identifier in URL" };
@@ -110,8 +114,10 @@ async function validateJobUrl(url: string): Promise<ValidationResult> {
 
     clearTimeout(timeout);
 
+    // RELAXED: Accept 2xx and 3xx as valid (redirects are OK)
+    // Only reject 4xx and 5xx errors
     const isValid = response.status >= 200 && response.status < 400;
-    const isDead = response.status === 404 || response.status === 410;
+    const isDead = response.status === 404 || response.status === 410 || response.status === 451;
 
     return {
       valid: isValid,
@@ -120,11 +126,14 @@ async function validateJobUrl(url: string): Promise<ValidationResult> {
       finalUrl: response.url, // Final URL after redirects
     };
   } catch (error) {
-    console.error(`Failed to validate URL ${url}:`, error);
+    // RELAXED: If HEAD fails, assume it's valid (some servers block HEAD requests)
+    // The content verification step will catch truly dead links
+    console.log(`⚠️  HEAD request failed for ${url}, assuming valid`);
     return {
-      valid: false,
+      valid: true, // Changed from false to true
       httpStatus: null,
       isDead: false,
+      finalUrl: url,
       error: error instanceof Error ? error.message : "Unknown error",
     };
   }
@@ -191,8 +200,8 @@ async function verifyJobPageContent(url: string, expectedKeywords: string[]): Pr
     }
 
     // REQUIRED: Must have substantive content (job description)
-    // Real job postings have detailed descriptions, not just a title
-    const hasSubstantiveContent = html.length > 2000; // At least 2KB of content
+    // RELAXED: Reduced from 2000 to 500 bytes to allow compact job postings
+    const hasSubstantiveContent = html.length > 500;
 
     if (!hasSubstantiveContent) {
       console.log(`Rejected: Insufficient content (${html.length} bytes) - ${url}`);
@@ -200,6 +209,7 @@ async function verifyJobPageContent(url: string, expectedKeywords: string[]): Pr
     }
 
     // REQUIRED: Should have job-specific indicators (not just generic content)
+    // RELAXED: Only need 1 indicator instead of 2
     const jobIndicators = [
       "aufgaben",
       "anforderungen",
@@ -208,15 +218,18 @@ async function verifyJobPageContent(url: string, expectedKeywords: string[]): Pr
       "wir bieten",
       "benefits",
       "tätigkeiten",
-      "verantwortung"
+      "verantwortung",
+      "ihre aufgaben",
+      "was sie erwartet",
+      "stellenbeschreibung"
     ];
 
-    const hasJobStructure = jobIndicators.filter(indicator =>
+    const hasJobStructure = jobIndicators.some(indicator =>
       lowerHtml.includes(indicator)
-    ).length >= 2; // At least 2 job structure indicators
+    );
 
     if (!hasJobStructure) {
-      console.log(`Rejected: Missing job structure (requirements/tasks) - ${url}`);
+      console.log(`Rejected: Missing job structure indicators - ${url}`);
       return false;
     }
 
@@ -339,78 +352,160 @@ async function scrapeCustomCareerPage(url: string): Promise<JobListing[]> {
     if (!response.ok) return [];
 
     const html = await response.text();
-    const $ = cheerio.load(html);
-    const jobs: JobListing[] = [];
+    let $ = cheerio.load(html);
+    let jobs: JobListing[] = [];
     const seenUrls = new Set<string>();
 
-    // More specific selectors - prioritize semantic job listing structures
-    const selectors = [
-      ".job-listing",
-      ".job-item",
-      ".job-offer",
-      ".vacancy",
-      ".position",
-      "article.job",
-      "div.job-card",
-      "tr.job-row",
-      // Only match links that are clearly job postings (with IDs or in job containers)
-      "a[href*='/stelle/'][href*='-']",
-      "a[href*='/job/'][href*='-']",
-      "a[href*='stellenangebot'][href*='-']",
-    ];
+    // STEP 1: Check if this page has actual job postings or if it's a landing page
+    let jobLinksFound = 0;
+    $("a[href]").each((_: number, el: any) => {
+      const href = $(el).attr("href");
+      if (!href) return;
+      const fullUrl = href.startsWith("http") ? href : new URL(href, url).toString();
+      if (/\/(stelle|job|position)(?:n|angebot)?\/[^\/]+|\/detail\/\d+|\/anzeige\/\d+/i.test(fullUrl)) {
+        jobLinksFound++;
+      }
+    });
 
-    for (const selector of selectors) {
-      $(selector).each((_, el) => {
-        const $el = $(el);
-        const titleEl = $el.find(".job-title, h2, h3, h4, .title, .position-title, strong").first();
-        const linkEl = $el.is("a") ? $el : $el.find("a[href]").first();
+    console.log(`  Found ${jobLinksFound} potential job links on landing page`);
 
-        let title = titleEl.text().trim();
-        if (!title || title.length < 10) {
-          // If no title element, try link text (but must be substantial)
-          title = linkEl.text().trim();
+    // STEP 2: If no job links found, this might be a landing page - look for job listing page link
+    if (jobLinksFound === 0) {
+      console.log(`  Appears to be a landing page, looking for job listing page...`);
+
+      const jobListingPatterns = [
+        /^\/(stellenangebote|jobs|offene-stellen|karriere\/stellen|vacancies|openings)/i,
+        /(stellenangebote|jobs|offene-stellen)/i,
+      ];
+
+      let jobListingUrl: string | null = null;
+
+      $("a[href]").each((_: number, el: any) => {
+        if (jobListingUrl) return; // Already found
+        const href = $(el).attr("href") || "";
+        const text = $(el).text().toLowerCase();
+
+        // Check if link text or href suggests job listings
+        if (
+          text.includes("stellenangebote") ||
+          text.includes("offene stellen") ||
+          text.includes("jobs") ||
+          text.includes("alle stellen") ||
+          jobListingPatterns.some(p => p.test(href))
+        ) {
+          jobListingUrl = href.startsWith("http") ? href : new URL(href, url).toString();
+          console.log(`  Found job listing page: ${jobListingUrl}`);
         }
-
-        const href = linkEl.attr("href");
-
-        if (!title || !href || title.length < 10) return;
-
-        // CRITICAL: Title must explicitly mention medical position
-        const lowerTitle = title.toLowerCase();
-        const isMedicalPosition =
-          lowerTitle.includes("assistenzarzt") ||
-          lowerTitle.includes("assistenzärztin") ||
-          (lowerTitle.includes("arzt") && lowerTitle.includes("weiterbildung")) ||
-          (lowerTitle.includes("ärztin") && lowerTitle.includes("weiterbildung"));
-
-        if (!isMedicalPosition) {
-          return; // Skip non-medical positions
-        }
-
-        // Resolve relative URLs
-        const jobUrl = href.startsWith("http") ? href : new URL(href, url).toString();
-
-        // Skip if already seen
-        if (seenUrls.has(jobUrl)) return;
-        seenUrls.add(jobUrl);
-
-        // CRITICAL: URL must pass pattern validation
-        const urlCheck = isValidJobUrlPattern(jobUrl);
-        if (!urlCheck.valid) {
-          console.log(`Skipped "${title}" - ${urlCheck.reason}`);
-          return;
-        }
-
-        jobs.push({
-          title,
-          url: jobUrl,
-          description: $el.find(".description, .job-description, .summary, p").first().text().trim(),
-          department: $el.find(".department, .specialty, .fachbereich").first().text().trim(),
-        });
       });
 
-      if (jobs.length > 0) break; // Found jobs with this selector, stop trying others
+      // If found, fetch and parse the actual job listing page
+      if (jobListingUrl) {
+        const listingResponse = await fetch(jobListingUrl);
+        if (listingResponse.ok) {
+          const listingHtml = await listingResponse.text();
+          $ = cheerio.load(listingHtml);
+          url = jobListingUrl; // Update base URL for relative links
+          console.log(`  Successfully loaded job listing page`);
+        }
+      } else {
+        console.log(`  No job listing page found, will try to scrape landing page anyway`);
+      }
     }
+
+    // STEP 3: Find links that look like job postings
+    $("a[href]").each((_, el) => {
+      const $el = $(el);
+      const href = $el.attr("href");
+      if (!href) return;
+
+      const jobUrl = href.startsWith("http") ? href : new URL(href, url).toString();
+
+      // Basic URL filtering - must look like a job posting
+      const urlLower = jobUrl.toLowerCase();
+      const isJobUrl =
+        /\/(stelle|job|position|vacancy|karriere)(?:n|angebot)?\/[^\/]+/i.test(jobUrl) ||
+        /\/detail\/\d+/i.test(jobUrl) ||
+        /\/anzeige\/\d+/i.test(jobUrl) ||
+        /stellenangebot.*\d+/i.test(jobUrl);
+
+      if (!isJobUrl) return;
+
+      // Skip if already seen
+      if (seenUrls.has(jobUrl)) return;
+      seenUrls.add(jobUrl);
+
+      // Get title - be lenient, use any available text
+      let title = $el.find(".job-title, h2, h3, h4, .title").first().text().trim() ||
+                  $el.closest(".job-listing, .job-item").find("h2, h3, h4").first().text().trim() ||
+                  $el.text().trim() ||
+                  "Job Opening"; // Fallback
+
+      // Clean up title
+      title = title.replace(/\s+/g, ' ').trim();
+
+      // REJECT: Button text and generic UI elements
+      const buttonTextPatterns = [
+        /^(jetzt\s+)?bewerben$/i,
+        /^hier\s+bewerben$/i,
+        /^zur\s+bewerbung$/i,
+        /^details?$/i,
+        /^mehr\s+infos?$/i,
+        /^weiterlesen$/i,
+        /^ansehen$/i,
+        /^\d+$/,  // Just numbers
+        /^weiter$/i,
+      ];
+
+      if (buttonTextPatterns.some(pattern => pattern.test(title))) {
+        return; // Skip button text
+      }
+
+      // REJECT: Non-doctor positions (nursing, admin, etc.)
+      const nonDoctorPatterns = [
+        /pflegefachkraft/i,
+        /gesundheits.*pfleger/i,
+        /krankenpfleger/i,
+        /\bMFA\b/i,  // Medizinische Fachangestellte
+        /medizinische.*fachangestellte/i,
+        /pflegeassistent/i,
+        /verwaltung[^a-z]*(mitarbeiter|kraft)/i,
+        /\bIT\b.*administrator/i,
+        /reinigungskraft/i,
+      ];
+
+      if (nonDoctorPatterns.some(pattern => pattern.test(title))) {
+        return; // Skip non-doctor positions
+      }
+
+      // Apply medical position filtering for titles >= 10 characters
+      if (title.length >= 10) {
+        const lowerTitle = title.toLowerCase();
+        const isDoctorPosition =
+          lowerTitle.includes("assistenzarzt") ||
+          lowerTitle.includes("assistenzärztin") ||
+          lowerTitle.includes("facharzt") ||
+          lowerTitle.includes("oberarzt") ||
+          lowerTitle.includes("chefarzt") ||
+          (lowerTitle.includes("arzt") && (
+            lowerTitle.includes("weiterbildung") ||
+            lowerTitle.includes("in weiterbildung") ||
+            lowerTitle.includes("medizin")
+          )) ||
+          lowerTitle.includes("ärzt");
+
+        // Only skip if we have a title AND it's clearly not a doctor position
+        if (!isDoctorPosition) {
+          return; // Skip non-doctor with clear title
+        }
+      }
+
+      jobs.push({
+        title,
+        url: jobUrl,
+        description: "",
+        department: "",
+      });
+    });
 
     console.log(`Custom scraper extracted ${jobs.length} job candidates from ${url}`);
     return jobs;
@@ -437,7 +532,10 @@ async function detectPlatformAndScrape(careerUrl: string): Promise<JobListing[]>
 // =====================
 
 async function processHospitalJobs(hospital: any) {
-  console.log(`Processing hospital: ${hospital.name}`);
+  console.log(`\n========================================`);
+  console.log(`Processing: ${hospital.name}`);
+  console.log(`URL: ${hospital.career_page_url}`);
+  console.log(`Platform: ${hospital.career_platform || 'unknown'}`);
 
   if (!hospital.career_page_url) {
     console.log(`No career page URL for ${hospital.name}, skipping`);
@@ -446,35 +544,42 @@ async function processHospitalJobs(hospital: any) {
 
   // Scrape jobs
   const jobs = await detectPlatformAndScrape(hospital.career_page_url);
-  console.log(`Found ${jobs.length} potential Assistenzarzt jobs at ${hospital.name}`);
+  console.log(`\n📋 Scraped ${jobs.length} job candidates from career page`);
 
   let jobsAdded = 0;
 
+  console.log(`\n🔍 Validating ${jobs.length} candidates...\n`);
+
   for (const job of jobs) {
+    console.log(`\nCandidate: "${job.title}"`);
+    console.log(`  URL: ${job.url}`);
+
     // STEP 1: Validate URL pattern (fast, no network call)
     const urlPatternCheck = isValidJobUrlPattern(job.url);
     if (!urlPatternCheck.valid) {
-      console.log(`❌ URL pattern rejected for "${job.title}": ${job.url} - ${urlPatternCheck.reason}`);
+      console.log(`  ❌ URL pattern: ${urlPatternCheck.reason}`);
       continue;
     }
+    console.log(`  ✅ URL pattern valid`);
 
     // STEP 2: Validate HTTP response
     const validation = await validateJobUrl(job.url);
 
     if (!validation.valid) {
-      console.log(`❌ HTTP validation failed for "${job.title}": ${job.url} (${validation.error})`);
+      console.log(`  ❌ HTTP check failed (${validation.httpStatus || 'error'})`);
       continue;
     }
+    console.log(`  ✅ HTTP check passed (${validation.httpStatus})`);
 
-    // STEP 3: Comprehensive content verification
-    const contentValid = await verifyJobPageContent(job.url, ["assistenzarzt", "arzt", "stelle"]);
-
+    // STEP 3: Content verification - ensures page is actually a job posting
+    const contentValid = await verifyJobPageContent(job.url, ["assistenzarzt", "arzt", "stelle", "position", "ärzt"]);
     if (!contentValid) {
-      console.log(`❌ Content verification failed for: ${job.url}`);
+      console.log(`  ❌ Content verification failed`);
       continue;
     }
+    console.log(`  ✅ Content verification passed`);
 
-    console.log(`✅ Job validated: "${job.title}" - ${job.url}`);
+    console.log(`  ✅✅ JOB VALIDATED: "${job.title}"`);
 
     // Check for duplicates
     const { data: duplicateCheck } = await supabase.rpc("find_duplicate_job", {
@@ -580,15 +685,16 @@ serve(async (req) => {
     //   }
     // }
 
-    // Get hospitals to scrape (limit to 25 per invocation for 24-hour coverage)
-    // 25 hospitals × 24 runs/day = 600 hospitals/day (covers all 500+)
+    // Get hospitals to scrape (limit to 10 per invocation to avoid timeout)
+    // 10 hospitals × 24 runs/day = 240 hospitals/day
+    // Full cycle: ~2 days for 500 hospitals (acceptable for hourly updates)
     const { data: hospitals, error: fetchError } = await supabase
       .from("hospitals")
       .select("*")
       .eq("is_active", true)
       .not("career_page_url", "is", null)
       .order("last_scraped_at", { ascending: true, nullsFirst: true })
-      .limit(25);
+      .limit(10);
 
     if (fetchError) throw fetchError;
 
@@ -605,8 +711,8 @@ serve(async (req) => {
       const result = await processHospitalJobs(hospital);
       results.push(result);
 
-      // Rate limiting: 5 seconds between hospitals
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      // Rate limiting: 2 seconds between hospitals (reduced to avoid timeout)
+      await new Promise((resolve) => setTimeout(resolve, 2000));
     }
 
     const totalFound = results.reduce((sum, r) => sum + r.jobsFound, 0);

@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { enforceRateLimit, RATE_LIMITS, RateLimitError, rateLimitResponse } from "../_shared/rate-limit.ts";
+import { fetchAnthropicWithRetry } from "../_shared/anthropic-retry.ts";
 
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
@@ -107,7 +109,7 @@ ${context}
 
 Antworte NUR mit der Zusammenfassung, keine zusätzlichen Erklärungen.`;
 
-                const aiResponse = await fetch('https://api.anthropic.com/v1/messages', {
+                const aiResponse = await fetchAnthropicWithRetry('https://api.anthropic.com/v1/messages', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -115,7 +117,7 @@ Antworte NUR mit der Zusammenfassung, keine zusätzlichen Erklärungen.`;
                         'anthropic-version': '2023-06-01',
                     },
                     body: JSON.stringify({
-                        model: 'claude-sonnet-4-5-20250929',
+                        model: 'claude-sonnet-4-6',
                         max_tokens: 300,
                         system: 'Du bist ein Experte für das Schreiben professioneller, einladender Stellenbeschreibungen für Ärzte in Deutschland. Schreibe prägnant und ansprechend.',
                         messages: [

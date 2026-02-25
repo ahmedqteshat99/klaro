@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState, useCallback } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, useCallback, type Dispatch, type SetStateAction } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { logFunnelEvent } from "@/lib/app-events";
@@ -25,15 +25,73 @@ import JobsNavBar from "@/components/jobs/JobsNavBar";
 import JobsHero from "@/components/jobs/JobsHero";
 import JobSearchBar from "@/components/jobs/JobSearchBar";
 import type { SortOption } from "@/components/jobs/JobSearchBar";
-import JobFiltersSidebar, { extractBundesland } from "@/components/jobs/JobFiltersSidebar";
+import JobFiltersSidebar, {
+  extractBundesland,
+  type FilterItem,
+} from "@/components/jobs/JobFiltersSidebar";
 import JobCard from "@/components/jobs/JobCard";
 import { JobCardSkeletonGrid } from "@/components/jobs/JobCardSkeleton";
 import JobsEmptyState from "@/components/jobs/JobsEmptyState";
 
+type JobRow = Tables<"jobs">;
+const STELLENART_TAGS = new Set([
+  "vollzeit", "teilzeit", "weiterbildung", "rotation", "notaufnahme", "intensivstation",
+]);
+
+const sortFilterItems = (map: Map<string, number>): FilterItem[] =>
+  Array.from(map.entries())
+    .map(([value, count]) => ({ value, count }))
+    .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value, "de"));
+
+const jobMatchesSearch = (job: JobRow, normalizedSearch: string): boolean => {
+  if (!normalizedSearch) return true;
+
+  const haystack = [
+    job.title,
+    job.hospital_name,
+    job.department,
+    job.location,
+    job.description,
+    job.requirements,
+    job.contact_email,
+    job.contact_name,
+    ...(job.tags ?? []),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return haystack.includes(normalizedSearch);
+};
+
+const jobMatchesLocationFilters = (job: JobRow, activeLocations: Set<string>): boolean => {
+  if (activeLocations.size === 0) return true;
+  const bundesland = extractBundesland(job.location);
+  return bundesland !== null && activeLocations.has(bundesland);
+};
+
+const jobMatchesDepartmentValue = (job: JobRow, departmentValue: string): boolean => {
+  const departmentLower = job.department?.toLowerCase() ?? "";
+  const needle = departmentValue.toLowerCase();
+  if (departmentLower.startsWith(needle)) return true;
+  return (job.tags ?? []).some((tag) => tag.toLowerCase() === needle);
+};
+
+const jobMatchesDepartmentFilters = (job: JobRow, activeDepartments: Set<string>): boolean => {
+  if (activeDepartments.size === 0) return true;
+  return [...activeDepartments].some((department) => jobMatchesDepartmentValue(job, department));
+};
+
+const jobMatchesTagFilters = (job: JobRow, activeTags: Set<string>): boolean => {
+  if (activeTags.size === 0) return true;
+  const tagsLower = new Set((job.tags ?? []).map((tag) => tag.toLowerCase()));
+  return [...activeTags].some((tag) => tagsLower.has(tag.toLowerCase()));
+};
+
 const JobsPage = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [jobs, setJobs] = useState<Tables<"jobs">[]>([]);
+  const [jobs, setJobs] = useState<JobRow[]>([]);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   // Locations now stores Bundesland values (derived from job.location)
@@ -42,6 +100,7 @@ const JobsPage = () => {
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const deferredSearch = useDeferredValue(search);
+  const normalizedSearch = useMemo(() => deferredSearch.trim().toLowerCase(), [deferredSearch]);
   const baseUrl =
     (import.meta.env.VITE_PUBLIC_SITE_URL as string | undefined)?.trim().replace(/\/+$/, "") ||
     window.location.origin;
@@ -84,7 +143,7 @@ const JobsPage = () => {
 
   // --- Filters ---
   const hasActiveFilters =
-    activeLocations.size > 0 || activeDepartments.size > 0 || activeTags.size > 0 || deferredSearch.trim().length > 0;
+    activeLocations.size > 0 || activeDepartments.size > 0 || activeTags.size > 0 || normalizedSearch.length > 0;
 
   const activeFilterCount = activeLocations.size + activeDepartments.size + activeTags.size;
 
@@ -96,7 +155,7 @@ const JobsPage = () => {
   }, []);
 
   const makeToggle = useCallback(
-    (setter: React.Dispatch<React.SetStateAction<Set<string>>>) =>
+    (setter: Dispatch<SetStateAction<Set<string>>>) =>
       (value: string) => {
         setter((prev) => {
           const next = new Set(prev);
@@ -112,59 +171,85 @@ const JobsPage = () => {
   const toggleDepartment = useMemo(() => makeToggle(setActiveDepartments), [makeToggle]);
   const toggleTag = useMemo(() => makeToggle(setActiveTags), [makeToggle]);
 
+  const filterFacetCounts = useMemo(() => {
+    // Each facet is computed against all active filters except itself.
+    const locationFacetJobs = jobs.filter(
+      (job) =>
+        jobMatchesSearch(job, normalizedSearch) &&
+        jobMatchesDepartmentFilters(job, activeDepartments) &&
+        jobMatchesTagFilters(job, activeTags)
+    );
+
+    const departmentFacetJobs = jobs.filter(
+      (job) =>
+        jobMatchesSearch(job, normalizedSearch) &&
+        jobMatchesLocationFilters(job, activeLocations) &&
+        jobMatchesTagFilters(job, activeTags)
+    );
+
+    const tagFacetJobs = jobs.filter(
+      (job) =>
+        jobMatchesSearch(job, normalizedSearch) &&
+        jobMatchesLocationFilters(job, activeLocations) &&
+        jobMatchesDepartmentFilters(job, activeDepartments)
+    );
+
+    const locationCounts = new Map<string, number>();
+    for (const job of locationFacetJobs) {
+      const bundesland = extractBundesland(job.location);
+      if (!bundesland) continue;
+      locationCounts.set(bundesland, (locationCounts.get(bundesland) ?? 0) + 1);
+    }
+    for (const activeLocation of activeLocations) {
+      if (!locationCounts.has(activeLocation)) locationCounts.set(activeLocation, 0);
+    }
+
+    const departmentValues = new Set<string>();
+    for (const job of jobs) {
+      if (job.department) departmentValues.add(job.department);
+    }
+    for (const activeDepartment of activeDepartments) {
+      departmentValues.add(activeDepartment);
+    }
+
+    const departmentCounts = new Map<string, number>();
+    for (const department of departmentValues) {
+      let count = 0;
+      for (const job of departmentFacetJobs) {
+        if (jobMatchesDepartmentValue(job, department)) count++;
+      }
+      departmentCounts.set(department, count);
+    }
+
+    const tagCounts = new Map<string, number>();
+    for (const job of tagFacetJobs) {
+      for (const tag of job.tags ?? []) {
+        tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+      }
+    }
+    for (const activeTag of activeTags) {
+      if (!tagCounts.has(activeTag)) tagCounts.set(activeTag, 0);
+    }
+
+    const allTagItems = sortFilterItems(tagCounts);
+
+    return {
+      locationItems: sortFilterItems(locationCounts),
+      departmentItems: sortFilterItems(departmentCounts),
+      stellenartItems: allTagItems.filter((item) => STELLENART_TAGS.has(item.value.toLowerCase())),
+      otherTagItems: allTagItems.filter((item) => !STELLENART_TAGS.has(item.value.toLowerCase())),
+    };
+  }, [jobs, normalizedSearch, activeDepartments, activeLocations, activeTags]);
+
   // --- Filter + sort ---
   const filteredJobs = useMemo(() => {
-    let result = jobs;
-
-    // Full-text search across all fields
-    if (deferredSearch.trim()) {
-      const term = deferredSearch.toLowerCase();
-      result = result.filter((job) => {
-        const haystack = [
-          job.title,
-          job.hospital_name,
-          job.department,
-          job.location,
-          job.description,
-          job.requirements,
-          job.contact_email,
-          job.contact_name,
-          ...(job.tags ?? []),
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        return haystack.includes(term);
-      });
-    }
-
-    // Bundesland filter — match against derived Bundesland from job.location
-    if (activeLocations.size > 0) {
-      result = result.filter((job) => {
-        const bl = extractBundesland(job.location);
-        return bl !== null && activeLocations.has(bl);
-      });
-    }
-
-    // Department filter — case-insensitive, cross-references tags too
-    if (activeDepartments.size > 0) {
-      result = result.filter((job) => {
-        const deptLower = job.department?.toLowerCase() ?? "";
-        const tagsLower = (job.tags ?? []).map((t) => t.toLowerCase());
-        return [...activeDepartments].some((d) => {
-          const dLower = d.toLowerCase();
-          return deptLower === dLower || tagsLower.includes(dLower);
-        });
-      });
-    }
-
-    // Tag filter — case-insensitive
-    if (activeTags.size > 0) {
-      result = result.filter((job) => {
-        const tagsLower = (job.tags ?? []).map((t) => t.toLowerCase());
-        return [...activeTags].some((t) => tagsLower.includes(t.toLowerCase()));
-      });
-    }
+    const result = jobs.filter(
+      (job) =>
+        jobMatchesSearch(job, normalizedSearch) &&
+        jobMatchesLocationFilters(job, activeLocations) &&
+        jobMatchesDepartmentFilters(job, activeDepartments) &&
+        jobMatchesTagFilters(job, activeTags)
+    );
 
     const sorted = [...result];
     switch (sortBy) {
@@ -185,7 +270,7 @@ const JobsPage = () => {
     }
 
     return sorted;
-  }, [deferredSearch, jobs, activeLocations, activeDepartments, activeTags, sortBy]);
+  }, [normalizedSearch, jobs, activeLocations, activeDepartments, activeTags, sortBy]);
 
   // --- SEO ---
   useEffect(() => {
@@ -266,7 +351,10 @@ const JobsPage = () => {
   // ─── Sidebar content (shared between desktop and mobile sheet) ────────────
   const sidebarContent = (
     <JobFiltersSidebar
-      jobs={jobs}
+      locationItems={filterFacetCounts.locationItems}
+      departmentItems={filterFacetCounts.departmentItems}
+      stellenartItems={filterFacetCounts.stellenartItems}
+      otherTagItems={filterFacetCounts.otherTagItems}
       activeLocations={activeLocations}
       activeDepartments={activeDepartments}
       activeTags={activeTags}
@@ -329,7 +417,9 @@ const JobsPage = () => {
           {/* Desktop Sidebar */}
           <div className="hidden lg:block w-56 xl:w-64 shrink-0">
             <div className="sticky top-[calc(57px+57px+1rem)] sm:top-[calc(65px+57px+1rem)]">
-              {sidebarContent}
+              <div className="max-h-[calc(100vh-(57px+57px+1.5rem))] sm:max-h-[calc(100vh-(65px+57px+1.5rem))] overflow-y-auto pr-2 pb-2">
+                {sidebarContent}
+              </div>
             </div>
           </div>
 
