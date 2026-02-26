@@ -223,36 +223,38 @@ const NewLandingPage = () => {
             </ScrollSection>
 
             <ScrollSection animation="scroll-fade-in" className="delay-300">
-              {/* Hand-drawn arrow from illustration to CTA - hidden on mobile */}
-              <div className="hidden lg:block absolute top-[-60px] left-1/2 transform -translate-x-1/2 pointer-events-none z-10">
-                <svg width="280" height="180" viewBox="0 0 280 180" fill="none" xmlns="http://www.w3.org/2000/svg" className="opacity-60">
-                  <path
-                    d="M 240 20 Q 200 60, 140 100 T 80 150"
-                    stroke="var(--notion-blue)"
-                    strokeWidth="2.5"
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeDasharray="4 4"
-                    className="animate-draw-path"
-                  />
-                  <path
-                    d="M 80 150 L 70 145 M 80 150 L 75 158"
-                    stroke="var(--notion-blue)"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    className="animate-draw-path"
-                  />
-                  <text
-                    x="180"
-                    y="50"
-                    fill="var(--notion-blue)"
-                    fontSize="14"
-                    fontWeight="600"
-                    className="animate-fade-in"
-                  >
-                    Hier starten! ✨
-                  </text>
-                </svg>
+              {/* Hand-drawn arrow from illustration to CTA */}
+              <div className="relative mb-8">
+                <div className="absolute left-1/2 transform -translate-x-1/2 pointer-events-none" style={{ top: '-120px', zIndex: 20 }}>
+                  <svg width="240" height="140" viewBox="0 0 240 140" fill="none" xmlns="http://www.w3.org/2000/svg" className="opacity-70">
+                    <path
+                      d="M 200 10 Q 160 40, 120 70 T 60 120"
+                      stroke="var(--notion-blue)"
+                      strokeWidth="3"
+                      fill="none"
+                      strokeLinecap="round"
+                      strokeDasharray="5 5"
+                      className="animate-draw-path"
+                    />
+                    <path
+                      d="M 60 120 L 50 115 M 60 120 L 55 128"
+                      stroke="var(--notion-blue)"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      className="animate-draw-path"
+                    />
+                    <text
+                      x="140"
+                      y="35"
+                      fill="var(--notion-blue)"
+                      fontSize="15"
+                      fontWeight="700"
+                      className="animate-fade-in"
+                    >
+                      Hier starten! ✨
+                    </text>
+                  </svg>
+                </div>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 justify-center items-center mb-6 relative">
