@@ -187,7 +187,7 @@ const NewLandingPage = () => {
 
               <div className="relative w-[350px] h-[350px]" style={{ background: 'var(--notion-bg-base)' }}>
                 <img
-                  src="/images/doctor-illustration.png"
+                  src="/images/doctor-illustration-new.png"
                   alt="Doctor"
                   className="w-full h-full object-contain"
                   style={{ mixBlendMode: 'multiply', opacity: 0.95 }}
