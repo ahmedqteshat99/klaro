@@ -206,34 +206,50 @@ const NewLandingPage = () => {
                 />
 
                 {/* Hand-drawn arrow from doctor to nav CTA */}
-                <div className="hidden lg:block absolute pointer-events-none" style={{ top: '-80px', right: '-200px', zIndex: 100 }}>
-                  <svg width="320" height="200" viewBox="0 0 320 200" fill="none" xmlns="http://www.w3.org/2000/svg" className="opacity-70">
+                <div className="hidden lg:block absolute pointer-events-none" style={{ top: '-140px', right: '-100px', zIndex: 100 }}>
+                  <svg width="420" height="240" viewBox="0 0 420 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    {/* Hand-drawn curved path */}
                     <path
-                      d="M 20 180 Q 80 140, 140 100 Q 200 60, 280 30"
-                      stroke="var(--notion-blue)"
-                      strokeWidth="3"
+                      d="M 40 220 C 80 200, 100 180, 140 150 C 180 120, 220 90, 260 70 C 300 50, 340 35, 380 25"
+                      stroke="#000000"
+                      strokeWidth="2.5"
                       fill="none"
                       strokeLinecap="round"
-                      strokeDasharray="5 5"
+                      strokeLinejoin="round"
+                      opacity="0.8"
                       className="animate-draw-path"
+                      style={{ filter: 'url(#pencil)' }}
                     />
+                    {/* Arrow head */}
                     <path
-                      d="M 280 30 L 270 35 M 280 30 L 275 40"
-                      stroke="var(--notion-blue)"
-                      strokeWidth="3"
+                      d="M 380 25 L 370 28 M 380 25 L 377 35"
+                      stroke="#000000"
+                      strokeWidth="2.5"
                       strokeLinecap="round"
+                      strokeLinejoin="round"
+                      opacity="0.8"
                       className="animate-draw-path"
+                      style={{ filter: 'url(#pencil)' }}
                     />
+                    {/* Text */}
                     <text
-                      x="120"
-                      y="90"
-                      fill="var(--notion-blue)"
-                      fontSize="15"
-                      fontWeight="700"
+                      x="180"
+                      y="100"
+                      fill="#000000"
+                      fontSize="16"
+                      fontWeight="600"
+                      opacity="0.9"
                       className="animate-fade-in"
                     >
                       Hier starten! ✨
                     </text>
+                    {/* Pencil texture filter for hand-drawn effect */}
+                    <defs>
+                      <filter id="pencil">
+                        <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" result="noise" seed="2" />
+                        <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.2" />
+                      </filter>
+                    </defs>
                   </svg>
                 </div>
               </div>
