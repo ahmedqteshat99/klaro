@@ -223,7 +223,39 @@ const NewLandingPage = () => {
             </ScrollSection>
 
             <ScrollSection animation="scroll-fade-in" className="delay-300">
-              <div className="flex flex-col sm:flex-row gap-3 justify-center items-center mb-6">
+              {/* Hand-drawn arrow from illustration to CTA - hidden on mobile */}
+              <div className="hidden lg:block absolute top-[-60px] left-1/2 transform -translate-x-1/2 pointer-events-none z-10">
+                <svg width="280" height="180" viewBox="0 0 280 180" fill="none" xmlns="http://www.w3.org/2000/svg" className="opacity-60">
+                  <path
+                    d="M 240 20 Q 200 60, 140 100 T 80 150"
+                    stroke="var(--notion-blue)"
+                    strokeWidth="2.5"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeDasharray="4 4"
+                    className="animate-draw-path"
+                  />
+                  <path
+                    d="M 80 150 L 70 145 M 80 150 L 75 158"
+                    stroke="var(--notion-blue)"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    className="animate-draw-path"
+                  />
+                  <text
+                    x="180"
+                    y="50"
+                    fill="var(--notion-blue)"
+                    fontSize="14"
+                    fontWeight="600"
+                    className="animate-fade-in"
+                  >
+                    Hier starten! ✨
+                  </text>
+                </svg>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 justify-center items-center mb-6 relative">
                 <Link
                   to="/auth"
                   onClick={() => rememberLandingCta("landing_hero_primary", "/auth")}
