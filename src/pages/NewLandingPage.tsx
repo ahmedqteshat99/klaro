@@ -123,7 +123,14 @@ const NewLandingPage = () => {
       <nav className="fixed top-0 left-0 right-0 z-50 border-b" style={{ background: 'var(--notion-bg-base)', borderColor: 'var(--notion-border)' }}>
         <div className="max-w-[1200px] mx-auto px-5 md:px-10 py-2 flex items-center justify-between">
           <div className="flex items-center">
-            <BrandLogo logoSrc="/brand/klaro-logo.png" size={78} />
+            <div className="h-[56px] sm:h-[68px] md:h-[78px] flex items-center">
+              <img
+                src="/brand/klaro-logo.png"
+                alt="Klaro für Ärzte"
+                className="h-full w-auto object-contain"
+                draggable={false}
+              />
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
