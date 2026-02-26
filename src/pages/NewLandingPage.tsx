@@ -204,54 +204,6 @@ const NewLandingPage = () => {
                     WebkitMaskImage: 'linear-gradient(to bottom, black 40%, transparent 85%)',
                   }}
                 />
-
-                {/* Hand-drawn arrow from doctor to nav CTA */}
-                <div className="hidden lg:block absolute pointer-events-none" style={{ top: '-180px', right: '-40px', zIndex: 100 }}>
-                  <svg width="460" height="280" viewBox="0 0 460 280" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    {/* Hand-drawn curved path */}
-                    <path
-                      d="M 50 260 C 90 235, 120 210, 160 180 C 200 150, 250 115, 300 85 C 350 55, 390 35, 420 20"
-                      stroke="#000000"
-                      strokeWidth="2.5"
-                      fill="none"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      opacity="0.75"
-                      className="animate-draw-path"
-                      style={{ filter: 'url(#pencil)' }}
-                    />
-                    {/* Arrow head */}
-                    <path
-                      d="M 420 20 L 410 24 M 420 20 L 416 30"
-                      stroke="#000000"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      opacity="0.75"
-                      className="animate-draw-path"
-                      style={{ filter: 'url(#pencil)' }}
-                    />
-                    {/* Text */}
-                    <text
-                      x="210"
-                      y="125"
-                      fill="#000000"
-                      fontSize="16"
-                      fontWeight="600"
-                      opacity="0.85"
-                      className="animate-fade-in"
-                    >
-                      Hier starten! ✨
-                    </text>
-                    {/* Pencil texture filter for hand-drawn effect */}
-                    <defs>
-                      <filter id="pencil">
-                        <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" result="noise" seed="2" />
-                        <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.2" />
-                      </filter>
-                    </defs>
-                  </svg>
-                </div>
               </div>
             </ScrollSection>
 
