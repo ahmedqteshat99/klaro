@@ -35,7 +35,7 @@ import {
   mapExtractedJobToAdminForm,
   type AdminJobFormValues,
 } from "@/lib/job-import";
-import { Check, ExternalLink, Info, Link2, LinkIcon, Loader2, Pencil, Plus, Rss, Search, Sparkles, Trash2, X } from "lucide-react";
+import { Check, ExternalLink, Info, Link2, LinkIcon, Loader2, MapPin, Pencil, Plus, Rss, Search, Sparkles, Trash2, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -129,8 +129,6 @@ const IMPORT_SOURCES = [
   { id: "stellenmarkt_medizin", label: "Stellenmarkt", icon: "📰" },
   { id: "aerzteblatt", label: "Ärzteblatt", icon: "📋" },
   { id: "praktischarzt", label: "PraktischArzt", icon: "⚕️" },
-  { id: "medijobs", label: "MediJobs", icon: "💼" },
-  { id: "xing", label: "XING", icon: "🔗" },
   { id: "ethimedis", label: "Ethimedis", icon: "🏥" },
 ] as const;
 
@@ -151,18 +149,13 @@ const AdminJobsPage = () => {
   const [missingFields, setMissingFields] = useState<Array<keyof AdminJobFormValues>>([]);
   const [lastImportSource, setLastImportSource] = useState<"url" | "text" | null>(null);
   const [isBackfilling, setIsBackfilling] = useState(false);
+  const [isBackfillingLocations, setIsBackfillingLocations] = useState(false);
+  const [isBackfillingAerzteblattUrls, setIsBackfillingAerzteblattUrls] = useState(false);
   const [isRssImporting, setIsRssImporting] = useState(false);
   const [rssDialogOpen, setRssDialogOpen] = useState(false);
   const [rssDialogState, setRssDialogState] = useState<"running" | "success" | "error">("running");
   const [rssDialogMessage, setRssDialogMessage] = useState("");
   const [rssDialogResults, setRssDialogResults] = useState<{
-    imported?: number; updated?: number; skipped?: number; expired?: number; totalListings?: number;
-  } | null>(null);
-  const [isXingImporting, setIsXingImporting] = useState(false);
-  const [xingDialogOpen, setXingDialogOpen] = useState(false);
-  const [xingDialogState, setXingDialogState] = useState<"running" | "success" | "error">("running");
-  const [xingDialogMessage, setXingDialogMessage] = useState("");
-  const [xingDialogResults, setXingDialogResults] = useState<{
     imported?: number; updated?: number; skipped?: number; expired?: number; totalListings?: number;
   } | null>(null);
   const [isPraktischArztImporting, setIsPraktischArztImporting] = useState(false);
@@ -494,6 +487,80 @@ const AdminJobsPage = () => {
     }
   };
 
+  const handleBackfillLocations = async () => {
+    setIsBackfillingLocations(true);
+    try {
+      const { backfillJobLocations } = await import("@/lib/api/generation");
+      const result = await backfillJobLocations();
+
+      if (!result.success) {
+        toast({
+          title: "Orte-Backfill fehlgeschlagen",
+          description: result.error || "Unbekannter Fehler",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Orte ergänzt",
+        description: `${result.updated || 0} von ${result.total || 0} Jobs aktualisiert.${result.failed ? ` ${result.failed} fehlgeschlagen.` : ''}`,
+      });
+
+      if (result.failures && result.failures.length > 0) {
+        console.warn("Location backfill failures:", result.failures);
+      }
+
+      // Reload jobs to show updated locations
+      await loadJobs();
+    } catch (error) {
+      toast({
+        title: "Fehler",
+        description: error instanceof Error ? error.message : "Unbekannter Fehler",
+        variant: "destructive",
+      });
+    } finally {
+      setIsBackfillingLocations(false);
+    }
+  };
+
+  const handleBackfillAerzteblattUrls = async () => {
+    setIsBackfillingAerzteblattUrls(true);
+    try {
+      const { backfillAerzteblattUrls } = await import("@/lib/api/generation");
+      const result = await backfillAerzteblattUrls();
+
+      if (!result.success) {
+        toast({
+          title: "Ärzteblatt URL-Backfill fehlgeschlagen",
+          description: result.error || "Unbekannter Fehler",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Ärzteblatt URLs aktualisiert",
+        description: `${result.updated || 0} von ${result.total || 0} Jobs aktualisiert.${result.failed ? ` ${result.failed} fehlgeschlagen, ${result.skipped} übersprungen.` : ''} ${result.duration || ''}`,
+      });
+
+      if (result.errors && result.errors.length > 0) {
+        console.warn("Ärzteblatt URL backfill errors:", result.errors);
+      }
+
+      // Reload jobs to show updated URLs
+      await loadJobs();
+    } catch (error) {
+      toast({
+        title: "Fehler",
+        description: error instanceof Error ? error.message : "Unbekannter Fehler",
+        variant: "destructive",
+      });
+    } finally {
+      setIsBackfillingAerzteblattUrls(false);
+    }
+  };
+
   const handleRssImport = async (source?: string) => {
     setIsRssImporting(true);
     setRssDialogState("running");
@@ -538,54 +605,6 @@ const AdminJobsPage = () => {
       setRssDialogMessage(error instanceof Error ? error.message : "Unbekannter Fehler");
     } finally {
       setIsRssImporting(false);
-    }
-  };
-
-  const handleXingImport = async () => {
-    setIsXingImporting(true);
-    setXingDialogState("running");
-    setXingDialogMessage("Stellenangebote werden von XING geladen...");
-    setXingDialogResults(null);
-    setXingDialogOpen(true);
-
-    try {
-      const { triggerXingImport } = await import("@/lib/api/generation");
-      const result = await triggerXingImport();
-
-      if (!result.success) {
-        setXingDialogState("error");
-        setXingDialogMessage(result.error || "Unbekannter Fehler");
-        return;
-      }
-
-      setXingDialogState("success");
-      setXingDialogResults({
-        imported: result.imported,
-        updated: result.updated,
-        skipped: result.skipped,
-        expired: result.expired,
-        totalListings: result.totalFeedItems,
-      });
-      setXingDialogMessage(
-        result.imported || result.updated
-          ? "Neue XING Stellen wurden erfolgreich importiert."
-          : result.totalFeedItems
-            ? `${result.totalFeedItems} Stellen gefunden, alle bereits in der Datenbank vorhanden.`
-            : "Keine XING Stellen gefunden. Möglicherweise ist die Seite nicht erreichbar."
-      );
-
-      await loadJobs();
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : "Unbekannter Fehler";
-      const isTimeout = msg.includes("non-2xx") || msg.includes("timeout") || msg.includes("504");
-      setXingDialogState("error");
-      setXingDialogMessage(
-        isTimeout
-          ? "Die XING-Abfrage hat zu lange gedauert (Timeout). Bitte versuchen Sie es später erneut."
-          : msg
-      );
-    } finally {
-      setIsXingImporting(false);
     }
   };
 
@@ -952,18 +971,18 @@ const AdminJobsPage = () => {
           <Button
             type="button"
             variant="secondary"
-            onClick={handleBackfillDescriptions}
-            disabled={isBackfilling}
+            onClick={handleBackfillAerzteblattUrls}
+            disabled={isBackfillingAerzteblattUrls}
           >
-            {isBackfilling ? (
+            {isBackfillingAerzteblattUrls ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Generiere...
+                URLs werden aktualisiert...
               </>
             ) : (
               <>
-                <Sparkles className="mr-2 h-4 w-4" />
-                Beschreibungen
+                <LinkIcon className="mr-2 h-4 w-4" />
+                Ärzteblatt URLs
               </>
             )}
           </Button>
@@ -1372,11 +1391,10 @@ const AdminJobsPage = () => {
                             (() => {
                               const feedSource = (job as any).rss_feed_source as string | null;
                               const sourceMap: Record<string, { name: string; color: string }> = {
-                                'xing': { name: 'XING', color: 'bg-blue-100 text-blue-700 border-blue-200' },
                                 'stellenmarkt_medizin': { name: 'Stellenmarkt', color: 'bg-purple-100 text-purple-700 border-purple-200' },
                                 'aerzteblatt': { name: 'Ärzteblatt', color: 'bg-green-100 text-green-700 border-green-200' },
                                 'praktischarzt': { name: 'PraktischArzt', color: 'bg-orange-100 text-orange-700 border-orange-200' },
-                                'medijobs': { name: 'MediJobs', color: 'bg-pink-100 text-pink-700 border-pink-200' },
+                                'ethimedis': { name: 'Ethimedis', color: 'bg-cyan-100 text-cyan-700 border-cyan-200' },
                               };
                               const source = feedSource ? sourceMap[feedSource] : null;
                               return source ? (
@@ -1583,102 +1601,6 @@ const AdminJobsPage = () => {
           {!isRssImporting && (
             <DialogFooter>
               <Button onClick={() => setRssDialogOpen(false)}>Schließen</Button>
-            </DialogFooter>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* XING Import Progress Dialog */}
-      <Dialog open={xingDialogOpen} onOpenChange={(open) => { if (!isXingImporting) setXingDialogOpen(open); }}>
-        <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => { if (isXingImporting) e.preventDefault(); }}>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ExternalLink className="h-5 w-5 text-blue-600" />
-              XING-Import
-            </DialogTitle>
-            <DialogDescription>
-              {xingDialogState === "running"
-                ? "Import läuft..."
-                : xingDialogState === "success"
-                  ? "Import abgeschlossen"
-                  : "Import fehlgeschlagen"}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            {xingDialogState === "running" && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <Loader2 className="h-5 w-5 animate-spin text-blue-600 shrink-0" />
-                  <p className="text-sm">{xingDialogMessage}</p>
-                </div>
-                <div className="space-y-2 pl-8 text-xs text-muted-foreground">
-                  <p>XING Jobs werden durchsucht</p>
-                  <p>Cloudflare-Schutz wird umgangen (Puppeteer)</p>
-                  <p>KI-Zusammenfassungen werden generiert</p>
-                </div>
-              </div>
-            )}
-
-            {xingDialogState === "success" && xingDialogResults && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30 shrink-0">
-                    <Check className="h-4 w-4 text-blue-600" />
-                  </div>
-                  <p className="text-sm">{xingDialogMessage}</p>
-                </div>
-                <div className="grid grid-cols-2 gap-2 rounded-lg border border-blue-200 p-3 bg-blue-50/50">
-                  {xingDialogResults.imported != null && (
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-600">{xingDialogResults.imported}</div>
-                      <div className="text-xs text-muted-foreground">Neu importiert</div>
-                    </div>
-                  )}
-                  {xingDialogResults.updated != null && (
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-500">{xingDialogResults.updated}</div>
-                      <div className="text-xs text-muted-foreground">Aktualisiert</div>
-                    </div>
-                  )}
-                  {xingDialogResults.skipped != null && (
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-muted-foreground">{xingDialogResults.skipped}</div>
-                      <div className="text-xs text-muted-foreground">Übersprungen</div>
-                    </div>
-                  )}
-                  {xingDialogResults.expired != null && (
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-orange-500">{xingDialogResults.expired}</div>
-                      <div className="text-xs text-muted-foreground">Abgelaufen</div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {xingDialogState === "success" && !xingDialogResults && (
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30 shrink-0">
-                  <Check className="h-4 w-4 text-blue-600" />
-                </div>
-                <p className="text-sm">{xingDialogMessage}</p>
-              </div>
-            )}
-
-            {xingDialogState === "error" && (
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30 shrink-0">
-                  <X className="h-4 w-4 text-red-600" />
-                </div>
-                <p className="text-sm text-red-600">{xingDialogMessage}</p>
-              </div>
-            )}
-          </div>
-
-          {!isXingImporting && (
-            <DialogFooter>
-              <Button onClick={() => setXingDialogOpen(false)}>Schließen</Button>
             </DialogFooter>
           )}
         </DialogContent>

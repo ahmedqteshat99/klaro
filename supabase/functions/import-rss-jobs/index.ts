@@ -88,6 +88,7 @@ interface ScrapedJob {
     location: string;
     guid: string; // The anzeige URL as unique identifier
     employerUrl?: string; // Direct employer application URL (resolved from detail page)
+    nodeId?: string; // Ärzteblatt node ID for efficient URL resolution
 }
 
 /** Scrape job listings from a single Stellenmarkt search results page. */
@@ -155,19 +156,23 @@ function parseStellemarktPage(html: string): ScrapedJob[] {
     return jobs;
 }
 
-/** Scrape job listings from a single Ärzteblatt search results page. */
+/** Scrape job listings from a single Ärzteblatt search results page.
+ *  Parses by <article> blocks for reliable extraction of company, location, and node ID. */
 function parseAerzteblattPage(html: string): ScrapedJob[] {
     const jobs: ScrapedJob[] = [];
 
-    // Hrefs are absolute URLs: https://aerztestellen.aerzteblatt.de/de/stelle/[slug]
-    // Title is reliably in the title="" attribute on the same <a> tag
-    // Note: Allow any attributes (like class="recruiter-job-link") between href and title
-    const jobLinkRegex = /<a\s+href="(https:\/\/aerztestellen\.aerzteblatt\.de\/de\/stelle\/[^"]+)"[^>]*title="([^"]+)"/g;
-    const matches = [...html.matchAll(jobLinkRegex)];
+    // Each job is wrapped in <article id="node-XXXXX" class="node node--job-per-...">
+    // Split by article boundaries for reliable field extraction
+    const articleRegex = /<article\s+id="node-(\d+)"[^>]*class="[^"]*node--job[^"]*"[^>]*>([\s\S]*?)<\/article>/g;
+    let match;
 
-    for (const match of matches) {
-        const fullLink = match[1];
-        const title = cleanText(match[2]);
+    while ((match = articleRegex.exec(html)) !== null) {
+        const nodeId = match[1];
+        const block = match[2];
+
+        // Title: from <a class="recruiter-job-link" ... title="TITLE"> inside <h2>
+        const titleMatch = block.match(/<h2[^>]*class="node__title"[\s\S]*?<a[^>]*title="([^"]+)"/);
+        const title = titleMatch ? cleanText(titleMatch[1]) : "";
         if (!title) continue;
 
         // Only include junior-level positions
@@ -176,29 +181,39 @@ function parseAerzteblattPage(html: string): ScrapedJob[] {
             continue;
         }
 
+        // Link: from <a href="URL" class="recruiter-job-link" ...> inside <h2>
+        const linkMatch = block.match(/<h2[^>]*class="node__title"[\s\S]*?<a[^>]*href="([^"]+)"/);
+        const fullLink = linkMatch?.[1] ?? "";
+        if (!fullLink || !fullLink.includes("/de/stelle/")) continue;
+
         // Dedup within page
         if (jobs.some((j) => j.guid === fullLink)) continue;
 
-        // Extract ~2000-char context around this link for company/location
-        const matchIndex = match.index ?? 0;
-        const contextStart = Math.max(0, matchIndex - 500);
-        const contextEnd = Math.min(html.length, matchIndex + 1500);
-        const context = html.substring(contextStart, contextEnd);
+        // Company: from <span class="recruiter-company-profile-job-organization">
+        // May contain an <a> wrapper around the company name
+        const companyMatch = block.match(
+            /class="recruiter-company-profile-job-organization"[^>]*>\s*(?:<a[^>]*>)?\s*([^<]+)/
+        );
+        const company = companyMatch ? cleanText(companyMatch[1]) : "";
 
-        // Extract company (text after date pattern: "23.02.2026, Company Name")
-        const companyMatch = context.match(/\d{2}\.\d{2}\.\d{4},\s*([^\n<]+)/);
-        const company = companyMatch?.[1]?.trim() || "";
+        // Location: from <div class="location">Street, PLZ City</div>
+        const locationDivMatch = block.match(/<div[^>]*class="location"[^>]*>\s*([^<]+)/);
+        const rawLocation = locationDivMatch ? cleanText(locationDivMatch[1]) : "";
 
-        // Extract location (zip code + city, e.g. "74613 Öhringen")
-        const locationMatch = context.match(/(\d{5}\s+[A-Za-zäöüÄÖÜß][A-Za-zäöüÄÖÜß\s\-]+)/);
-        const location = locationMatch?.[1]?.trim() || "";
+        // Extract PLZ + City from full address (ignore street prefix)
+        let location = "";
+        if (rawLocation) {
+            const plzCityMatch = rawLocation.match(/(\d{5}\s+[A-Za-zäöüÄÖÜß][A-Za-zäöüÄÖÜß\s\-]+)/);
+            location = plzCityMatch ? plzCityMatch[1].trim() : rawLocation;
+        }
 
         jobs.push({
             title,
             link: fullLink,
-            company: cleanText(company),
-            location: cleanText(location),
+            company,
+            location,
             guid: fullLink,
+            nodeId,
         });
     }
 
@@ -499,6 +514,68 @@ async function resolveEmployerUrl(jobPageUrl: string): Promise<string | null> {
     } catch {
         return null;
     }
+}
+
+// Medical department terms — used to detect bad locations and prevent false positives
+const MEDICAL_TERMS = new Set([
+    "radiologie", "kardiologie", "chirurgie", "anästhesie", "anasthesie",
+    "neurologie", "gynäkologie", "gynakologie", "pädiatrie", "padiatrie",
+    "psychiatrie", "orthopädie", "orthopadie", "urologie", "dermatologie",
+    "onkologie", "pneumologie", "nephrologie", "gastroenterologie",
+    "innere medizin", "intensivmedizin", "notaufnahme", "allgemeinmedizin",
+    "nuklearmedizin", "pathologie", "hämatologie", "hamatologie",
+    "endokrinologie", "rheumatologie", "geriatrie", "neonatologie",
+    "weiterbildung", "facharzt", "oberarzt", "assistenzarzt",
+    "gefäßchirurgie", "unfallchirurgie", "viszeralchirurgie",
+    "herzchirurgie", "thoraxchirurgie", "kinderchirurgie",
+    "hals-nasen-ohrenheilkunde", "augenheilkunde", "palliativmedizin",
+    "arbeitsmedizin", "rechtsmedizin", "mikrobiologie", "virologie",
+    "transfusionsmedizin", "strahlentherapie", "laboratoriumsmedizin",
+]);
+
+/** Resolve Ärzteblatt employer URL directly from node ID (no detail page fetch needed).
+ *  Follows up to 3 redirect hops to get through tracking intermediaries. */
+async function resolveAerzteblattEmployerUrl(nodeId: string): Promise<string | null> {
+    const applyUrl = `https://aerztestellen.aerzteblatt.de/de/node/${nodeId}/apply-external`;
+    const skipDomains = ["aerzteblatt.de", "anzeigenvorschau.net"];
+    const MAX_HOPS = 3;
+    let currentUrl = applyUrl;
+
+    for (let hop = 0; hop < MAX_HOPS; hop++) {
+        try {
+            const resp = await fetch(currentUrl, {
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (compatible; KlaroBot/1.0)",
+                    "Accept": "text/html",
+                },
+                redirect: "manual",
+                signal: AbortSignal.timeout(8_000),
+            });
+
+            const loc = resp.headers.get("Location");
+            if (!loc) {
+                // No more redirects — return current if it's an employer URL
+                return currentUrl !== applyUrl && !skipDomains.some((d) => currentUrl.includes(d))
+                    ? currentUrl
+                    : null;
+            }
+
+            // Resolve relative redirects
+            const nextUrl = loc.startsWith("http") ? loc : new URL(loc, currentUrl).href;
+
+            // If we've reached an employer domain, return it
+            if (!skipDomains.some((d) => nextUrl.includes(d))) {
+                return nextUrl;
+            }
+
+            currentUrl = nextUrl;
+        } catch {
+            return null;
+        }
+    }
+
+    // After MAX_HOPS, return whatever we have if it's not an aggregator
+    return skipDomains.some((d) => currentUrl.includes(d)) ? null : currentUrl;
 }
 
 interface AiJobEnrichment {
@@ -833,7 +910,7 @@ serve(async (req) => {
         const seenGuids = new Set<string>();
         const itemsToProcess = allScrapedJobs.slice(0, MAX_JOBS_PER_RUN * sourcesToScrape.length);
         let urlBackfillCount = 0;
-        const MAX_URL_BACKFILLS_PER_RUN = 5; // Limit backfills to keep run time short
+        const MAX_URL_BACKFILLS_PER_RUN = 15; // Increased: Ärzteblatt resolver is fast (redirect-only)
 
         // Aggregator domains — used to detect jobs needing employer URL backfill
         const aggregatorDomains = [
@@ -880,7 +957,9 @@ serve(async (req) => {
                             aggregatorDomains.some((d) => currentUrl.includes(d));
 
                         if (needsUrlBackfill && urlBackfillCount < MAX_URL_BACKFILLS_PER_RUN) {
-                            const backfilledUrl = job.employerUrl || await resolveEmployerUrl(job.link);
+                            const backfilledUrl = job.nodeId
+                                ? await resolveAerzteblattEmployerUrl(job.nodeId)
+                                : (job.employerUrl || await resolveEmployerUrl(job.link));
                             if (backfilledUrl) {
                                 await db
                                     .from("jobs")
@@ -889,12 +968,24 @@ serve(async (req) => {
                                 console.log(`[${runId}] Backfilled employer URL for "${job.title}": ${backfilledUrl}`);
                             }
                             urlBackfillCount++;
-                            await new Promise((r) => setTimeout(r, 1000));
+                            if (!job.nodeId) await new Promise((r) => setTimeout(r, 1000));
                         }
 
-                        // Backfill location with Bundesland if the DB value doesn't already have one
+                        // Backfill location: fix missing/wrong locations (e.g. medical terms stored as cities)
                         const dbLocation = (existing as any).location as string | null;
-                        if (dbLocation) {
+                        const dbLocationBad = !dbLocation || dbLocation.length < 3 ||
+                            MEDICAL_TERMS.has((dbLocation || "").toLowerCase().trim());
+
+                        if (dbLocationBad && job.location) {
+                            // Fresh scrape has a valid location — overwrite the bad one
+                            const enrichedLoc = enrichLocationWithState(job.location);
+                            await db
+                                .from("jobs")
+                                .update({ location: enrichedLoc })
+                                .eq("id", (existing as any).id);
+                            console.log(`[${runId}] Fixed location for "${job.title}": ${enrichedLoc}`);
+                        } else if (dbLocation) {
+                            // Existing location is OK — just try to enrich with Bundesland
                             const enrichedLoc = enrichLocationWithState(dbLocation);
                             if (enrichedLoc !== dbLocation) {
                                 await db
@@ -917,10 +1008,12 @@ serve(async (req) => {
                         continue;
                     }
 
-                    // Content changed — re-resolve employer URL (prefer pre-extracted employer URL)
-                    const updatedEmployerUrl = job.employerUrl || await resolveEmployerUrl(job.link);
+                    // Content changed — re-resolve employer URL
+                    const updatedEmployerUrl = job.nodeId
+                        ? await resolveAerzteblattEmployerUrl(job.nodeId)
+                        : (job.employerUrl || await resolveEmployerUrl(job.link));
                     if (updatedEmployerUrl) console.log(`[${runId}] Resolved employer URL: ${updatedEmployerUrl}`);
-                    if (!job.employerUrl) await new Promise((r) => setTimeout(r, 1000));
+                    if (!job.nodeId && !job.employerUrl) await new Promise((r) => setTimeout(r, 1000));
 
                     const enrichment = await generateAiSummary(job, anthropicKey);
                     const updateApplyUrl = updatedEmployerUrl || job.link;
@@ -951,10 +1044,12 @@ serve(async (req) => {
                     });
                     console.log(`[${runId}] Updated (${sourceName}): ${job.title}`);
                 } else {
-                    // New job — prefer pre-extracted employer URL, fall back to resolving from detail page
-                    const employerUrl = job.employerUrl || await resolveEmployerUrl(job.link);
+                    // New job — use fast Ärzteblatt resolver when nodeId available, else generic
+                    const employerUrl = job.nodeId
+                        ? await resolveAerzteblattEmployerUrl(job.nodeId)
+                        : (job.employerUrl || await resolveEmployerUrl(job.link));
                     if (employerUrl) console.log(`[${runId}] Resolved employer URL: ${employerUrl}`);
-                    if (!job.employerUrl) await new Promise((r) => setTimeout(r, 1000));
+                    if (!job.nodeId && !job.employerUrl) await new Promise((r) => setTimeout(r, 1000));
 
                     const applyUrl = employerUrl || job.link;
 

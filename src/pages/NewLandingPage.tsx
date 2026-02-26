@@ -121,8 +121,10 @@ const NewLandingPage = () => {
     <div className="min-h-screen font-sans overflow-x-hidden" style={{ background: 'var(--notion-bg-base)' }}>
       {/* Navigation — Notion-style clean top bar */}
       <nav className="fixed top-0 left-0 right-0 z-50 border-b" style={{ background: 'var(--notion-bg-base)', borderColor: 'var(--notion-border)' }}>
-        <div className="max-w-[1200px] mx-auto px-5 md:px-10 h-16 flex items-center justify-between">
-          <BrandLogo />
+        <div className="max-w-[1200px] mx-auto px-5 md:px-10 py-2 flex items-center justify-between">
+          <div className="flex items-center">
+            <BrandLogo logoSrc="/brand/klaro-logo.png" size={78} />
+          </div>
 
           <div className="flex items-center gap-2">
             <Link
@@ -153,7 +155,7 @@ const NewLandingPage = () => {
       </nav>
 
       {/* Hero Section — Notion-style large headline on clean canvas */}
-      <section className="relative pt-28 pb-16 sm:pt-36 sm:pb-24 lg:pt-44 lg:pb-32" style={{ background: 'var(--notion-bg-base)' }}>
+      <section className="relative pt-16 pb-8 sm:pt-20 sm:pb-12 lg:pt-24 lg:pb-16" style={{ background: 'var(--notion-bg-base)' }}>
         <div className="max-w-[1200px] mx-auto px-5 md:px-10 relative z-10">
           <div className="max-w-[800px] mx-auto text-center">
             {showDeletedNotice && (
@@ -165,29 +167,8 @@ const NewLandingPage = () => {
               </Alert>
             )}
 
-            <ScrollSection animation="scroll-fade-in" className="relative inline-block">
-              {/* Hand-drawn Arrow to Top CTA (Responsive & Transparent SVG) */}
-              <div className="absolute hidden lg:block top-[-100px] right-[-190px] w-[200px] h-[120px] pointer-events-none z-0">
-                <svg viewBox="0 0 200 120" className="w-full h-full text-slate-400/80" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.06))' }}>
-                  {/* Concave hand-drawn path (dips down then swoops up) */}
-                  <path d="M 10 100 Q 120 110, 180 20" />
-                  <path d="M 9 101 Q 121 112, 179 21" strokeWidth="1" opacity="0.6" />
-
-                  {/* Imperfect arrowhead */}
-                  <path d="M 155 25 L 185 15 L 170 45" />
-                  <path d="M 154 26 L 186 14 L 171 44" strokeWidth="1" opacity="0.6" />
-                </svg>
-              </div>
-              <div className="absolute hidden md:block lg:hidden top-[-70px] right-[-140px] w-[150px] h-[90px] pointer-events-none z-0">
-                <svg viewBox="0 0 150 90" className="w-full h-full text-slate-400/80" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.06))' }}>
-                  <path d="M 5 70 Q 90 80, 130 15" />
-                  <path d="M 4 71 Q 91 81, 129 16" strokeWidth="1" opacity="0.6" />
-                  <path d="M 105 20 L 135 10 L 120 40" />
-                  <path d="M 104 21 L 136 9 L 121 41" strokeWidth="1" opacity="0.6" />
-                </svg>
-              </div>
-
-              <div className="relative z-10 inline-flex items-center gap-2.5 px-4 py-2 rounded-full text-sm font-medium mb-8" style={{ background: 'var(--notion-bg-surface)', border: '1px solid var(--notion-border-strong)', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+            <ScrollSection animation="scroll-fade-in" className="flex items-center justify-center gap-8 mb-8">
+              <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full text-sm font-medium" style={{ background: 'var(--notion-bg-surface)', border: '1px solid var(--notion-border-strong)', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
                 <div className="flex -space-x-1.5">
                   {[1, 2, 3, 4].map(i => (
                     <img
@@ -203,17 +184,13 @@ const NewLandingPage = () => {
                   Vertraut von {userCount.toLocaleString("de-DE")}+ Ärzten
                 </span>
               </div>
-            </ScrollSection>
 
-
-
-            {/* Hero Medical Illustration */}
-            <ScrollSection animation="scroll-fade-in" className="delay-50 mb-8 flex justify-center">
-              <div className="relative max-w-[400px] sm:max-w-[480px] w-full flex justify-center px-4">
+              <div className="relative w-[350px] h-[350px]" style={{ background: 'var(--notion-bg-base)' }}>
                 <img
-                  src="/images/hero_user_transparent.min.png"
-                  alt="Klaro für Ärzte"
-                  className="w-full h-auto object-contain drop-shadow-sm"
+                  src="/images/doctor-illustration.png"
+                  alt="Doctor"
+                  className="w-full h-full object-contain"
+                  style={{ mixBlendMode: 'multiply', opacity: 0.95 }}
                 />
               </div>
             </ScrollSection>

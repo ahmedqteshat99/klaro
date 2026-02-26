@@ -325,26 +325,6 @@ export async function triggerRssImport(sources?: string[]): Promise<{
 }
 
 /**
- * Trigger XING job import specifically.
- * Admin-only operation.
- */
-export async function triggerXingImport(): Promise<{
-  success: boolean;
-  runId?: string;
-  totalFeedItems?: number;
-  matchingItems?: number;
-  imported?: number;
-  updated?: number;
-  skipped?: number;
-  expired?: number;
-  errors?: number;
-  errorMessages?: string[];
-  error?: string;
-}> {
-  return triggerRssImport(['xing']);
-}
-
-/**
  * Trigger PraktischArzt job import specifically.
  * Admin-only operation.
  */
@@ -389,6 +369,69 @@ export async function checkStaleJobs(): Promise<{
     unknown?: number;
     staleJobs?: Array<{ id: string; url: string; httpStatus?: number }>;
   }>("check-stale-jobs", {});
+
+  if (result.error) {
+    return { success: false, error: result.error };
+  }
+
+  return result.data ?? { success: false, error: "Keine Antwort vom Server" };
+}
+
+/**
+ * Backfill missing locations for all jobs
+ */
+export async function backfillJobLocations(): Promise<{
+  success: boolean;
+  error?: string;
+  total?: number;
+  updated?: number;
+  failed?: number;
+  failures?: string[];
+}> {
+  await ensureFreshSession();
+
+  const result = await invokeEdgeFunction<{
+    success: boolean;
+    error?: string;
+    total?: number;
+    updated?: number;
+    failed?: number;
+    failures?: string[];
+  }>("backfill-locations", {});
+
+  if (result.error) {
+    return { success: false, error: result.error };
+  }
+
+  return result.data ?? { success: false, error: "Keine Antwort vom Server" };
+}
+
+/**
+ * Backfill Ärzteblatt job URLs to point to employer sites instead of aerzteblatt.de
+ * Admin-only operation.
+ */
+export async function backfillAerzteblattUrls(): Promise<{
+  success: boolean;
+  error?: string;
+  total?: number;
+  updated?: number;
+  failed?: number;
+  skipped?: number;
+  duration?: string;
+  errors?: string[];
+}> {
+  await ensureFreshSession();
+
+  const result = await invokeEdgeFunction<{
+    success: boolean;
+    error?: string;
+    total?: number;
+    updated?: number;
+    failed?: number;
+    skipped?: number;
+    duration?: string;
+    errors?: string[];
+  }>("backfill-aerzteblatt-urls", {});
 
   if (result.error) {
     return { success: false, error: result.error };

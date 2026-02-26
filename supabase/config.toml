@@ -51,11 +51,8 @@ verify_jwt = false
 [functions.backfill-job-states]
 verify_jwt = false
 
-[functions.scrape-hospital-jobs]
-verify_jwt = false
-
-[functions.discover-career-pages]
-verify_jwt = false
-
 [functions.backfill-job-fields]
+verify_jwt = false
+
+[functions.backfill-locations]
 verify_jwt = false
