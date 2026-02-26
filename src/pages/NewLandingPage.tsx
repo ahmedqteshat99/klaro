@@ -190,7 +190,12 @@ const NewLandingPage = () => {
                   src="/images/doctor-illustration-new.png"
                   alt="Doctor"
                   className="w-full h-full object-contain"
-                  style={{ mixBlendMode: 'multiply', opacity: 0.95 }}
+                  style={{
+                    mixBlendMode: 'multiply',
+                    opacity: 0.95,
+                    maskImage: 'linear-gradient(to bottom, black 40%, transparent 85%)',
+                    WebkitMaskImage: 'linear-gradient(to bottom, black 40%, transparent 85%)',
+                  }}
                 />
               </div>
             </ScrollSection>
