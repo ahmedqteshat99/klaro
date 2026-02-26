@@ -147,7 +147,7 @@ const NewLandingPage = () => {
               style={{ background: 'var(--notion-text-dark)', color: '#fff' }}
               onClick={() => rememberLandingCta("landing_nav_cta", "/auth")}
             >
-              Klaro kostenlos testen
+              ✨ Klaro kostenlos testen
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
@@ -223,7 +223,7 @@ const NewLandingPage = () => {
                   className="inline-flex items-center gap-2 px-7 py-3.5 text-base font-semibold rounded-xl transition-all hover:opacity-90 hover:translate-y-[-1px]"
                   style={{ background: 'var(--notion-text-dark)', color: '#fff' }}
                 >
-                  Lebenslauf kostenlos erstellen
+                  📝 Lebenslauf kostenlos erstellen
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
@@ -231,7 +231,7 @@ const NewLandingPage = () => {
                   className="inline-flex items-center gap-2 px-7 py-3.5 text-base font-semibold rounded-xl transition-all border hover:translate-y-[-1px]"
                   style={{ color: 'var(--notion-text-dark)', borderColor: 'var(--notion-border-strong)', background: 'transparent' }}
                 >
-                  Stellen durchsuchen
+                  🔍 Stellen durchsuchen
                 </Link>
               </div>
               <div className="flex items-center justify-center gap-5 text-sm" style={{ color: 'var(--notion-text-muted)' }}>
@@ -304,7 +304,7 @@ const NewLandingPage = () => {
                   className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg transition-all hover:opacity-90"
                   style={{ background: 'var(--notion-text-dark)', color: '#fff' }}
                 >
-                  Lebenslauf erstellen
+                  📄 Lebenslauf erstellen
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               </div>
@@ -358,7 +358,7 @@ const NewLandingPage = () => {
                   className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg transition-all hover:opacity-90"
                   style={{ background: 'var(--notion-text-dark)', color: '#fff' }}
                 >
-                  Anschreiben generieren
+                  ✍️ Anschreiben generieren
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               </div>
@@ -669,7 +669,7 @@ const NewLandingPage = () => {
               className="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold rounded-xl transition-all hover:opacity-90"
               style={{ background: 'var(--notion-text-dark)', color: '#fff' }}
             >
-              Jetzt kostenlos starten
+              🚀 Jetzt kostenlos starten
               <ArrowRight className="h-4 w-4" />
             </Link>
           </ScrollSection>
@@ -831,7 +831,7 @@ const NewLandingPage = () => {
                 className="inline-flex items-center gap-2 px-8 py-4 text-base font-semibold rounded-xl transition-all hover:opacity-90 hover:translate-y-[-1px]"
                 style={{ background: 'var(--notion-text-dark)', color: '#fff' }}
               >
-                Lebenslauf kostenlos erstellen
+                ✨ Lebenslauf kostenlos erstellen
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
