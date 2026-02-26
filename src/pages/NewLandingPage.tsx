@@ -206,39 +206,39 @@ const NewLandingPage = () => {
                 />
 
                 {/* Hand-drawn arrow from doctor to nav CTA */}
-                <div className="hidden lg:block absolute pointer-events-none" style={{ top: '-140px', right: '-100px', zIndex: 100 }}>
-                  <svg width="420" height="240" viewBox="0 0 420 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <div className="hidden lg:block absolute pointer-events-none" style={{ top: '-180px', right: '-40px', zIndex: 100 }}>
+                  <svg width="460" height="280" viewBox="0 0 460 280" fill="none" xmlns="http://www.w3.org/2000/svg">
                     {/* Hand-drawn curved path */}
                     <path
-                      d="M 40 220 C 80 200, 100 180, 140 150 C 180 120, 220 90, 260 70 C 300 50, 340 35, 380 25"
+                      d="M 50 260 C 90 235, 120 210, 160 180 C 200 150, 250 115, 300 85 C 350 55, 390 35, 420 20"
                       stroke="#000000"
                       strokeWidth="2.5"
                       fill="none"
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      opacity="0.8"
+                      opacity="0.75"
                       className="animate-draw-path"
                       style={{ filter: 'url(#pencil)' }}
                     />
                     {/* Arrow head */}
                     <path
-                      d="M 380 25 L 370 28 M 380 25 L 377 35"
+                      d="M 420 20 L 410 24 M 420 20 L 416 30"
                       stroke="#000000"
                       strokeWidth="2.5"
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      opacity="0.8"
+                      opacity="0.75"
                       className="animate-draw-path"
                       style={{ filter: 'url(#pencil)' }}
                     />
                     {/* Text */}
                     <text
-                      x="180"
-                      y="100"
+                      x="210"
+                      y="125"
                       fill="#000000"
                       fontSize="16"
                       fontWeight="600"
-                      opacity="0.9"
+                      opacity="0.85"
                       className="animate-fade-in"
                     >
                       Hier starten! ✨
