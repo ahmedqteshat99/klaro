@@ -48,14 +48,31 @@ const limit = (value: string | null | undefined, max = 200) => {
   return normalized.slice(0, max);
 };
 
+// In-memory cache to avoid repeated localStorage reads
+let attributionCache: AttributionState | null = null;
+
 const readAttributionState = (): AttributionState => {
+  // Return cached value if available
+  if (attributionCache !== null) {
+    return attributionCache;
+  }
+
   try {
     const raw = localStorage.getItem(ATTRIBUTION_STORAGE_KEY);
-    if (!raw) return {};
+    if (!raw) {
+      attributionCache = {};
+      return {};
+    }
     const parsed = JSON.parse(raw) as AttributionState;
-    if (!parsed || typeof parsed !== "object") return {};
+    if (!parsed || typeof parsed !== "object") {
+      attributionCache = {};
+      return {};
+    }
+    // Cache the parsed result
+    attributionCache = parsed;
     return parsed;
   } catch {
+    attributionCache = {};
     return {};
   }
 };
@@ -63,6 +80,8 @@ const readAttributionState = (): AttributionState => {
 const writeAttributionState = (state: AttributionState) => {
   try {
     localStorage.setItem(ATTRIBUTION_STORAGE_KEY, JSON.stringify(state));
+    // Invalidate cache to force re-read on next access
+    attributionCache = null;
   } catch {
     // Best-effort only.
   }

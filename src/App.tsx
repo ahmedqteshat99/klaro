@@ -51,9 +51,11 @@ const AttributionTracker = () => {
 };
 
 const App = () => {
-  // Initialize cookie consent on mount
+  // Initialize cookie consent - deferred to next event loop for better initial load
   useEffect(() => {
-    initializeKlaro();
+    setTimeout(() => {
+      initializeKlaro();
+    }, 0);
   }, []);
 
   return (

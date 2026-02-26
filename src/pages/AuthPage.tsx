@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { isOnboardingDone, checkOnboardingFromDB } from "@/pages/OnboardingPage";
@@ -34,6 +34,7 @@ const AuthPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const hasNavigated = useRef(false);
   const nextPath = useMemo(
     () => sanitizeNextPath(new URLSearchParams(location.search).get("next")),
     [location.search]
@@ -51,34 +52,26 @@ const AuthPage = () => {
   // Check if user is already logged in
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Fire-and-forget analytics (non-blocking)
       if (event === "SIGNED_IN" && session?.user) {
-        await logEvent("login", getAttributionMeta() ?? undefined, session.user.id);
-        await touchLastSeen(session.user.id);
+        logEvent("login", getAttributionMeta() ?? undefined, session.user.id);
+        touchLastSeen(session.user.id);
       }
 
       if (event === "SIGNED_UP" && session?.user) {
-        await logEvent("signup", getAttributionMeta() ?? undefined, session.user.id);
-        await touchLastSeen(session.user.id);
+        logEvent("signup", getAttributionMeta() ?? undefined, session.user.id);
+        touchLastSeen(session.user.id);
       }
 
-      if (session) {
+      // Handle navigation (with guard to prevent duplicate navigation)
+      if (session && !hasNavigated.current) {
         const userId = session.user.id;
         if (isOnboardingDone(userId)) {
+          hasNavigated.current = true;
           navigate(postAuthTarget, { replace: true });
         } else {
           const done = await checkOnboardingFromDB(userId);
-          navigate(done ? postAuthTarget : onboardingTarget, { replace: true });
-        }
-      }
-    });
-
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session) {
-        const userId = session.user.id;
-        if (isOnboardingDone(userId)) {
-          navigate(postAuthTarget, { replace: true });
-        } else {
-          const done = await checkOnboardingFromDB(userId);
+          hasNavigated.current = true;
           navigate(done ? postAuthTarget : onboardingTarget, { replace: true });
         }
       }

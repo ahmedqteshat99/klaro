@@ -1,4 +1,5 @@
-import * as Klaro from "klaro";
+// Lazy-loaded Klaro instance
+let klaroInstance: any = null;
 
 // Klaro Cookie Consent Configuration
 export const klaroConfig = {
@@ -150,9 +151,20 @@ export const klaroConfig = {
   },
 };
 
-// Initialize Klaro
-export function initializeKlaro() {
+// Check if Klaro is loaded
+export function isKlaroLoaded(): boolean {
+  return klaroInstance !== null;
+}
+
+// Initialize Klaro with lazy loading
+export async function initializeKlaroLazy() {
+  if (klaroInstance) return klaroInstance;
+
   try {
+    // Dynamically import Klaro
+    const Klaro = await import('klaro');
+    klaroInstance = Klaro;
+
     // @ts-ignore - Klaro types not perfect
     window.klaro = Klaro;
     // @ts-ignore
@@ -160,15 +172,29 @@ export function initializeKlaro() {
 
     // Initialize Klaro
     Klaro.setup(klaroConfig);
+
+    return klaroInstance;
   } catch (error) {
     console.error("Error initializing Klaro:", error);
+    return null;
   }
+}
+
+// Legacy sync function for backward compatibility (now just a wrapper)
+export function initializeKlaro() {
+  // Non-blocking async initialization
+  initializeKlaroLazy().catch(err => console.error("Klaro init failed:", err));
 }
 
 // Helper function to check if consent was given for a specific service
 export function hasConsent(serviceName: string): boolean {
+  // If Klaro isn't loaded yet, return false (no consent)
+  if (!isKlaroLoaded() || !klaroInstance) {
+    return false;
+  }
+
   try {
-    const manager = Klaro.getManager();
+    const manager = klaroInstance.getManager();
     if (!manager) return false;
     return manager.getConsent(serviceName);
   } catch (error) {
@@ -179,5 +205,9 @@ export function hasConsent(serviceName: string): boolean {
 
 // Helper function to check if attribution tracking is allowed
 export function canTrackAttribution(): boolean {
+  // Assume no consent until Klaro loads and user explicitly opts in
+  if (!isKlaroLoaded()) {
+    return false;
+  }
   return hasConsent("attribution");
 }
