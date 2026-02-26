@@ -204,6 +204,38 @@ const NewLandingPage = () => {
                     WebkitMaskImage: 'linear-gradient(to bottom, black 40%, transparent 85%)',
                   }}
                 />
+
+                {/* Hand-drawn arrow from doctor to nav CTA */}
+                <div className="hidden lg:block absolute pointer-events-none" style={{ top: '-80px', right: '-200px', zIndex: 100 }}>
+                  <svg width="320" height="200" viewBox="0 0 320 200" fill="none" xmlns="http://www.w3.org/2000/svg" className="opacity-70">
+                    <path
+                      d="M 20 180 Q 80 140, 140 100 Q 200 60, 280 30"
+                      stroke="var(--notion-blue)"
+                      strokeWidth="3"
+                      fill="none"
+                      strokeLinecap="round"
+                      strokeDasharray="5 5"
+                      className="animate-draw-path"
+                    />
+                    <path
+                      d="M 280 30 L 270 35 M 280 30 L 275 40"
+                      stroke="var(--notion-blue)"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      className="animate-draw-path"
+                    />
+                    <text
+                      x="120"
+                      y="90"
+                      fill="var(--notion-blue)"
+                      fontSize="15"
+                      fontWeight="700"
+                      className="animate-fade-in"
+                    >
+                      Hier starten! ✨
+                    </text>
+                  </svg>
+                </div>
               </div>
             </ScrollSection>
 
@@ -223,40 +255,6 @@ const NewLandingPage = () => {
             </ScrollSection>
 
             <ScrollSection animation="scroll-fade-in" className="delay-300">
-              {/* Hand-drawn arrow from illustration to CTA */}
-              <div className="relative mb-8">
-                <div className="absolute left-1/2 transform -translate-x-1/2 pointer-events-none" style={{ top: '-120px', zIndex: 20 }}>
-                  <svg width="240" height="140" viewBox="0 0 240 140" fill="none" xmlns="http://www.w3.org/2000/svg" className="opacity-70">
-                    <path
-                      d="M 200 10 Q 160 40, 120 70 T 60 120"
-                      stroke="var(--notion-blue)"
-                      strokeWidth="3"
-                      fill="none"
-                      strokeLinecap="round"
-                      strokeDasharray="5 5"
-                      className="animate-draw-path"
-                    />
-                    <path
-                      d="M 60 120 L 50 115 M 60 120 L 55 128"
-                      stroke="var(--notion-blue)"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                      className="animate-draw-path"
-                    />
-                    <text
-                      x="140"
-                      y="35"
-                      fill="var(--notion-blue)"
-                      fontSize="15"
-                      fontWeight="700"
-                      className="animate-fade-in"
-                    >
-                      Hier starten! ✨
-                    </text>
-                  </svg>
-                </div>
-              </div>
-
               <div className="flex flex-col sm:flex-row gap-3 justify-center items-center mb-6 relative">
                 <Link
                   to="/auth"
