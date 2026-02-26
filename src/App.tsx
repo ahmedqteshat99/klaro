@@ -10,9 +10,10 @@ import AdminRoute from "./components/admin/AdminRoute";
 import AuthorizedRoute from "./components/auth/AuthorizedRoute";
 import "klaro/dist/klaro.css";
 import "@/styles/cookie-banner.css";
+// Eager load AuthPage - critical for performance, no lazy loading delay
+import AuthPage from "./pages/AuthPage";
 
 const LandingPage = lazy(() => import("./pages/LandingPage"));
-const AuthPage = lazy(() => import("./pages/AuthPage"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const ComingSoonPage = lazy(() => import("./pages/ComingSoonPage"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
