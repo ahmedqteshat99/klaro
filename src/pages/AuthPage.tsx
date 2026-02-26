@@ -356,7 +356,7 @@ const AuthPage = () => {
         <div className="w-full max-w-md">
           {/* Logo */}
           <Link to="/" className="flex items-center justify-center mb-10">
-            <BrandLogo />
+            <BrandLogo logoSrc="/brand/klaro-icon.svg" size={40} />
           </Link>
 
           <Card className="animate-fade-in shadow-apple-lg">

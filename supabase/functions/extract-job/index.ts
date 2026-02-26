@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { enforceRateLimit, RATE_LIMITS, RateLimitError, rateLimitResponse } from "../_shared/rate-limit.ts";
 import { fetchAnthropicWithRetry } from "../_shared/anthropic-retry.ts";
+import { enrichLocationWithState } from "../_shared/enrich-location.ts";
 
 const normalizeUrl = (value: string) => {
   const trimmed = value.trim();
@@ -201,7 +202,7 @@ serve(async (req) => {
 
 {
   "krankenhaus": "Name des Krankenhauses/der Klinik",
-  "standort": "Stadt/Ort",
+  "standort": "Stadt/Ort (WICHTIG: Suche nach Ort/Stadt in der gesamten Anzeige, inkl. Klinikname, Adresse, PLZ, Kontaktinfo. Beispiele: 'Berlin', '74613 Öhringen', 'München', 'Hamburg-Eppendorf'. Falls nicht direkt genannt, versuche aus Klinikname zu extrahieren, z.B. 'Klinikum Stuttgart' → 'Stuttgart')",
   "fachabteilung": "Abteilung/Fachbereich",
   "position": "Stellenbezeichnung",
   "ansprechpartner": "Name des Ansprechpartners (Chefarzt, Prof., HR etc.)",
@@ -209,7 +210,7 @@ serve(async (req) => {
   "title": "Stellenbezeichnung für Admin-Form",
   "hospital_name": "Name des Krankenhauses/der Klinik",
   "department": "Abteilung/Fachbereich",
-  "location": "Stadt/Ort",
+  "location": "Stadt/Ort (SEHR WICHTIG: Immer angeben! Suche nach: PLZ+Stadt, Städtenamen, Ortsangaben in Adresse, Klinikname mit Stadt, Kontaktadresse. Falls wirklich nicht auffindbar, versuche aus Klinikname zu extrahieren)",
   "description": "2-3 Sätze Zusammenfassung der Stelle. Beschreibe kurz: Was für ein Krankenhaus ist es, was sind die Hauptaufgaben, und was macht die Stelle attraktiv. Schreibe in professionellem, einladendem Ton auf Deutsch.",
   "requirements": "Zusammenfassung der Anforderungen",
   "contact_name": "Ansprechpartner",
@@ -297,6 +298,40 @@ STELLENANZEIGE:
       source_name: toNullableString(jobData?.hospital_name ?? jobData?.krankenhaus),
       scraped_at: new Date().toISOString(),
     };
+
+    // Fallback: Try to extract location from hospital name if location is missing
+    if (!normalizedData.location && normalizedData.hospital_name) {
+      const enriched = enrichLocationWithState(normalizedData.hospital_name);
+      // Check if enrichment found a match (contains comma = state was added)
+      if (enriched.includes(',')) {
+        normalizedData.location = enriched;
+        console.log(`Extracted location from hospital name: "${normalizedData.hospital_name}" → "${enriched}"`);
+      }
+    }
+
+    // Fallback: Try to extract PLZ+Stadt from description if still no location
+    if (!normalizedData.location && normalizedData.description) {
+      const plzMatch = normalizedData.description.match(/\b(\d{5})\s+([A-Za-zäöüÄÖÜß][A-Za-zäöüÄÖÜß\s\-]+)/);
+      if (plzMatch) {
+        const locationCandidate = `${plzMatch[1]} ${plzMatch[2].trim()}`;
+        const enriched = enrichLocationWithState(locationCandidate);
+        normalizedData.location = enriched;
+        console.log(`Extracted location from description PLZ: "${locationCandidate}" → "${enriched}"`);
+      }
+    }
+
+    // Fallback: Try to extract city name from description
+    if (!normalizedData.location && normalizedData.description) {
+      const cityPattern = /(?:in|Standort:|Location:|Ort:)\s+([A-ZÄÖÜ][a-zäöüß]+(?:\s+[a-zäöü]+)?)/;
+      const cityMatch = normalizedData.description.match(cityPattern);
+      if (cityMatch) {
+        const enriched = enrichLocationWithState(cityMatch[1]);
+        if (enriched.includes(',')) {
+          normalizedData.location = enriched;
+          console.log(`Extracted location from description city pattern: "${cityMatch[1]}" → "${enriched}"`);
+        }
+      }
+    }
 
     const hasAnyValue = Object.values(normalizedData).some((value) => {
       if (Array.isArray(value)) return value.length > 0;

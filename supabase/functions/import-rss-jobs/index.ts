@@ -2,7 +2,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { enrichLocationWithState } from "../_shared/enrich-location.ts";
-import { scrapeWithBrowser, isBrowserScraperAvailable } from "../_shared/browser-scraper.ts";
 
 // ─── Configuration ───────────────────────────────────────────────
 // Stellenmarkt config
@@ -17,17 +16,9 @@ const AERZTEBLATT_SOURCE = "aerzteblatt";
 const PRAKTISCHARZT_URL = "https://www.praktischarzt.de/assistenzarzt/";
 const PRAKTISCHARZT_SOURCE = "praktischarzt";
 
-// MediJobs config (pagination is JS-based; only page 1 is fetchable via HTTP)
-const MEDIJOBS_URL = "https://www.medi-jobs.de/jobs/?s=assistenzarzt";
-const MEDIJOBS_SOURCE = "medijobs";
-
-// XING config (requires Puppeteer service due to Cloudflare protection)
-const XING_URL = "https://www.xing.com/jobs/search?keywords=assistenzarzt&location=Deutschland";
-const XING_SOURCE = "xing";
-
-// Ethimedis config (requires Puppeteer service due to JS rendering)
-// career_level_ids=5 filters for Assistenzarzt positions only
-const ETHIMEDIS_URL = "https://www.ethimedis.de/arztstellen?career_level_ids=5";
+// Ethimedis config (uses legacy AJAX endpoint — no browser needed)
+// type_id=5 filters for Assistenzarzt positions only
+const ETHIMEDIS_URL = "https://www.ethimedis.de/joboffers/index/type_id/5/sortby/data__joboffers.publication_date/sortdirection/desc";
 const ETHIMEDIS_SOURCE = "ethimedis";
 
 // NOTE: StepStone, Indeed, Jobvector, and jobs.aerztezeitung.de removed —
@@ -38,10 +29,7 @@ const MAX_PAGES = 5; // Legacy default (unused now, each source has its own MAX_
 const MAX_PAGES_STELLENMARKT = 100; // Stellenmarkt scraping depth
 const MAX_PAGES_AERZTEBLATT = 100; // Ärzteblatt has many pages; scrape deeper
 const MAX_PAGES_PRAKTISCHARZT = 100; // PraktischArzt has many pages; scrape deeper
-const MAX_PAGES_MEDIJOBS = 100; // MediJobs scraping depth
-const MAX_PAGES_XING = 100; // XING scraping depth (browser-based)
-const MAX_PAGES_ETHIMEDIS = 50; // Ethimedis scraping depth (browser-based, may adjust after testing)
-const MAX_BROWSER_PAGES = 1; // Browser-based scraping is slow; limit to 1 page (DEPRECATED)
+const MAX_PAGES_ETHIMEDIS = 50; // Ethimedis scraping depth
 const MAX_JOBS_PER_RUN = 300; // Safe for single source imports (with timeout safety)
 const EXPIRATION_GRACE_HOURS = 48;
 
@@ -72,6 +60,25 @@ function cleanText(raw: string): string {
         .trim();
 }
 
+/**
+ * Check if a job title is for a junior-level position (Assistenzarzt / Arzt in Weiterbildung).
+ * Accepts combined titles like "Assistenzarzt / Oberarzt" since they're relevant to junior doctors.
+ *
+ * @param title - The job title to check (will be converted to lowercase)
+ * @returns true if the title should be included, false otherwise
+ */
+function isJuniorPosition(title: string): boolean {
+    const lowerTitle = title.toLowerCase();
+
+    // Include if title explicitly mentions junior-level positions
+    return (
+        lowerTitle.includes("assistenzarzt") ||
+        lowerTitle.includes("assistenzärztin") ||
+        lowerTitle.includes("arzt in weiterbildung") ||
+        lowerTitle.includes("ärztin in weiterbildung")
+    );
+}
+
 // enrichLocationWithState is imported from ../_shared/enrich-location.ts
 
 interface ScrapedJob {
@@ -81,6 +88,7 @@ interface ScrapedJob {
     location: string;
     guid: string; // The anzeige URL as unique identifier
     employerUrl?: string; // Direct employer application URL (resolved from detail page)
+    nodeId?: string; // Ärzteblatt node ID for efficient URL resolution
 }
 
 /** Scrape job listings from a single Stellenmarkt search results page. */
@@ -100,6 +108,12 @@ function parseStellemarktPage(html: string): ScrapedJob[] {
 
         // Use the more complete title
         const title = titleFromAttr.length > titleFromH2.length ? titleFromAttr : titleFromH2;
+
+        // Only include junior-level positions (includes combined titles like "Assistenzarzt / Oberarzt")
+        if (!isJuniorPosition(title)) {
+            console.log(`  [Stellenmarkt] Skipping non-junior position: ${title}`);
+            continue;
+        }
 
         // Skip if already seen (duplicates within page)
         if (jobs.some((j) => j.guid === link)) continue;
@@ -142,44 +156,64 @@ function parseStellemarktPage(html: string): ScrapedJob[] {
     return jobs;
 }
 
-/** Scrape job listings from a single Ärzteblatt search results page. */
+/** Scrape job listings from a single Ärzteblatt search results page.
+ *  Parses by <article> blocks for reliable extraction of company, location, and node ID. */
 function parseAerzteblattPage(html: string): ScrapedJob[] {
     const jobs: ScrapedJob[] = [];
 
-    // Hrefs are absolute URLs: https://aerztestellen.aerzteblatt.de/de/stelle/[slug]
-    // Title is reliably in the title="" attribute on the same <a> tag
-    // Note: Allow any attributes (like class="recruiter-job-link") between href and title
-    const jobLinkRegex = /<a\s+href="(https:\/\/aerztestellen\.aerzteblatt\.de\/de\/stelle\/[^"]+)"[^>]*title="([^"]+)"/g;
-    const matches = [...html.matchAll(jobLinkRegex)];
+    // Each job is wrapped in <article id="node-XXXXX" class="node node--job-per-...">
+    // Split by article boundaries for reliable field extraction
+    const articleRegex = /<article\s+id="node-(\d+)"[^>]*class="[^"]*node--job[^"]*"[^>]*>([\s\S]*?)<\/article>/g;
+    let match;
 
-    for (const match of matches) {
-        const fullLink = match[1];
-        const title = cleanText(match[2]);
+    while ((match = articleRegex.exec(html)) !== null) {
+        const nodeId = match[1];
+        const block = match[2];
+
+        // Title: from <a class="recruiter-job-link" ... title="TITLE"> inside <h2>
+        const titleMatch = block.match(/<h2[^>]*class="node__title"[\s\S]*?<a[^>]*title="([^"]+)"/);
+        const title = titleMatch ? cleanText(titleMatch[1]) : "";
         if (!title) continue;
+
+        // Only include junior-level positions
+        if (!isJuniorPosition(title)) {
+            console.log(`  [Ärzteblatt] Skipping non-junior position: ${title}`);
+            continue;
+        }
+
+        // Link: from <a href="URL" class="recruiter-job-link" ...> inside <h2>
+        const linkMatch = block.match(/<h2[^>]*class="node__title"[\s\S]*?<a[^>]*href="([^"]+)"/);
+        const fullLink = linkMatch?.[1] ?? "";
+        if (!fullLink || !fullLink.includes("/de/stelle/")) continue;
 
         // Dedup within page
         if (jobs.some((j) => j.guid === fullLink)) continue;
 
-        // Extract ~2000-char context around this link for company/location
-        const matchIndex = match.index ?? 0;
-        const contextStart = Math.max(0, matchIndex - 500);
-        const contextEnd = Math.min(html.length, matchIndex + 1500);
-        const context = html.substring(contextStart, contextEnd);
+        // Company: from <span class="recruiter-company-profile-job-organization">
+        // May contain an <a> wrapper around the company name
+        const companyMatch = block.match(
+            /class="recruiter-company-profile-job-organization"[^>]*>\s*(?:<a[^>]*>)?\s*([^<]+)/
+        );
+        const company = companyMatch ? cleanText(companyMatch[1]) : "";
 
-        // Extract company (text after date pattern: "23.02.2026, Company Name")
-        const companyMatch = context.match(/\d{2}\.\d{2}\.\d{4},\s*([^\n<]+)/);
-        const company = companyMatch?.[1]?.trim() || "";
+        // Location: from <div class="location">Street, PLZ City</div>
+        const locationDivMatch = block.match(/<div[^>]*class="location"[^>]*>\s*([^<]+)/);
+        const rawLocation = locationDivMatch ? cleanText(locationDivMatch[1]) : "";
 
-        // Extract location (zip code + city, e.g. "74613 Öhringen")
-        const locationMatch = context.match(/(\d{5}\s+[A-Za-zäöüÄÖÜß][A-Za-zäöüÄÖÜß\s\-]+)/);
-        const location = locationMatch?.[1]?.trim() || "";
+        // Extract PLZ + City from full address (ignore street prefix)
+        let location = "";
+        if (rawLocation) {
+            const plzCityMatch = rawLocation.match(/(\d{5}\s+[A-Za-zäöüÄÖÜß][A-Za-zäöüÄÖÜß\s\-]+)/);
+            location = plzCityMatch ? plzCityMatch[1].trim() : rawLocation;
+        }
 
         jobs.push({
             title,
             link: fullLink,
-            company: cleanText(company),
-            location: cleanText(location),
+            company,
+            location,
             guid: fullLink,
+            nodeId,
         });
     }
 
@@ -229,206 +263,122 @@ function parsePraktischArztPage(html: string): ScrapedJob[] {
     return jobs;
 }
 
-/** Scrape job listings from a single medi-jobs.de search results page.
- *  Job links follow the pattern /{employer-id}/{job-id}/ (two numeric segments).
- *  Pagination on medi-jobs.de is JS-based so only page 1 is fetchable via HTTP. */
-function parseMediJobsPage(html: string): ScrapedJob[] {
-    const jobs: ScrapedJob[] = [];
-    const seen = new Set<string>();
-
-    // Links: <a href="/675/1/"><strong>Title</strong></a>
-    const linkRegex = /<a[^>]+href="(\/\d+\/\d+\/)"[^>]*>\s*<strong>([^<]+)<\/strong>/g;
-    let match;
-    while ((match = linkRegex.exec(html)) !== null) {
-        const urlPath = match[1];
-        const title = cleanText(match[2]);
-        if (!title) continue;
-
-        const fullLink = `https://www.medi-jobs.de${urlPath}`;
-        if (seen.has(fullLink)) continue;
-        seen.add(fullLink);
-
-        // Context after the link for company and location
-        const idx = match.index;
-        const ctx = html.substring(idx, Math.min(html.length, idx + 600));
-
-        // Structure after </a>: Company\nDate\nLocation (plain text nodes)
-        // Strip the matched <a>...</a> block then read the following text
-        const afterLink = ctx.replace(/<a[^>]+>[\s\S]*?<\/a>/, "");
-        const textNodes = afterLink
-            .replace(/<[^>]*>/g, "\n")
-            .split("\n")
-            .map((s) => s.trim())
-            .filter((s) => s.length > 1 && !/^\d{2}\.\d{2}\.\d{4}$/.test(s)); // skip date-only lines
-
-        const company = textNodes[0] ? cleanText(textNodes[0]) : "";
-        const location = textNodes[1] ? cleanText(textNodes[1]) : "";
-
-        jobs.push({ title, link: fullLink, company, location, guid: fullLink });
-    }
-
-    return jobs;
-}
-
-/** Scrape job listings from Ethimedis (JavaScript-rendered Next.js site).
- *  Filters out Initiativbewerbung (speculative applications).
- *  URL already includes career_level_ids=5 filter for Assistenzarzt positions. */
+/** Parse job listings from the Ethimedis legacy AJAX HTML content.
+ *  Expects the HTML from the `content` field of the JSON response.
+ *  URL uses type_id=5 for server-side Assistenzarzt filtering. */
 function parseEthimedisPage(html: string): ScrapedJob[] {
     const jobs: ScrapedJob[] = [];
     const seen = new Set<string>();
 
-    // After JS execution, look for job links
-    // Pattern: <a href="/arztstellen/..." ...>Title</a>
-    const jobLinkRegex = /<a[^>]*href="(\/arztstellen\/[^"]+)"[^>]*>([^<]+)<\/a>/g;
+    // Each job block has data-jobofferid="ID"
+    const jobBlockRegex = /data-jobofferid="(\d+)"/g;
+    const jobIds: { id: string; index: number }[] = [];
     let match;
 
-    while ((match = jobLinkRegex.exec(html)) !== null) {
-        const path = match[1];
-        const title = cleanText(match[2]);
+    while ((match = jobBlockRegex.exec(html)) !== null) {
+        const id = match[1];
+        if (!jobIds.some((j) => j.id === id)) {
+            jobIds.push({ id, index: match.index });
+        }
+    }
 
-        if (!title || title.length < 10) continue;
+    for (let i = 0; i < jobIds.length; i++) {
+        const { id, index: start } = jobIds[i];
+        const end = i + 1 < jobIds.length ? jobIds[i + 1].index : html.length;
+        const block = html.substring(start, end);
 
-        // Skip Initiativbewerbung (speculative/unsolicited applications)
+        // Title: <h5>...</h5>
+        const titleMatch = block.match(/<h5[^>]*>\s*([\s\S]*?)\s*<\/h5>/);
+        const title = titleMatch ? cleanText(titleMatch[1]) : "";
+        if (!title || title.length < 5) continue;
+
+        // Skip Initiativbewerbung
         if (title.toLowerCase().includes("initiativbewerbung")) {
-            console.log(`  Skipping Initiativbewerbung: ${title}`);
+            console.log(`  [Ethimedis] Skipping Initiativbewerbung: ${title}`);
             continue;
         }
 
-        const fullLink = `https://www.ethimedis.de${path}`;
+        // Only include junior-level positions (extra safeguard on top of type_id=5)
+        if (!isJuniorPosition(title)) {
+            console.log(`  [Ethimedis] Skipping non-junior position: ${title}`);
+            continue;
+        }
 
+        const fullLink = `https://www.ethimedis.de/joboffers/nicedetails/id/${id}`;
         if (seen.has(fullLink)) continue;
         seen.add(fullLink);
 
-        // Extract company and location from surrounding context
-        const idx = match.index ?? 0;
-        const ctx = html.substring(Math.max(0, idx - 500), Math.min(html.length, idx + 1500));
+        // Company: text between PremiumUser</div><br> and <h5, contains <br> for department
+        const companyMatch = block.match(/PremiumUser<\/div><br>\s*\n\s*\n\s*([\s\S]*?)\s*<h5/);
+        const companyRaw = companyMatch ? companyMatch[1].replace(/<br\s*\/?>/g, " - ").replace(/<[^>]*>/g, "").trim() : "";
+        const company = cleanText(companyRaw);
 
-        // Try to extract company name from context
-        // This will be refined during testing based on actual HTML structure
-        const companyMatch = ctx.match(/<div[^>]*class="[^"]*company[^"]*"[^>]*>([^<]+)<\/div>/i) ||
-            ctx.match(/<span[^>]*class="[^"]*employer[^"]*"[^>]*>([^<]+)<\/span>/i);
-        const company = companyMatch ? cleanText(companyMatch[1]) : "";
-
-        // Try to extract location from context
-        const locationMatch = ctx.match(/<div[^>]*class="[^"]*location[^"]*"[^>]*>([^<]+)<\/div>/i) ||
-            ctx.match(/<span[^>]*class="[^"]*location[^"]*"[^>]*>([^<]+)<\/span>/i) ||
-            ctx.match(/(\d{5}\s+[A-Za-zäöüÄÖÜß][A-Za-zäöüÄÖÜß\s\-]+)/);
+        // Location: after map-marker SVG, in <span class="look_text">
+        const locationMatch = block.match(/awesome-map-marker[\s\S]*?<span class="look_text">\s*(.*?)\s*<\/span>/);
         const location = locationMatch ? cleanText(locationMatch[1]) : "";
 
         jobs.push({
             title,
             link: fullLink,
-            company: company || "Ethimedis",
-            location: location || "Deutschland",
+            company: company || "",
+            location: location || "",
             guid: fullLink,
         });
     }
 
-    console.log(`  Ethimedis parser: found ${jobs.length} jobs (after filtering Initiativbewerbung)`);
     return jobs;
 }
 
-/** Scrape job listings from XING (requires browser rendering due to Cloudflare).
- *  Links follow pattern: https://www.xing.com/jobs/[city]-[job-slug]-[id]
- */
-function parseXingPage(html: string): ScrapedJob[] {
-    const jobs: ScrapedJob[] = [];
+/** Scrape Ethimedis via legacy AJAX endpoint (offset-based pagination, JSON response). */
+async function scrapeEthimedis(runId: string, maxPages: number): Promise<ScrapedJob[]> {
+    const allJobs: ScrapedJob[] = [];
     const seen = new Set<string>();
 
-    // XING uses structured data - extract from JSON-LD
-    const jsonLdRegex = /<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g;
-    let match;
+    for (let offset = 0; offset < maxPages * 15; offset += 15) {
+        const url = `${ETHIMEDIS_URL}/offset/${offset}?format=json`;
 
-    while ((match = jsonLdRegex.exec(html)) !== null) {
         try {
-            const data = JSON.parse(match[1]);
+            const response = await fetch(url, {
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (compatible; KlaroBot/1.0)",
+                    "Accept": "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                signal: AbortSignal.timeout(30_000),
+            });
 
-            // Check if it's a JobPosting
-            if (data["@type"] === "JobPosting" || data["@graph"]?.[0]?.["@type"] === "JobPosting") {
-                const jobData = data["@type"] === "JobPosting" ? data : data["@graph"]?.[0];
+            if (!response.ok) {
+                console.warn(`[${runId}] Ethimedis offset ${offset} returned ${response.status}, stopping`);
+                break;
+            }
 
-                const title = jobData.title || "";
-                const url = jobData.url || "";
+            const json = await response.json();
+            const html = json.content || "";
+            const jobs = parseEthimedisPage(html);
 
-                if (!title || !url || seen.has(url)) continue;
+            console.log(`[${runId}] Ethimedis offset ${offset}: found ${jobs.length} jobs`);
 
-                // Filter for Assistenzarzt positions
-                const lowerTitle = title.toLowerCase();
-                if (
-                    lowerTitle.includes("assistenzarzt") ||
-                    lowerTitle.includes("assistenzärztin") ||
-                    lowerTitle.includes("arzt in weiterbildung")
-                ) {
-                    seen.add(url);
-
-                    const company = jobData.hiringOrganization?.name || "";
-                    const location = jobData.jobLocation?.address?.addressLocality ||
-                        jobData.jobLocation?.address?.addressRegion || "";
-
-                    // Extract employer's direct URL (not the XING ad link)
-                    const orgUrl = jobData.hiringOrganization?.url
-                        || jobData.hiringOrganization?.sameAs
-                        || "";
-                    // Only use it if it's a real external URL (not xing.com)
-                    const employerUrl = orgUrl && !orgUrl.includes("xing.com") ? orgUrl : undefined;
-
-                    jobs.push({
-                        title: cleanText(title),
-                        link: url,
-                        company: cleanText(company),
-                        location: cleanText(location),
-                        guid: url,
-                        employerUrl,
-                    });
+            for (const job of jobs) {
+                if (!seen.has(job.guid)) {
+                    seen.add(job.guid);
+                    allJobs.push(job);
                 }
             }
-        } catch (e) {
-            // Skip invalid JSON
-        }
-    }
 
-    // Fallback: Parse HTML structure if JSON-LD not available
-    if (jobs.length === 0) {
-        // XING job links pattern: <a href="/jobs/..." aria-label="Job Title">
-        // Title is in aria-label attribute, not link text
-        const linkRegex = /<a[^>]+href="((?:https:\/\/www\.xing\.com)?\/jobs\/[^"]+)"[^>]*aria-label="([^"]+)"[^>]*>/g;
+            if (jobs.length === 0) break;
 
-        while ((match = linkRegex.exec(html)) !== null) {
-            let urlPath = match[1];
-            const ariaLabel = match[2];
-
-            // Convert relative URL to absolute
-            const url = urlPath.startsWith('http')
-                ? urlPath
-                : `https://www.xing.com${urlPath}`;
-
-            if (seen.has(url)) continue;
-
-            // Title is in aria-label attribute
-            const title = cleanText(ariaLabel);
-
-            if (!title || title.length < 10) continue;
-
-            // Filter for Assistenzarzt
-            const lowerTitle = title.toLowerCase();
-            if (
-                lowerTitle.includes("assistenzarzt") ||
-                lowerTitle.includes("assistenzärztin") ||
-                lowerTitle.includes("arzt in weiterbildung")
-            ) {
-                seen.add(url);
-                jobs.push({
-                    title,
-                    link: url,
-                    company: "",
-                    location: "",
-                    guid: url,
-                });
+            // Polite delay between pages
+            if (offset + 15 < maxPages * 15) {
+                await new Promise((r) => setTimeout(r, 1500));
             }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : "Fetch error";
+            console.error(`[${runId}] Ethimedis offset ${offset} error: ${msg}`);
+            break;
         }
     }
 
-    return jobs;
+    return allJobs;
 }
 
 /** Check if there's a next page. */
@@ -479,58 +429,6 @@ async function scrapeJobBoard(
             }
         } catch (error) {
             const msg = error instanceof Error ? error.message : "Fetch error";
-            console.error(`[${runId}] Page ${page} error: ${msg}`);
-            break;
-        }
-    }
-
-    return allJobs;
-}
-
-/** Browser-based scraper for JavaScript-heavy sites (XING, etc.) */
-async function scrapeBrowserJobBoard(
-    baseUrl: string,
-    parsePageFn: (html: string) => ScrapedJob[],
-    getNextPageUrl: (baseUrl: string, page: number) => string,
-    runId: string,
-    maxPages: number = MAX_BROWSER_PAGES
-): Promise<ScrapedJob[]> {
-    const allJobs: ScrapedJob[] = [];
-
-    // Check if browser scraper service is available
-    const browserAvailable = await isBrowserScraperAvailable();
-    if (!browserAvailable) {
-        console.warn(`[${runId}] Browser scraper service not available, skipping browser-based scraping`);
-        return [];
-    }
-
-    for (let page = 1; page <= maxPages; page++) {
-        const url = getNextPageUrl(baseUrl, page);
-
-        try {
-            console.log(`[${runId}] Browser scraping page ${page}: ${url}`);
-
-            // Use browser scraper to bypass Cloudflare
-            // Timeout reduced to 45s to stay within edge function limits
-            const scraped = await scrapeWithBrowser(url, {
-                timeout: 45000,
-                waitForSelector: "article, .job-card, .job-listing, [data-testid='job-card'], [class*='job-teaser'], a[href*='/jobs/']",
-            });
-
-            const jobs = parsePageFn(scraped.html);
-
-            console.log(`[${runId}] Page ${page}: found ${jobs.length} jobs`);
-            allJobs.push(...jobs);
-
-            // No more jobs on this page, stop pagination
-            if (jobs.length === 0) break;
-
-            // Delay between pages (polite scraping + avoid detection)
-            if (page < maxPages) {
-                await new Promise((r) => setTimeout(r, 3000)); // Longer delay for browser scraping
-            }
-        } catch (error) {
-            const msg = error instanceof Error ? error.message : "Browser scrape error";
             console.error(`[${runId}] Page ${page} error: ${msg}`);
             break;
         }
@@ -616,6 +514,68 @@ async function resolveEmployerUrl(jobPageUrl: string): Promise<string | null> {
     } catch {
         return null;
     }
+}
+
+// Medical department terms — used to detect bad locations and prevent false positives
+const MEDICAL_TERMS = new Set([
+    "radiologie", "kardiologie", "chirurgie", "anästhesie", "anasthesie",
+    "neurologie", "gynäkologie", "gynakologie", "pädiatrie", "padiatrie",
+    "psychiatrie", "orthopädie", "orthopadie", "urologie", "dermatologie",
+    "onkologie", "pneumologie", "nephrologie", "gastroenterologie",
+    "innere medizin", "intensivmedizin", "notaufnahme", "allgemeinmedizin",
+    "nuklearmedizin", "pathologie", "hämatologie", "hamatologie",
+    "endokrinologie", "rheumatologie", "geriatrie", "neonatologie",
+    "weiterbildung", "facharzt", "oberarzt", "assistenzarzt",
+    "gefäßchirurgie", "unfallchirurgie", "viszeralchirurgie",
+    "herzchirurgie", "thoraxchirurgie", "kinderchirurgie",
+    "hals-nasen-ohrenheilkunde", "augenheilkunde", "palliativmedizin",
+    "arbeitsmedizin", "rechtsmedizin", "mikrobiologie", "virologie",
+    "transfusionsmedizin", "strahlentherapie", "laboratoriumsmedizin",
+]);
+
+/** Resolve Ärzteblatt employer URL directly from node ID (no detail page fetch needed).
+ *  Follows up to 3 redirect hops to get through tracking intermediaries. */
+async function resolveAerzteblattEmployerUrl(nodeId: string): Promise<string | null> {
+    const applyUrl = `https://aerztestellen.aerzteblatt.de/de/node/${nodeId}/apply-external`;
+    const skipDomains = ["aerzteblatt.de", "anzeigenvorschau.net"];
+    const MAX_HOPS = 3;
+    let currentUrl = applyUrl;
+
+    for (let hop = 0; hop < MAX_HOPS; hop++) {
+        try {
+            const resp = await fetch(currentUrl, {
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (compatible; KlaroBot/1.0)",
+                    "Accept": "text/html",
+                },
+                redirect: "manual",
+                signal: AbortSignal.timeout(8_000),
+            });
+
+            const loc = resp.headers.get("Location");
+            if (!loc) {
+                // No more redirects — return current if it's an employer URL
+                return currentUrl !== applyUrl && !skipDomains.some((d) => currentUrl.includes(d))
+                    ? currentUrl
+                    : null;
+            }
+
+            // Resolve relative redirects
+            const nextUrl = loc.startsWith("http") ? loc : new URL(loc, currentUrl).href;
+
+            // If we've reached an employer domain, return it
+            if (!skipDomains.some((d) => nextUrl.includes(d))) {
+                return nextUrl;
+            }
+
+            currentUrl = nextUrl;
+        } catch {
+            return null;
+        }
+    }
+
+    // After MAX_HOPS, return whatever we have if it's not an aggregator
+    return skipDomains.some((d) => currentUrl.includes(d)) ? null : currentUrl;
 }
 
 interface AiJobEnrichment {
@@ -716,8 +676,6 @@ const ALL_SOURCES = [
     STELLENMARKT_SOURCE,
     AERZTEBLATT_SOURCE,
     PRAKTISCHARZT_SOURCE,
-    MEDIJOBS_SOURCE,
-    XING_SOURCE,
     ETHIMEDIS_SOURCE,
 ] as const;
 
@@ -858,8 +816,6 @@ serve(async (req) => {
             stellenmarktJobs,
             aerzteblattJobs,
             praktischArztJobs,
-            mediJobsJobs,
-            xingJobs,
             ethimedisJobs,
         ] = await Promise.all([
             // Stellenmarkt
@@ -895,38 +851,9 @@ serve(async (req) => {
                 )
                 : Promise.resolve([]),
 
-            // MediJobs (pagination is JS-based; page 2+ will 404 and stop naturally)
-            sourcesToScrape.includes(MEDIJOBS_SOURCE)
-                ? scrapeJobBoard(
-                    MEDIJOBS_URL,
-                    parseMediJobsPage,
-                    (base, page) => page === 1 ? base : `${base}&page=${page}`,
-                    runId,
-                    MAX_PAGES_MEDIJOBS
-                )
-                : Promise.resolve([]),
-
-            // XING (uses browser scraper to bypass Cloudflare)
-            sourcesToScrape.includes(XING_SOURCE)
-                ? scrapeBrowserJobBoard(
-                    XING_URL,
-                    parseXingPage,
-                    (base, page) => page === 1 ? base : `${base}&page=${page}`,
-                    runId,
-                    MAX_PAGES_XING
-                )
-                : Promise.resolve([]),
-
-            // Ethimedis (uses browser scraper for JS-rendered content)
-            // URL already includes career_level_ids=5 filter for Assistenzarzt
+            // Ethimedis (legacy AJAX endpoint — no browser needed)
             sourcesToScrape.includes(ETHIMEDIS_SOURCE)
-                ? scrapeBrowserJobBoard(
-                    ETHIMEDIS_URL,
-                    parseEthimedisPage,
-                    (base, page) => page === 1 ? base : `${base}&page=${page}`,
-                    runId,
-                    MAX_PAGES_ETHIMEDIS
-                )
+                ? scrapeEthimedis(runId, MAX_PAGES_ETHIMEDIS)
                 : Promise.resolve([]),
         ]);
 
@@ -935,8 +862,6 @@ serve(async (req) => {
             `Stellenmarkt=${stellenmarktJobs.length}, ` +
             `Ärzteblatt=${aerzteblattJobs.length}, ` +
             `PraktischArzt=${praktischArztJobs.length}, ` +
-            `MediJobs=${mediJobsJobs.length}, ` +
-            `XING=${xingJobs.length}, ` +
             `Ethimedis=${ethimedisJobs.length}`
         );
 
@@ -949,8 +874,6 @@ serve(async (req) => {
             ...stellenmarktJobs.map((j) => ({ ...j, feedSource: STELLENMARKT_SOURCE })),
             ...aerzteblattJobs.map((j) => ({ ...j, feedSource: AERZTEBLATT_SOURCE })),
             ...praktischArztJobs.map((j) => ({ ...j, feedSource: PRAKTISCHARZT_SOURCE })),
-            ...mediJobsJobs.map((j) => ({ ...j, feedSource: MEDIJOBS_SOURCE })),
-            ...xingJobs.map((j) => ({ ...j, feedSource: XING_SOURCE })),
             ...ethimedisJobs.map((j) => ({ ...j, feedSource: ETHIMEDIS_SOURCE })),
         ];
 
@@ -960,10 +883,17 @@ serve(async (req) => {
         if (allScrapedJobs.length === 0) {
             await db.from("job_import_logs").insert({
                 run_id: runId,
-                action: "error",
-                details: { phase: "scrape", error: "No listings found from any source" },
+                action: "run_completed",
+                details: { phase: "scrape", note: "No listings found from requested sources", sources: sourcesToScrape },
             });
-            throw new Error("Keine Stellenangebote von beiden Quellen gefunden");
+            return new Response(
+                JSON.stringify({
+                    success: true,
+                    results: { ...results, totalListings: 0 },
+                    message: `Keine Stellenangebote von ${sourcesToScrape.join(", ")} gefunden. Möglicherweise ist der Browser-Scraper nicht erreichbar.`,
+                }),
+                { headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
+            );
         }
 
         // ── 2. Load existing jobs for dedup ──
@@ -980,11 +910,11 @@ serve(async (req) => {
         const seenGuids = new Set<string>();
         const itemsToProcess = allScrapedJobs.slice(0, MAX_JOBS_PER_RUN * sourcesToScrape.length);
         let urlBackfillCount = 0;
-        const MAX_URL_BACKFILLS_PER_RUN = 5; // Limit backfills to keep run time short
+        const MAX_URL_BACKFILLS_PER_RUN = 15; // Increased: Ärzteblatt resolver is fast (redirect-only)
 
         // Aggregator domains — used to detect jobs needing employer URL backfill
         const aggregatorDomains = [
-            "stellenmarkt.de", "aerzteblatt.de", "praktischarzt.de", "medi-jobs.de", "xing.com",
+            "stellenmarkt.de", "aerzteblatt.de", "praktischarzt.de",
             "ethimedis.de",
         ];
 
@@ -1009,8 +939,6 @@ serve(async (req) => {
                     [STELLENMARKT_SOURCE]: "stellenmarkt.de",
                     [AERZTEBLATT_SOURCE]: "aerzteblatt.de",
                     [PRAKTISCHARZT_SOURCE]: "praktischarzt.de",
-                    [MEDIJOBS_SOURCE]: "medi-jobs.de",
-                    [XING_SOURCE]: "xing.com",
                     [ETHIMEDIS_SOURCE]: "ethimedis.de",
                 };
                 const sourceName = sourceNameMap[feedSource] ?? feedSource;
@@ -1029,7 +957,9 @@ serve(async (req) => {
                             aggregatorDomains.some((d) => currentUrl.includes(d));
 
                         if (needsUrlBackfill && urlBackfillCount < MAX_URL_BACKFILLS_PER_RUN) {
-                            const backfilledUrl = job.employerUrl || await resolveEmployerUrl(job.link);
+                            const backfilledUrl = job.nodeId
+                                ? await resolveAerzteblattEmployerUrl(job.nodeId)
+                                : (job.employerUrl || await resolveEmployerUrl(job.link));
                             if (backfilledUrl) {
                                 await db
                                     .from("jobs")
@@ -1038,12 +968,24 @@ serve(async (req) => {
                                 console.log(`[${runId}] Backfilled employer URL for "${job.title}": ${backfilledUrl}`);
                             }
                             urlBackfillCount++;
-                            await new Promise((r) => setTimeout(r, 1000));
+                            if (!job.nodeId) await new Promise((r) => setTimeout(r, 1000));
                         }
 
-                        // Backfill location with Bundesland if the DB value doesn't already have one
+                        // Backfill location: fix missing/wrong locations (e.g. medical terms stored as cities)
                         const dbLocation = (existing as any).location as string | null;
-                        if (dbLocation) {
+                        const dbLocationBad = !dbLocation || dbLocation.length < 3 ||
+                            MEDICAL_TERMS.has((dbLocation || "").toLowerCase().trim());
+
+                        if (dbLocationBad && job.location) {
+                            // Fresh scrape has a valid location — overwrite the bad one
+                            const enrichedLoc = enrichLocationWithState(job.location);
+                            await db
+                                .from("jobs")
+                                .update({ location: enrichedLoc })
+                                .eq("id", (existing as any).id);
+                            console.log(`[${runId}] Fixed location for "${job.title}": ${enrichedLoc}`);
+                        } else if (dbLocation) {
+                            // Existing location is OK — just try to enrich with Bundesland
                             const enrichedLoc = enrichLocationWithState(dbLocation);
                             if (enrichedLoc !== dbLocation) {
                                 await db
@@ -1066,10 +1008,12 @@ serve(async (req) => {
                         continue;
                     }
 
-                    // Content changed — re-resolve employer URL (prefer pre-extracted employer URL)
-                    const updatedEmployerUrl = job.employerUrl || await resolveEmployerUrl(job.link);
+                    // Content changed — re-resolve employer URL
+                    const updatedEmployerUrl = job.nodeId
+                        ? await resolveAerzteblattEmployerUrl(job.nodeId)
+                        : (job.employerUrl || await resolveEmployerUrl(job.link));
                     if (updatedEmployerUrl) console.log(`[${runId}] Resolved employer URL: ${updatedEmployerUrl}`);
-                    if (!job.employerUrl) await new Promise((r) => setTimeout(r, 1000));
+                    if (!job.nodeId && !job.employerUrl) await new Promise((r) => setTimeout(r, 1000));
 
                     const enrichment = await generateAiSummary(job, anthropicKey);
                     const updateApplyUrl = updatedEmployerUrl || job.link;
@@ -1100,10 +1044,12 @@ serve(async (req) => {
                     });
                     console.log(`[${runId}] Updated (${sourceName}): ${job.title}`);
                 } else {
-                    // New job — prefer pre-extracted employer URL, fall back to resolving from detail page
-                    const employerUrl = job.employerUrl || await resolveEmployerUrl(job.link);
+                    // New job — use fast Ärzteblatt resolver when nodeId available, else generic
+                    const employerUrl = job.nodeId
+                        ? await resolveAerzteblattEmployerUrl(job.nodeId)
+                        : (job.employerUrl || await resolveEmployerUrl(job.link));
                     if (employerUrl) console.log(`[${runId}] Resolved employer URL: ${employerUrl}`);
-                    if (!job.employerUrl) await new Promise((r) => setTimeout(r, 1000));
+                    if (!job.nodeId && !job.employerUrl) await new Promise((r) => setTimeout(r, 1000));
 
                     const applyUrl = employerUrl || job.link;
 

@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
-const BATCH_SIZE = 5; // concurrent HEAD requests
+const BATCH_SIZE = 20; // concurrent HEAD requests (4x faster)
 const REQUEST_TIMEOUT_MS = 10_000;
 
 interface CheckResult {
@@ -135,7 +135,9 @@ serve(async (req) => {
             .select("id, apply_url, title")
             .eq("is_published", true)
             .not("apply_url", "is", null)
-            .neq("apply_url", "");
+            .neq("apply_url", "")
+            .order("link_checked_at", { ascending: true, nullsFirst: true }) // Oldest first
+            .limit(200); // Only 200 jobs per run
 
         if (fetchErr) throw fetchErr;
         if (!jobs || jobs.length === 0) {
