@@ -4,122 +4,19 @@ import { corsHeaders } from "../_shared/cors.ts";
 
 // ─── Configuration ───────────────────────────────────────────────
 const HOSPITALS_PER_RUN = 5;
-const MAX_EXECUTION_MS = 140_000; // 140s (10s buffer before 150s timeout)
-const MISS_THRESHOLD = 2; // Mark job as "gone" after 2 consecutive misses
+const MAX_EXECUTION_MS = 140_000;
+const MISS_THRESHOLD = 2;
 
-// Career URL discovery patterns
-const CAREER_SUBDOMAINS = ["karriere", "jobs", "stellenangebote", "career", "careers"];
-const CAREER_PATHS = [
-    "/karriere", "/stellenangebote", "/jobs", "/career", "/careers",
-    "/de/karriere", "/de/jobs", "/de/stellenangebote",
-    "/karriere/stellenangebote", "/karriere/jobs",
-    "/ueber-uns/karriere", "/arbeiten-bei-uns",
-];
+const FETCH_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "de-DE,de;q=0.9,en;q=0.5",
+};
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
 function generateRunId(): string {
     return `berlin_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-/** Extract the registerable domain from a URL (e.g. vivantes.de from https://www.vivantes.de/foo). */
-function extractBaseDomain(url: string): string | null {
-    try {
-        const parsed = new URL(url);
-        const parts = parsed.hostname.split(".");
-        // Handle co.uk style TLDs
-        if (parts.length >= 2) {
-            return parts.slice(-2).join(".");
-        }
-        return parsed.hostname;
-    } catch {
-        return null;
-    }
-}
-
-/** Try fetching a URL and return true if it responds with 200. */
-async function probeUrl(url: string): Promise<boolean> {
-    try {
-        const resp = await fetch(url, {
-            method: "HEAD",
-            headers: {
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "text/html",
-            },
-            redirect: "follow",
-            signal: AbortSignal.timeout(8_000),
-        });
-        return resp.status >= 200 && resp.status < 400;
-    } catch {
-        return false;
-    }
-}
-
-/** Discover the hospital's career page URL by probing subdomains and paths. */
-async function discoverCareerUrl(websiteUrl: string): Promise<string | null> {
-    const baseDomain = extractBaseDomain(websiteUrl);
-    if (!baseDomain) return null;
-
-    // 1. Try subdomains first (karriere.vivantes.de, jobs.charite.de, etc.)
-    for (const sub of CAREER_SUBDOMAINS) {
-        const subdomainUrl = `https://${sub}.${baseDomain}`;
-        console.log(`  Probing subdomain: ${subdomainUrl}`);
-        if (await probeUrl(subdomainUrl)) {
-            console.log(`  ✓ Found career subdomain: ${subdomainUrl}`);
-            return subdomainUrl;
-        }
-    }
-
-    // 2. Try common paths on the main domain
-    const baseUrl = websiteUrl.replace(/\/+$/, "");
-    for (const path of CAREER_PATHS) {
-        const pathUrl = `${baseUrl}${path}`;
-        console.log(`  Probing path: ${pathUrl}`);
-        if (await probeUrl(pathUrl)) {
-            console.log(`  ✓ Found career path: ${pathUrl}`);
-            return pathUrl;
-        }
-    }
-
-    return null;
-}
-
-/** Resolve the actual hospital website from the DKV profile page. */
-async function resolveWebsiteFromDkv(dkvUrl: string): Promise<string | null> {
-    try {
-        const resp = await fetch(dkvUrl, {
-            headers: {
-                "User-Agent": "Mozilla/5.0 (compatible; KlaroBot/1.0)",
-                "Accept": "text/html",
-            },
-            signal: AbortSignal.timeout(10_000),
-        });
-        if (!resp.ok) return null;
-        const html = await resp.text();
-
-        // DKV pages have the hospital website in a link with "Homepage" or "Webseite" text
-        // or in a direct external link pattern
-        const websitePatterns = [
-            /href="(https?:\/\/(?!.*deutsches-krankenhaus-verzeichnis)[^"]+)"[^>]*>\s*(?:Homepage|Webseite|Website|Internetseite)/i,
-            /(?:Homepage|Webseite|Website)[\s\S]*?href="(https?:\/\/(?!.*deutsches-krankenhaus-verzeichnis)[^"]+)"/i,
-            // Fallback: look for external links in the contact section
-            /class="[^"]*website[^"]*"[^>]*href="(https?:\/\/[^"]+)"/i,
-            /href="(https?:\/\/(?!.*deutsches-krankenhaus-verzeichnis|.*google|.*facebook|.*twitter)[^"]+)"[^>]*rel="noopener/i,
-        ];
-
-        for (const pattern of websitePatterns) {
-            const match = html.match(pattern);
-            if (match?.[1]) {
-                const url = match[1].replace(/\/+$/, "");
-                console.log(`  Resolved website: ${url}`);
-                return url;
-            }
-        }
-
-        return null;
-    } catch {
-        return null;
-    }
 }
 
 interface ExtractedJob {
@@ -128,40 +25,178 @@ interface ExtractedJob {
     department: string | null;
 }
 
-/** Use Claude Haiku to extract Assistenzarzt / Innere Medizin jobs from career page HTML. */
-async function extractJobsWithAi(
+// ─── Strategy 1: __NEXT_DATA__ extraction (Next.js career sites) ──
+
+function extractFromNextData(html: string, careerUrl: string): ExtractedJob[] {
+    const match = html.match(/<script\s+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+    if (!match?.[1]) return [];
+
+    try {
+        const nextData = JSON.parse(match[1]);
+        const jobs: ExtractedJob[] = [];
+
+        // Recursively search the data structure for job-like objects
+        const searchForJobs = (obj: any, depth = 0) => {
+            if (depth > 15 || !obj) return;
+
+            if (Array.isArray(obj)) {
+                for (const item of obj) searchForJobs(item, depth + 1);
+                return;
+            }
+
+            if (typeof obj === "object") {
+                // Vivantes-style: has PositionTitle, PositionURI, Department
+                if (obj.PositionTitle || obj.PositionName) {
+                    const title = obj.PositionTitle || obj.PositionName || "";
+                    const dept = obj.Department || obj.ParentDepartment || obj.OrganizationName || null;
+                    const url = obj.PositionURI || obj.ApplyURI || obj.Link || null;
+
+                    // Filter for Assistenzarzt / Innere Medizin keywords
+                    const combined = `${title} ${dept || ""} ${obj.JobTitle || ""}`.toLowerCase();
+                    const isRelevant =
+                        combined.includes("assistenzarzt") ||
+                        combined.includes("assistenzärztin") ||
+                        combined.includes("arzt in weiterbildung") ||
+                        combined.includes("ärztin in weiterbildung") ||
+                        (combined.includes("innere medizin") && (combined.includes("arzt") || combined.includes("ärztin"))) ||
+                        (combined.includes("ärztlicher bereich") && (
+                            combined.includes("innere") || combined.includes("kardiologie") ||
+                            combined.includes("gastroenterologie") || combined.includes("nephrologie") ||
+                            combined.includes("pneumologie") || combined.includes("onkologie") ||
+                            combined.includes("geriatrie") || combined.includes("endokrinologie") ||
+                            combined.includes("rheumatologie") || combined.includes("hämatologie")
+                        ));
+
+                    if (isRelevant && title) {
+                        jobs.push({
+                            title: title.trim(),
+                            url: url ? (url.startsWith("http") ? url : new URL(url, careerUrl).href) : null,
+                            department: dept?.trim() || null,
+                        });
+                    }
+                }
+
+                // Generic: has title/name + href/url/link
+                if ((obj.title || obj.name) && (obj.href || obj.url || obj.link)) {
+                    const title = obj.title || obj.name || "";
+                    const combined = title.toLowerCase();
+                    const isRelevant =
+                        combined.includes("assistenzarzt") ||
+                        combined.includes("assistenzärztin") ||
+                        combined.includes("innere medizin") ||
+                        combined.includes("arzt in weiterbildung");
+
+                    if (isRelevant) {
+                        const link = obj.href || obj.url || obj.link;
+                        jobs.push({
+                            title: title.trim(),
+                            url: link ? (link.startsWith("http") ? link : new URL(link, careerUrl).href) : null,
+                            department: obj.department || obj.category || null,
+                        });
+                    }
+                }
+
+                for (const key of Object.keys(obj)) {
+                    searchForJobs(obj[key], depth + 1);
+                }
+            }
+        };
+
+        searchForJobs(nextData);
+
+        // Deduplicate by title+url
+        const seen = new Set<string>();
+        return jobs.filter((j) => {
+            const key = `${j.title}|${j.url}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    } catch (err) {
+        console.error("Failed to parse __NEXT_DATA__:", err);
+        return [];
+    }
+}
+
+// ─── Strategy 2: HTML link extraction (non-JS sites) ─────────────
+
+function extractFromHtmlLinks(html: string, careerUrl: string): ExtractedJob[] {
+    const jobs: ExtractedJob[] = [];
+
+    // Match links that contain job-related text
+    const linkRegex = /<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+    let m;
+    while ((m = linkRegex.exec(html)) !== null) {
+        const href = m[1];
+        const text = m[2].replace(/<[^>]+>/g, "").trim();
+        if (!text || text.length < 10 || text.length > 300) continue;
+
+        const lower = text.toLowerCase();
+        const isRelevant =
+            lower.includes("assistenzarzt") ||
+            lower.includes("assistenzärztin") ||
+            lower.includes("arzt in weiterbildung") ||
+            lower.includes("ärztin in weiterbildung") ||
+            (lower.includes("innere medizin") && (lower.includes("arzt") || lower.includes("ärztin")));
+
+        if (isRelevant) {
+            let url: string;
+            try {
+                url = href.startsWith("http") ? href : new URL(href, careerUrl).href;
+            } catch {
+                url = href;
+            }
+
+            jobs.push({
+                title: text,
+                url,
+                department: null,
+            });
+        }
+    }
+
+    // Also check for structured data (JSON-LD)
+    const jsonLdRegex = /<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi;
+    while ((m = jsonLdRegex.exec(html)) !== null) {
+        try {
+            const data = JSON.parse(m[1]);
+            const items = Array.isArray(data) ? data : [data];
+            for (const item of items) {
+                if (item["@type"] === "JobPosting") {
+                    const title = item.title || item.name || "";
+                    const lower = title.toLowerCase();
+                    if (lower.includes("assistenzarzt") || lower.includes("innere medizin") || lower.includes("weiterbildung")) {
+                        jobs.push({
+                            title: title.trim(),
+                            url: item.url || item.sameAs || null,
+                            department: item.occupationalCategory || item.department || null,
+                        });
+                    }
+                }
+            }
+        } catch { /* ignore parse errors */ }
+    }
+
+    // Deduplicate
+    const seen = new Set<string>();
+    return jobs.filter((j) => {
+        const key = `${j.title}|${j.url}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
+// ─── Strategy 3: AI extraction (fallback for complex pages) ──────
+
+async function extractWithAi(
     html: string,
     hospitalName: string,
     careerUrl: string,
     anthropicKey: string
 ): Promise<ExtractedJob[]> {
-    // Truncate HTML to ~30k chars to stay within token limits
-    const truncatedHtml = html.length > 30_000 ? html.substring(0, 30_000) : html;
-
-    const prompt = `Du analysierst die Karriere-/Stellenangebote-Seite des Krankenhauses "${hospitalName}" (URL: ${careerUrl}).
-
-Extrahiere ALLE Stellenangebote die für Assistenzärzte oder Ärzte in Weiterbildung relevant sind.
-Suche speziell nach:
-- Assistenzarzt / Assistenzärztin Positionen
-- Arzt/Ärztin in Weiterbildung  
-- Positionen in Innere Medizin, Kardiologie, Gastroenterologie, Nephrologie, Pneumologie, Hämatologie/Onkologie, Endokrinologie, Rheumatologie, Geriatrie (und verwandte Subdisziplinen der Inneren Medizin)
-- Positionen die "Assistenzarzt" ODER "Innere Medizin" im Titel enthalten
-
-Antworte NUR mit einem validen JSON-Array. Für jede gefundene Stelle:
-[
-  {
-    "title": "Voller Stellentitel",
-    "url": "Vollständige Bewerbungs-URL (absolut, nicht relativ) oder null",
-    "department": "Fachbereich/Abteilung oder null"
-  }
-]
-
-Wenn KEINE relevanten Stellen gefunden werden, antworte mit: []
-
-WICHTIG: 
-- Gib NUR valides JSON zurück, kein Markdown, keine Erklärungen
-- Mache relative URLs absolut basierend auf ${careerUrl}
-- Inkludiere nur Stellen die wirklich Assistenzarzt/Weiterbildung oder Innere Medizin betreffen`;
+    // Truncate to ~40k chars
+    const truncated = html.length > 40_000 ? html.substring(0, 40_000) : html;
 
     try {
         const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -174,26 +209,32 @@ WICHTIG:
             body: JSON.stringify({
                 model: "claude-haiku-4-5",
                 max_tokens: 2000,
-                system: "Du extrahierst Stellenangebote aus deutschen Krankenhaus-Karriereseiten. Antworte NUR mit validem JSON.",
+                system: "Du extrahierst Stellenangebote aus deutschen Krankenhaus-Karriereseiten. Antworte NUR mit validem JSON-Array.",
                 messages: [{
                     role: "user",
-                    content: `${prompt}\n\nHTML-Inhalt der Karriereseite:\n\n${truncatedHtml}`,
+                    content: `Analysiere diese Karriereseite von "${hospitalName}" (${careerUrl}).
+
+Extrahiere alle Stellenangebote für:
+- Assistenzarzt/Assistenzärztin
+- Arzt/Ärztin in Weiterbildung
+- Positionen in Innere Medizin und Subdisziplinen (Kardiologie, Gastroenterologie, Nephrologie, Pneumologie, Hämatologie/Onkologie, Endokrinologie, Rheumatologie, Geriatrie)
+
+Antworte NUR mit JSON: [{"title": "...", "url": "absolute URL oder null", "department": "... oder null"}]
+Wenn keine relevanten Stellen gefunden: []
+
+HTML:
+${truncated}`,
                 }],
             }),
         });
 
-        if (!response.ok) {
-            console.error(`AI API error: ${response.status}`);
-            return [];
-        }
+        if (!response.ok) return [];
 
         const data = await response.json();
-        let rawText = data.content?.[0]?.text?.trim() ?? "";
+        let text = data.content?.[0]?.text?.trim() ?? "";
+        text = text.replace(/```json\n?/gi, "").replace(/```\n?/g, "").trim();
 
-        // Strip markdown fences if present
-        rawText = rawText.replace(/```json\n?/gi, "").replace(/```\n?/g, "").trim();
-
-        const parsed = JSON.parse(rawText);
+        const parsed = JSON.parse(text);
         if (!Array.isArray(parsed)) return [];
 
         return parsed
@@ -207,6 +248,51 @@ WICHTIG:
         console.error(`AI extraction error for ${hospitalName}:`, err);
         return [];
     }
+}
+
+// ─── Multi-page fetcher (follows links to subpages) ──────────────
+
+async function fetchCareerPages(careerUrl: string): Promise<{ url: string; html: string }[]> {
+    const pages: { url: string; html: string }[] = [];
+    const baseUrl = careerUrl.replace(/\/+$/, "");
+
+    // Fetch the main career page
+    try {
+        const resp = await fetch(baseUrl, {
+            headers: FETCH_HEADERS,
+            redirect: "follow",
+            signal: AbortSignal.timeout(15_000),
+        });
+        if (resp.ok) {
+            const html = await resp.text();
+            pages.push({ url: resp.url || baseUrl, html });
+        }
+    } catch (err) {
+        console.error(`Failed to fetch ${baseUrl}:`, err);
+    }
+
+    // Also try /stellenangebote subpage if we're on a career landing page
+    const subpages = ["/stellenangebote", "/jobs", "/offene-stellen", "/stellenmarkt"];
+    for (const sub of subpages) {
+        const subUrl = baseUrl + sub;
+        if (subUrl === baseUrl) continue;
+        try {
+            const resp = await fetch(subUrl, {
+                headers: FETCH_HEADERS,
+                redirect: "follow",
+                signal: AbortSignal.timeout(10_000),
+            });
+            if (resp.ok) {
+                const html = await resp.text();
+                // Only add if it has substantial content
+                if (html.length > 1000 && !pages.some((p) => p.url === (resp.url || subUrl))) {
+                    pages.push({ url: resp.url || subUrl, html });
+                }
+            }
+        } catch { /* skip */ }
+    }
+
+    return pages;
 }
 
 // ─── Main Handler ────────────────────────────────────────────────
@@ -223,12 +309,12 @@ serve(async (req) => {
     const results = {
         runId,
         hospitalsProcessed: 0,
-        careerUrlsDiscovered: 0,
         jobsFound: 0,
         jobsInserted: 0,
         jobsUpdated: 0,
         jobsMarkedGone: 0,
         errors: [] as string[],
+        strategies: {} as Record<string, string>,
     };
 
     try {
@@ -246,41 +332,30 @@ serve(async (req) => {
         if (!isCron) {
             if (!authHeader) {
                 return new Response(JSON.stringify({ error: "Nicht autorisiert" }), {
-                    status: 401,
-                    headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+                    status: 401, headers: { ...corsHeaders(req), "Content-Type": "application/json" },
                 });
             }
-
             const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
                 global: { headers: { Authorization: authHeader } },
             });
-
             const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
             if (userError || !user) {
                 return new Response(JSON.stringify({ error: "Authentifizierung fehlgeschlagen" }), {
-                    status: 401,
-                    headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+                    status: 401, headers: { ...corsHeaders(req), "Content-Type": "application/json" },
                 });
             }
-
             const dbAdmin = createClient(supabaseUrl, serviceRoleKey);
-            const { data: roleData } = await dbAdmin
-                .from("profiles")
-                .select("role")
-                .eq("user_id", user.id)
-                .single();
-
+            const { data: roleData } = await dbAdmin.from("profiles").select("role").eq("user_id", user.id).single();
             if (roleData?.role !== "ADMIN") {
                 return new Response(JSON.stringify({ error: "Nur Admins" }), {
-                    status: 403,
-                    headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+                    status: 403, headers: { ...corsHeaders(req), "Content-Type": "application/json" },
                 });
             }
         }
 
         const db = createClient(supabaseUrl, serviceRoleKey);
 
-        // ── Load hospitals (oldest scraped first) ──
+        // ── Load hospitals ──
         const { data: hospitals, error: fetchErr } = await db
             .from("berlin_hospitals")
             .select("*")
@@ -289,8 +364,8 @@ serve(async (req) => {
             .limit(HOSPITALS_PER_RUN);
 
         if (fetchErr) throw fetchErr;
-        if (!hospitals || hospitals.length === 0) {
-            return new Response(JSON.stringify({ success: true, ...results, message: "No hospitals to process" }), {
+        if (!hospitals?.length) {
+            return new Response(JSON.stringify({ success: true, ...results, message: "No hospitals" }), {
                 headers: { ...corsHeaders(req), "Content-Type": "application/json" },
             });
         }
@@ -298,140 +373,97 @@ serve(async (req) => {
         console.log(`[${runId}] Processing ${hospitals.length} hospitals...`);
 
         for (const hospital of hospitals) {
-            if (!shouldContinue()) {
-                console.log(`[${runId}] Timeout approaching, stopping`);
-                break;
+            if (!shouldContinue()) break;
+
+            const careerUrl = hospital.career_url;
+            if (!careerUrl) {
+                await db.from("berlin_hospitals").update({
+                    scrape_status: "needs_manual",
+                    scrape_error: "No career URL configured",
+                    last_scraped_at: new Date().toISOString(),
+                }).eq("id", hospital.id);
+                results.errors.push(`${hospital.name}: no career URL`);
+                continue;
             }
 
-            console.log(`[${runId}] ── ${hospital.name} ──`);
+            console.log(`[${runId}] ── ${hospital.name} (${careerUrl}) ──`);
 
             try {
-                // ── Step 1: Resolve website URL if needed ──
-                let websiteUrl = hospital.website_url;
-                if (!websiteUrl && hospital.dkv_url) {
-                    console.log(`[${runId}] Resolving website from DKV...`);
-                    websiteUrl = await resolveWebsiteFromDkv(hospital.dkv_url);
-                    if (websiteUrl) {
-                        await db
-                            .from("berlin_hospitals")
-                            .update({ website_url: websiteUrl })
-                            .eq("id", hospital.id);
-                    }
-                }
-
-                if (!websiteUrl) {
-                    console.warn(`[${runId}] No website URL for ${hospital.name}, skipping`);
-                    await db
-                        .from("berlin_hospitals")
-                        .update({
-                            scrape_status: "needs_manual",
-                            scrape_error: "Could not resolve website URL from DKV profile",
-                            last_scraped_at: new Date().toISOString(),
-                        })
-                        .eq("id", hospital.id);
-                    results.errors.push(`${hospital.name}: no website URL`);
+                // ── Fetch career pages (main + subpages) ──
+                const pages = await fetchCareerPages(careerUrl);
+                if (pages.length === 0) {
+                    await db.from("berlin_hospitals").update({
+                        scrape_status: "error", scrape_error: "Could not fetch career page",
+                        last_scraped_at: new Date().toISOString(),
+                    }).eq("id", hospital.id);
+                    results.errors.push(`${hospital.name}: fetch failed`);
                     continue;
                 }
 
-                // ── Step 2: Discover career URL if needed ──
-                let careerUrl = hospital.career_url;
-                if (!careerUrl) {
-                    console.log(`[${runId}] Discovering career URL for ${hospital.name}...`);
-                    careerUrl = await discoverCareerUrl(websiteUrl);
-                    if (careerUrl) {
-                        results.careerUrlsDiscovered++;
-                        await db
-                            .from("berlin_hospitals")
-                            .update({ career_url: careerUrl })
-                            .eq("id", hospital.id);
-                    } else {
-                        console.warn(`[${runId}] No career URL found for ${hospital.name}`);
-                        await db
-                            .from("berlin_hospitals")
-                            .update({
-                                scrape_status: "needs_manual",
-                                scrape_error: "Career page not found via subdomain/path probing",
-                                last_scraped_at: new Date().toISOString(),
-                            })
-                            .eq("id", hospital.id);
-                        results.errors.push(`${hospital.name}: career page not found`);
-                        continue;
+                console.log(`[${runId}] Fetched ${pages.length} pages (${pages.map(p => p.html.length + " chars").join(", ")})`);
+
+                // ── Try extraction strategies in order ──
+                let extractedJobs: ExtractedJob[] = [];
+                let strategyUsed = "none";
+
+                for (const page of pages) {
+                    // Strategy 1: __NEXT_DATA__ (structured JSON, most reliable for Next.js sites)
+                    if (page.html.includes("__NEXT_DATA__")) {
+                        const nextJobs = extractFromNextData(page.html, page.url);
+                        if (nextJobs.length > 0) {
+                            extractedJobs = nextJobs;
+                            strategyUsed = `next_data(${page.url})`;
+                            console.log(`[${runId}] Strategy: __NEXT_DATA__ → ${nextJobs.length} jobs`);
+                            break;
+                        }
+                    }
+
+                    // Strategy 2: Parse HTML links + JSON-LD
+                    const htmlJobs = extractFromHtmlLinks(page.html, page.url);
+                    if (htmlJobs.length > 0) {
+                        extractedJobs = htmlJobs;
+                        strategyUsed = `html_links(${page.url})`;
+                        console.log(`[${runId}] Strategy: HTML links → ${htmlJobs.length} jobs`);
+                        break;
                     }
                 }
 
-                // ── Step 3: Fetch career page ──
-                console.log(`[${runId}] Fetching: ${careerUrl}`);
-                const pageResp = await fetch(careerUrl, {
-                    headers: {
-                        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        "Accept": "text/html,application/xhtml+xml",
-                        "Accept-Language": "de-DE,de;q=0.9",
-                    },
-                    redirect: "follow",
-                    signal: AbortSignal.timeout(15_000),
-                });
-
-                if (!pageResp.ok) {
-                    console.error(`[${runId}] Career page returned ${pageResp.status}`);
-                    await db
-                        .from("berlin_hospitals")
-                        .update({
-                            scrape_status: "error",
-                            scrape_error: `HTTP ${pageResp.status}`,
-                            last_scraped_at: new Date().toISOString(),
-                        })
-                        .eq("id", hospital.id);
-                    results.errors.push(`${hospital.name}: HTTP ${pageResp.status}`);
-                    continue;
+                // Strategy 3: AI extraction (fallback — use the largest page)
+                if (extractedJobs.length === 0) {
+                    const biggestPage = pages.sort((a, b) => b.html.length - a.html.length)[0];
+                    console.log(`[${runId}] Trying AI extraction on ${biggestPage.url} (${biggestPage.html.length} chars)...`);
+                    extractedJobs = await extractWithAi(biggestPage.html, hospital.name, biggestPage.url, anthropicKey);
+                    strategyUsed = `ai(${biggestPage.url})`;
+                    console.log(`[${runId}] Strategy: AI → ${extractedJobs.length} jobs`);
                 }
 
-                const html = await pageResp.text();
-                console.log(`[${runId}] Got ${html.length} chars of HTML`);
-
-                // ── Step 4: AI extraction ──
-                const extractedJobs = await extractJobsWithAi(html, hospital.name, careerUrl, anthropicKey);
-                console.log(`[${runId}] AI extracted ${extractedJobs.length} jobs for ${hospital.name}`);
+                results.strategies[hospital.name] = strategyUsed;
                 results.jobsFound += extractedJobs.length;
 
-                // ── Step 5: Change detection ──
-                // If hospital previously had jobs but now returns 0, flag as needs_manual
+                // ── Change detection ──
                 if (extractedJobs.length === 0) {
-                    const { data: existingJobs } = await db
+                    const { data: existingActive } = await db
                         .from("berlin_hospital_jobs")
-                        .select("id")
-                        .eq("hospital_id", hospital.id)
-                        .eq("status", "active")
-                        .limit(1);
+                        .select("id").eq("hospital_id", hospital.id).eq("status", "active").limit(1);
 
-                    if (existingJobs && existingJobs.length > 0) {
-                        console.warn(`[${runId}] ${hospital.name} had active jobs but AI found 0 — flagging needs_manual`);
-                        await db
-                            .from("berlin_hospitals")
-                            .update({
-                                scrape_status: "needs_manual",
-                                scrape_error: "Previously had jobs but now found 0 — possible scraping issue",
-                                last_scraped_at: new Date().toISOString(),
-                            })
-                            .eq("id", hospital.id);
-                        // Don't mark existing jobs as gone yet — could be a false negative
-                        results.hospitalsProcessed++;
-                        continue;
-                    }
-
-                    // Genuinely no jobs
-                    await db
-                        .from("berlin_hospitals")
-                        .update({
-                            scrape_status: "no_jobs",
-                            scrape_error: null,
+                    if (existingActive?.length) {
+                        console.warn(`[${runId}] ${hospital.name}: had active jobs but found 0 → needs_manual`);
+                        await db.from("berlin_hospitals").update({
+                            scrape_status: "needs_manual",
+                            scrape_error: "Previously had jobs but found 0 — may need URL update",
                             last_scraped_at: new Date().toISOString(),
-                        })
-                        .eq("id", hospital.id);
+                        }).eq("id", hospital.id);
+                    } else {
+                        await db.from("berlin_hospitals").update({
+                            scrape_status: "no_jobs", scrape_error: null,
+                            last_scraped_at: new Date().toISOString(),
+                        }).eq("id", hospital.id);
+                    }
                     results.hospitalsProcessed++;
                     continue;
                 }
 
-                // ── Step 6: Upsert jobs ──
+                // ── Upsert jobs ──
                 const now = new Date().toISOString();
                 const seenUrls = new Set<string>();
 
@@ -439,7 +471,6 @@ serve(async (req) => {
                     const applyUrl = job.url || `${careerUrl}#${encodeURIComponent(job.title)}`;
                     seenUrls.add(applyUrl);
 
-                    // Try to find existing job
                     const { data: existing } = await db
                         .from("berlin_hospital_jobs")
                         .select("id, status")
@@ -448,93 +479,63 @@ serve(async (req) => {
                         .single();
 
                     if (existing) {
-                        // Update last_seen, reset consecutive_misses
-                        await db
-                            .from("berlin_hospital_jobs")
-                            .update({
-                                last_seen_at: now,
-                                consecutive_misses: 0,
-                                status: existing.status === "gone" ? "active" : existing.status,
-                                title: job.title,
-                                department: job.department || undefined,
-                                updated_at: now,
-                            })
-                            .eq("id", existing.id);
+                        await db.from("berlin_hospital_jobs").update({
+                            last_seen_at: now, consecutive_misses: 0,
+                            status: existing.status === "gone" ? "active" : existing.status,
+                            title: job.title, department: job.department || undefined,
+                            updated_at: now,
+                        }).eq("id", existing.id);
                         results.jobsUpdated++;
                     } else {
-                        // Insert new job
-                        await db
-                            .from("berlin_hospital_jobs")
-                            .insert({
-                                hospital_id: hospital.id,
-                                title: job.title,
-                                department: job.department || null,
-                                apply_url: applyUrl,
-                                first_seen_at: now,
-                                last_seen_at: now,
-                                status: "active",
-                                is_new: true,
-                            });
+                        await db.from("berlin_hospital_jobs").insert({
+                            hospital_id: hospital.id,
+                            title: job.title,
+                            department: job.department || null,
+                            apply_url: applyUrl,
+                            first_seen_at: now, last_seen_at: now,
+                            status: "active", is_new: true,
+                        });
                         results.jobsInserted++;
                     }
                 }
 
-                // ── Step 7: Increment misses for unseen active jobs ──
+                // ── Track misses ──
                 const { data: activeJobs } = await db
                     .from("berlin_hospital_jobs")
                     .select("id, apply_url, consecutive_misses")
-                    .eq("hospital_id", hospital.id)
-                    .eq("status", "active");
+                    .eq("hospital_id", hospital.id).eq("status", "active");
 
                 if (activeJobs) {
-                    for (const activeJob of activeJobs) {
-                        if (!seenUrls.has(activeJob.apply_url || "")) {
-                            const newMisses = (activeJob.consecutive_misses || 0) + 1;
+                    for (const aj of activeJobs) {
+                        if (!seenUrls.has(aj.apply_url || "")) {
+                            const newMisses = (aj.consecutive_misses || 0) + 1;
                             if (newMisses >= MISS_THRESHOLD) {
-                                await db
-                                    .from("berlin_hospital_jobs")
-                                    .update({ status: "gone", consecutive_misses: newMisses, updated_at: now })
-                                    .eq("id", activeJob.id);
+                                await db.from("berlin_hospital_jobs").update({
+                                    status: "gone", consecutive_misses: newMisses, updated_at: now,
+                                }).eq("id", aj.id);
                                 results.jobsMarkedGone++;
                             } else {
-                                await db
-                                    .from("berlin_hospital_jobs")
-                                    .update({ consecutive_misses: newMisses })
-                                    .eq("id", activeJob.id);
+                                await db.from("berlin_hospital_jobs").update({ consecutive_misses: newMisses }).eq("id", aj.id);
                             }
                         }
                     }
                 }
 
-                // ── Update hospital status ──
-                await db
-                    .from("berlin_hospitals")
-                    .update({
-                        scrape_status: "success",
-                        scrape_error: null,
-                        last_scraped_at: now,
-                    })
-                    .eq("id", hospital.id);
-
+                await db.from("berlin_hospitals").update({
+                    scrape_status: "success", scrape_error: null, last_scraped_at: now,
+                }).eq("id", hospital.id);
                 results.hospitalsProcessed++;
-                console.log(`[${runId}] ✓ ${hospital.name}: ${extractedJobs.length} jobs found`);
+                console.log(`[${runId}] ✓ ${hospital.name}: ${extractedJobs.length} jobs (${strategyUsed})`);
 
-                // Polite delay between hospitals
-                await new Promise((r) => setTimeout(r, 1000));
+                await new Promise((r) => setTimeout(r, 800));
 
             } catch (err) {
                 const msg = err instanceof Error ? err.message : "Unknown error";
-                console.error(`[${runId}] Error processing ${hospital.name}:`, msg);
+                console.error(`[${runId}] Error: ${hospital.name}:`, msg);
                 results.errors.push(`${hospital.name}: ${msg}`);
-
-                await db
-                    .from("berlin_hospitals")
-                    .update({
-                        scrape_status: "error",
-                        scrape_error: msg,
-                        last_scraped_at: new Date().toISOString(),
-                    })
-                    .eq("id", hospital.id);
+                await db.from("berlin_hospitals").update({
+                    scrape_status: "error", scrape_error: msg, last_scraped_at: new Date().toISOString(),
+                }).eq("id", hospital.id);
             }
         }
 
@@ -543,9 +544,9 @@ serve(async (req) => {
             headers: { ...corsHeaders(req), "Content-Type": "application/json" },
         });
     } catch (err) {
-        console.error(`[${runId}] Fatal error:`, err);
+        console.error(`[${runId}] Fatal:`, err);
         return new Response(
-            JSON.stringify({ success: false, error: err instanceof Error ? err.message : "Unknown error", ...results }),
+            JSON.stringify({ success: false, error: err instanceof Error ? err.message : "Unknown", ...results }),
             { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
     }
