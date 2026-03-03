@@ -1,4 +1,4 @@
-"""Enhanced Ethimedis scraper with AI fallbacks for robust data extraction."""
+"""Enhanced Ethimedis scraper with OpenAI GPT-4o-mini fallbacks for robust data extraction."""
 import asyncio
 import logging
 

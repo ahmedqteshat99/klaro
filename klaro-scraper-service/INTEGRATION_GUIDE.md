@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide shows how to integrate AI models (Claude) to prevent scraping failures and improve data quality.
+This guide shows how to integrate AI models (GPT-4o-mini) to prevent scraping failures and improve data quality.
 
 ## 🎯 Failure Points & AI Solutions
 
@@ -10,7 +10,7 @@ This guide shows how to integrate AI models (Claude) to prevent scraping failure
 
 **Problem:** CSS selectors fail when sites change structure, or location is embedded in text.
 
-**AI Solution:** Use Claude as fallback to extract location from context.
+**AI Solution:** Use GPT-4o-mini as fallback to extract location from context.
 
 ```python
 # In scrapers/ethimedis.py (or any scraper)
@@ -31,7 +31,7 @@ async def parse_html_content_with_ai_fallback(self, html: str) -> list[ScrapedJo
             raw_location = clean_text(str(loc_spans[0].text))
             location = extract_city_from_location(raw_location)
 
-        # 🤖 AI FALLBACK: If CSS selector failed, use Claude
+        # 🤖 AI FALLBACK: If CSS selector failed, use GPT-4o-mini
         if not location:
             logger.warning(f"Location not found via CSS for job {job_id}, trying AI...")
             description_text = clean_text(str(block.text))[:500]
@@ -50,7 +50,7 @@ async def parse_html_content_with_ai_fallback(self, html: str) -> list[ScrapedJo
 ```
 
 **Cost Estimation:**
-- Model: Claude Haiku 4.5
+- Model: GPT-4o-mini Haiku 4.5
 - Cost: ~$0.0001 per extraction
 - 1000 fallback calls = ~$0.10
 
@@ -60,7 +60,7 @@ async def parse_html_content_with_ai_fallback(self, html: str) -> list[ScrapedJo
 
 **Problem:** CSS selectors can't find the employer URL, or page structure changed.
 
-**AI Solution:** Use Claude to analyze page HTML and identify the most likely employer URL.
+**AI Solution:** Use GPT-4o-mini to analyze page HTML and identify the most likely employer URL.
 
 ```python
 # In main.py - resolve_employer_url endpoint
@@ -85,7 +85,7 @@ async def resolve_employer_url(page_url: str, source: str) -> Optional[str]:
 
     # ... other source-specific logic ...
 
-    # 🤖 AI FALLBACK: If selectors fail, use Claude
+    # 🤖 AI FALLBACK: If selectors fail, use GPT-4o-mini
     logger.warning("Employer URL not found via selectors, trying AI...")
     employer_url = await extract_employer_url_with_ai(
         html_content=html[:10000],  # Limit HTML size for API
@@ -111,7 +111,7 @@ async def resolve_employer_url(page_url: str, source: str) -> Optional[str]:
 
 **Problem:** Extracted data is incomplete, contains errors, or has medical terms in wrong fields.
 
-**AI Solution:** Use Claude to validate and correct extracted data.
+**AI Solution:** Use GPT-4o-mini to validate and correct extracted data.
 
 ```python
 # In scrapers/base.py - after extraction
@@ -153,7 +153,7 @@ async def scrape_with_validation(self, max_pages: int = 10):
 
 **Problem:** Sites change HTML structure, breaking all CSS selectors.
 
-**AI Solution:** Use Claude Vision to analyze screenshots and suggest new selectors.
+**AI Solution:** Use GPT-4o-mini Vision to analyze screenshots and suggest new selectors.
 
 ```python
 # New file: utils/adaptive_selectors.py
@@ -164,7 +164,7 @@ async def generate_selectors_from_screenshot(
     screenshot_path: str,
     target_elements: list[str]  # e.g., ["job title", "location", "apply button"]
 ) -> dict[str, str]:
-    """Use Claude Vision to suggest CSS selectors from a screenshot.
+    """Use GPT-4o-mini Vision to suggest CSS selectors from a screenshot.
 
     Args:
         screenshot_path: Path to page screenshot
@@ -194,14 +194,14 @@ Respond in JSON format:
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
-            "https://api.anthropic.com/v1/messages",
+            "https://api.openai.com/v1/messages",
             headers={
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
+                "x-api-key": OPENAI_API_KEY,
+                "openai-version": "2023-06-01",
                 "content-type": "application/json",
             },
             json={
-                "model": "claude-sonnet-4-5",  # Vision model
+                "model": "gpt-4o",  # Vision model (gpt-4o supports vision)
                 "max_tokens": 1000,
                 "messages": [{
                     "role": "user",

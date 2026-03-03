@@ -1,4 +1,5 @@
 # AI Integration for Robust Scraping - Executive Summary
+## 🤖 Powered by OpenAI GPT-4o-mini
 
 ## 🎯 Problem Statement
 
@@ -36,14 +37,14 @@ The current Scrapling system has **4 main failure points**:
                    │
                    ▼
           ┌────────────────────────┐
-          │   2. AI Fallback       │  ← Slower, costs $0.0001/job
-          │  (Claude Haiku 4.5)    │     (~5% of jobs)
+          │   2. AI Fallback       │  ← Slower, costs $0.00004/job
+          │  (GPT-4o-mini)         │     (~5% of jobs)
           └────────┬────────────────┘
                    │
                    ▼
           ┌────────────────────────┐
           │  3. Data Validation    │  ← Optional quality check
-          │   (Claude Haiku)       │
+          │   (GPT-4o-mini)        │
           └────────┬────────────────┘
                    │
                    ▼
@@ -68,7 +69,7 @@ location = await extract_location_with_ai(
 # Returns: "Hamburg"
 ```
 
-**Cost:** $0.0001 per extraction × ~200 fallbacks/day = **$0.02/day**
+**Cost:** $0.00004 per extraction × ~200 fallbacks/day = **$0.008/day** ($0.24/month)
 
 #### 1.2 Employer URL Resolution Fallback
 ```python
@@ -81,9 +82,9 @@ employer_url = await extract_employer_url_with_ai(
 # Returns: "https://krankenhaus-berlin.de/karriere/apply"
 ```
 
-**Cost:** $0.0002 per resolution × ~100 fallbacks/day = **$0.02/day**
+**Cost:** $0.00009 per resolution × ~100 fallbacks/day = **$0.009/day** ($0.27/month)
 
-**Total Phase 1 Cost: ~$1.20/month** 💰
+**Total Phase 1 Cost: ~$0.51/month** 💰 (60% cheaper than Claude!)
 
 ---
 
@@ -110,7 +111,7 @@ validation = await validate_extracted_data_with_ai({
 
 **Impact:** Reduces bad data imports by **80%**
 
-**Cost:** $0.0001 × ~1000 jobs/day = **$0.10/day** = **$3/month**
+**Cost:** $0.00008 × ~1000 jobs/day = **$0.08/day** = **$2.40/month**
 
 ---
 
@@ -144,10 +145,10 @@ save_selectors("ethimedis", new_selectors)
 
 **Impact:** Zero-downtime when sites redesign ✨
 
-**Cost:** Claude Sonnet 4 with vision: $0.015 per screenshot
+**Cost:** GPT-4o with vision: $0.01 per screenshot
 - Manual checks: 1/week per source = 4/month
 - Auto-triggered: 2-3/month on failures
-- **Total: ~$0.10/month**
+- **Total: ~$0.07/month**
 
 ---
 
@@ -175,15 +176,15 @@ save_selectors("ethimedis", new_selectors)
 
 | Phase | Feature | Daily Cost | Monthly Cost |
 |-------|---------|-----------|--------------|
-| **Phase 1** | Location Fallback | $0.02 | $0.60 |
-| **Phase 1** | URL Resolution | $0.02 | $0.60 |
-| **Phase 2** | Data Validation | $0.10 | $3.00 |
-| **Phase 3** | Adaptive Selectors | $0.003 | $0.10 |
-| | **TOTAL** | **$0.14** | **$4.30** |
+| **Phase 1** | Location Fallback | $0.008 | $0.24 |
+| **Phase 1** | URL Resolution | $0.009 | $0.27 |
+| **Phase 2** | Data Validation | $0.08 | $2.40 |
+| **Phase 3** | Adaptive Selectors | $0.002 | $0.07 |
+| | **TOTAL** | **$0.10** | **$2.98** |
 
-**With 80% caching:** $0.86/month ✅
+**With 80% caching:** $0.60/month ✅
 
-**Cost per successful job import:** $0.000086 (less than 0.01 cents!)
+**Cost per successful job import:** $0.00006 (0.006 cents!)
 
 ---
 
