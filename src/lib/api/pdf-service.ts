@@ -23,7 +23,7 @@ async function requestPdfBlob({
     stadt,
 }: ServerPdfParams): Promise<Blob> {
     if (!PDF_SERVICE_URL) {
-        throw new Error("PDF Service URL is not configured (VITE_PDF_SERVICE_URL)");
+        throw new Error("SERVER_UNAVAILABLE");
     }
 
     // Get the current auth token
@@ -53,9 +53,7 @@ async function requestPdfBlob({
             }),
         });
     } catch {
-        throw new Error(
-            `PDF-Service nicht erreichbar (${PDF_SERVICE_URL}). Bitte URL/Deployment pruefen.`
-        );
+        throw new Error("SERVER_UNAVAILABLE");
     }
 
     if (!response.ok) {
@@ -76,25 +74,11 @@ export async function generatePdfBlobFromServer(params: ServerPdfParams): Promis
     return requestPdfBlob(params);
 }
 
-/**
- * Download a PDF from the server-side Puppeteer service.
- * Sends the HTML content + options, receives a PDF binary, and triggers a file download.
- */
-export async function downloadPdfFromServer(params: ServerPdfParams): Promise<void> {
-    // Convert response to blob and trigger download
-    const blob = await requestPdfBlob(params);
+function triggerBlobDownload(blob: Blob, fileName: string): void {
     const url = URL.createObjectURL(blob);
-
-    const defaultFileName =
-        params.type === "cv" ? "Lebenslauf.pdf" : "Anschreiben.pdf";
-    const finalName = params.fileName || defaultFileName;
-
-    // Use an anchor element to trigger the download.
-    // On iOS Safari the `download` attribute is ignored — the PDF opens
-    // inline in the same tab, where the user can share/save via the OS.
     const link = document.createElement("a");
     link.href = url;
-    link.download = finalName;
+    link.download = fileName;
     document.body.appendChild(link);
     link.click();
 
@@ -102,4 +86,39 @@ export async function downloadPdfFromServer(params: ServerPdfParams): Promise<vo
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
     }, 100);
+}
+
+/**
+ * Download a PDF — tries the server-side Puppeteer service first,
+ * falls back to client-side browser print if the server is unavailable.
+ */
+export async function downloadPdfFromServer(params: ServerPdfParams): Promise<void> {
+    const defaultFileName =
+        params.type === "cv" ? "Lebenslauf.pdf" : "Anschreiben.pdf";
+    const finalName = params.fileName || defaultFileName;
+
+    try {
+        const blob = await requestPdfBlob(params);
+        triggerBlobDownload(blob, finalName);
+    } catch (err) {
+        const isServerDown =
+            err instanceof Error && err.message === "SERVER_UNAVAILABLE";
+
+        if (!isServerDown) {
+            throw err;
+        }
+
+        // Fallback: client-side PDF via browser print dialog
+        console.warn("PDF server unavailable, falling back to client-side print export");
+        const { exportToPDF } = await import("@/lib/pdf-export");
+        await exportToPDF({
+            htmlContent: params.htmlContent,
+            fileName: finalName.replace(/\.pdf$/i, ""),
+            showFoto: params.type === "cv" ? params.showFoto : false,
+            fotoUrl: params.fotoUrl,
+            showSignatur: params.showSignatur,
+            signaturUrl: params.signaturUrl,
+            stadt: params.stadt,
+        });
+    }
 }

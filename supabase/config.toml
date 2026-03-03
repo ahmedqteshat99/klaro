@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.backfill-locations]
 verify_jwt = false
+
+[functions.scrape-berlin-hospitals]
+verify_jwt = false

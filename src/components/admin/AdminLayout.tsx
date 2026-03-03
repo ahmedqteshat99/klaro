@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { BriefcaseBusiness, LayoutDashboard, Shield, Users } from "lucide-react";
+import { BriefcaseBusiness, LayoutDashboard, MapPin, Shield, Users } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 import { cn } from "@/lib/utils";
 
@@ -8,6 +8,7 @@ const navItems = [
   { to: "/admin/jobs", label: "Jobs", icon: BriefcaseBusiness, end: false },
   { to: "/admin/users", label: "Benutzer", icon: Users, end: false },
   { to: "/admin/data-subjects", label: "DSGVO-Rechte", icon: Shield, end: false },
+  { to: "/admin/berlin-jobs", label: "Berlin Jobs", icon: MapPin, end: false },
 ];
 
 const AdminLayout = () => {

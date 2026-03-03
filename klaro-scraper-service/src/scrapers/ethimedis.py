@@ -21,7 +21,7 @@ ETHIMEDIS_BASE_URL = (
 )
 
 
-class EthimedisScraperWithAI:
+class EthimedisScraper:
     """Enhanced Ethimedis scraper with AI fallbacks.
 
     Features:
@@ -233,7 +233,7 @@ class EthimedisScraperWithAI:
 # Example usage:
 """
 # Instantiate with AI fallback enabled
-scraper = EthimedisScraperWithAI(enable_ai_fallback=True)
+scraper = EthimedisScraper(enable_ai_fallback=True)
 
 # Scrape jobs
 jobs, pages, errors = await scraper.scrape(max_pages=10)

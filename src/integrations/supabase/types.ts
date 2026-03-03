@@ -303,7 +303,118 @@ export type Database = {
             referencedRelation: "jobs"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "applications_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "stale_jobs"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      berlin_hospital_jobs: {
+        Row: {
+          apply_url: string | null
+          consecutive_misses: number | null
+          created_at: string | null
+          department: string | null
+          description: string | null
+          first_seen_at: string | null
+          hospital_id: string
+          id: string
+          is_new: boolean | null
+          last_seen_at: string | null
+          notes: string | null
+          status: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          apply_url?: string | null
+          consecutive_misses?: number | null
+          created_at?: string | null
+          department?: string | null
+          description?: string | null
+          first_seen_at?: string | null
+          hospital_id: string
+          id?: string
+          is_new?: boolean | null
+          last_seen_at?: string | null
+          notes?: string | null
+          status?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          apply_url?: string | null
+          consecutive_misses?: number | null
+          created_at?: string | null
+          department?: string | null
+          description?: string | null
+          first_seen_at?: string | null
+          hospital_id?: string
+          id?: string
+          is_new?: boolean | null
+          last_seen_at?: string | null
+          notes?: string | null
+          status?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "berlin_hospital_jobs_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "berlin_hospitals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      berlin_hospitals: {
+        Row: {
+          career_url: string | null
+          career_url_verified: boolean | null
+          created_at: string | null
+          dkv_url: string | null
+          id: string
+          is_active: boolean | null
+          last_scraped_at: string | null
+          name: string
+          scrape_error: string | null
+          scrape_status: string | null
+          updated_at: string | null
+          website_url: string | null
+        }
+        Insert: {
+          career_url?: string | null
+          career_url_verified?: boolean | null
+          created_at?: string | null
+          dkv_url?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_scraped_at?: string | null
+          name: string
+          scrape_error?: string | null
+          scrape_status?: string | null
+          updated_at?: string | null
+          website_url?: string | null
+        }
+        Update: {
+          career_url?: string | null
+          career_url_verified?: boolean | null
+          created_at?: string | null
+          dkv_url?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_scraped_at?: string | null
+          name?: string
+          scrape_error?: string | null
+          scrape_status?: string | null
+          updated_at?: string | null
+          website_url?: string | null
+        }
+        Relationships: []
       }
       candidate_share_requests: {
         Row: {
@@ -538,6 +649,114 @@ export type Database = {
         }
         Relationships: []
       }
+      hospitals: {
+        Row: {
+          beds_count: number | null
+          bundesland: string
+          career_page_url: string | null
+          career_platform: string | null
+          case_count: number | null
+          city: string
+          created_at: string | null
+          data_quality_score: number | null
+          departments: Json | null
+          email: string | null
+          has_job_postings: boolean | null
+          id: string
+          iknr: string | null
+          is_active: boolean | null
+          job_postings_count: number | null
+          last_error_message: string | null
+          last_scrape_success: boolean | null
+          last_scraped_at: string | null
+          latitude: number | null
+          longitude: number | null
+          name: string
+          name_normalized: string
+          phone: string | null
+          plz: string | null
+          scrape_error_count: number | null
+          scrape_success_count: number | null
+          source: string[] | null
+          street: string | null
+          type: string | null
+          updated_at: string | null
+          verification_date: string | null
+          verified: boolean | null
+          website: string | null
+        }
+        Insert: {
+          beds_count?: number | null
+          bundesland: string
+          career_page_url?: string | null
+          career_platform?: string | null
+          case_count?: number | null
+          city: string
+          created_at?: string | null
+          data_quality_score?: number | null
+          departments?: Json | null
+          email?: string | null
+          has_job_postings?: boolean | null
+          id?: string
+          iknr?: string | null
+          is_active?: boolean | null
+          job_postings_count?: number | null
+          last_error_message?: string | null
+          last_scrape_success?: boolean | null
+          last_scraped_at?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          name_normalized: string
+          phone?: string | null
+          plz?: string | null
+          scrape_error_count?: number | null
+          scrape_success_count?: number | null
+          source?: string[] | null
+          street?: string | null
+          type?: string | null
+          updated_at?: string | null
+          verification_date?: string | null
+          verified?: boolean | null
+          website?: string | null
+        }
+        Update: {
+          beds_count?: number | null
+          bundesland?: string
+          career_page_url?: string | null
+          career_platform?: string | null
+          case_count?: number | null
+          city?: string
+          created_at?: string | null
+          data_quality_score?: number | null
+          departments?: Json | null
+          email?: string | null
+          has_job_postings?: boolean | null
+          id?: string
+          iknr?: string | null
+          is_active?: boolean | null
+          job_postings_count?: number | null
+          last_error_message?: string | null
+          last_scrape_success?: boolean | null
+          last_scraped_at?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          name_normalized?: string
+          phone?: string | null
+          plz?: string | null
+          scrape_error_count?: number | null
+          scrape_success_count?: number | null
+          source?: string[] | null
+          street?: string | null
+          type?: string | null
+          updated_at?: string | null
+          verification_date?: string | null
+          verified?: boolean | null
+          website?: string | null
+        }
+        Relationships: []
+      }
       job_import_logs: {
         Row: {
           action: string
@@ -577,25 +796,42 @@ export type Database = {
             referencedRelation: "jobs"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "job_import_logs_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "stale_jobs"
+            referencedColumns: ["id"]
+          },
         ]
       }
       jobs: {
         Row: {
           apply_url: string | null
+          apply_url_hash: string | null
           attribution_metadata: Json | null
           cache_expires_at: string | null
+          consecutive_misses: number | null
           contact_email: string | null
           contact_name: string | null
+          content_hash: string | null
           created_at: string | null
           created_by: string | null
           department: string | null
           description: string | null
           expires_at: string | null
+          field_backfill_attempts: number
+          field_backfill_last_attempt_at: string | null
+          field_backfill_last_error: string | null
+          field_backfill_status: string | null
+          hospital_id: string | null
           hospital_name: string | null
           id: string
           import_status: string | null
           is_published: boolean
+          last_seen_at: string | null
           link_checked_at: string | null
+          link_failure_count: number | null
           link_status: string | null
           location: string | null
           published_at: string | null
@@ -606,28 +842,44 @@ export type Database = {
           rss_imported_at: string | null
           rss_last_seen_at: string | null
           scraped_at: string | null
+          source: string | null
+          source_identifier: string | null
           source_name: string | null
           source_url: string | null
           tags: string[] | null
           title: string
           updated_at: string | null
+          url_http_status: number | null
+          url_is_dead: boolean | null
+          url_validated: boolean | null
+          url_validation_date: string | null
         }
         Insert: {
           apply_url?: string | null
+          apply_url_hash?: string | null
           attribution_metadata?: Json | null
           cache_expires_at?: string | null
+          consecutive_misses?: number | null
           contact_email?: string | null
           contact_name?: string | null
+          content_hash?: string | null
           created_at?: string | null
           created_by?: string | null
           department?: string | null
           description?: string | null
           expires_at?: string | null
+          field_backfill_attempts?: number
+          field_backfill_last_attempt_at?: string | null
+          field_backfill_last_error?: string | null
+          field_backfill_status?: string | null
+          hospital_id?: string | null
           hospital_name?: string | null
           id?: string
           import_status?: string | null
           is_published?: boolean
+          last_seen_at?: string | null
           link_checked_at?: string | null
+          link_failure_count?: number | null
           link_status?: string | null
           location?: string | null
           published_at?: string | null
@@ -638,28 +890,44 @@ export type Database = {
           rss_imported_at?: string | null
           rss_last_seen_at?: string | null
           scraped_at?: string | null
+          source?: string | null
+          source_identifier?: string | null
           source_name?: string | null
           source_url?: string | null
           tags?: string[] | null
           title: string
           updated_at?: string | null
+          url_http_status?: number | null
+          url_is_dead?: boolean | null
+          url_validated?: boolean | null
+          url_validation_date?: string | null
         }
         Update: {
           apply_url?: string | null
+          apply_url_hash?: string | null
           attribution_metadata?: Json | null
           cache_expires_at?: string | null
+          consecutive_misses?: number | null
           contact_email?: string | null
           contact_name?: string | null
+          content_hash?: string | null
           created_at?: string | null
           created_by?: string | null
           department?: string | null
           description?: string | null
           expires_at?: string | null
+          field_backfill_attempts?: number
+          field_backfill_last_attempt_at?: string | null
+          field_backfill_last_error?: string | null
+          field_backfill_status?: string | null
+          hospital_id?: string | null
           hospital_name?: string | null
           id?: string
           import_status?: string | null
           is_published?: boolean
+          last_seen_at?: string | null
           link_checked_at?: string | null
+          link_failure_count?: number | null
           link_status?: string | null
           location?: string | null
           published_at?: string | null
@@ -670,13 +938,34 @@ export type Database = {
           rss_imported_at?: string | null
           rss_last_seen_at?: string | null
           scraped_at?: string | null
+          source?: string | null
+          source_identifier?: string | null
           source_name?: string | null
           source_url?: string | null
           tags?: string[] | null
           title?: string
           updated_at?: string | null
+          url_http_status?: number | null
+          url_is_dead?: boolean | null
+          url_validated?: boolean | null
+          url_validation_date?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "jobs_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "hospital_scraping_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jobs_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "hospitals"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       lifecycle_email_logs: {
         Row: {
@@ -1093,6 +1382,98 @@ export type Database = {
         }
         Relationships: []
       }
+      duplicate_jobs: {
+        Row: {
+          apply_url_hash: string | null
+          content_hash: string | null
+          duplicate_count: number | null
+          hospitals: string[] | null
+          job_ids: string[] | null
+          titles: string[] | null
+        }
+        Relationships: []
+      }
+      hospital_scraping_stats: {
+        Row: {
+          bundesland: string | null
+          career_page_url: string | null
+          career_platform: string | null
+          dead_jobs: number | null
+          id: string | null
+          last_scrape_success: boolean | null
+          last_scraped_at: string | null
+          most_recent_job_scraped: string | null
+          name: string | null
+          scrape_status: string | null
+          total_jobs_found: number | null
+          valid_jobs: number | null
+        }
+        Relationships: []
+      }
+      job_quality_metrics: {
+        Row: {
+          dead_link_rate_pct: number | null
+          dead_links: number | null
+          hospital_scraped: number | null
+          hospitals_with_jobs: number | null
+          rss_jobs: number | null
+          scraped_jobs: number | null
+          total_jobs: number | null
+          unvalidated_jobs: number | null
+          validated_jobs: number | null
+          validation_rate_pct: number | null
+        }
+        Relationships: []
+      }
+      platform_performance: {
+        Row: {
+          avg_jobs_per_hospital: number | null
+          career_platform: string | null
+          failed_scrapes: number | null
+          hospitals_count: number | null
+          successful_scrapes: number | null
+          total_jobs: number | null
+          validated_jobs: number | null
+          validation_rate_pct: number | null
+        }
+        Relationships: []
+      }
+      stale_jobs: {
+        Row: {
+          apply_url: string | null
+          days_since_seen: unknown
+          hospital_name: string | null
+          id: string | null
+          last_seen_at: string | null
+          scraped_at: string | null
+          staleness_status: string | null
+          title: string | null
+          url_is_dead: boolean | null
+        }
+        Insert: {
+          apply_url?: string | null
+          days_since_seen?: never
+          hospital_name?: string | null
+          id?: string | null
+          last_seen_at?: string | null
+          scraped_at?: string | null
+          staleness_status?: never
+          title?: string | null
+          url_is_dead?: boolean | null
+        }
+        Update: {
+          apply_url?: string | null
+          days_since_seen?: never
+          hospital_name?: string | null
+          id?: string | null
+          last_seen_at?: string | null
+          scraped_at?: string | null
+          staleness_status?: never
+          title?: string | null
+          url_is_dead?: boolean | null
+        }
+        Relationships: []
+      }
       user_data_access_log: {
         Row: {
           action: string | null
@@ -1108,6 +1489,10 @@ export type Database = {
       }
     }
     Functions: {
+      calculate_hospital_quality_score: {
+        Args: { h: Database["public"]["Tables"]["hospitals"]["Row"] }
+        Returns: number
+      }
       check_rate_limit: {
         Args: {
           p_endpoint: string
@@ -1125,7 +1510,34 @@ export type Database = {
       }
       cleanup_old_audit_logs: { Args: never; Returns: number }
       cleanup_old_rate_limits: { Args: never; Returns: undefined }
+      cleanup_stale_jobs: {
+        Args: never
+        Returns: {
+          unpublished_count: number
+        }[]
+      }
       delete_user_account: { Args: { p_user_id: string }; Returns: Json }
+      find_duplicate_job: {
+        Args: { p_apply_url_hash: string; p_content_hash: string }
+        Returns: string
+      }
+      generate_job_content_hash: {
+        Args: {
+          p_description: string
+          p_hospital: string
+          p_location: string
+          p_title: string
+        }
+        Returns: string
+      }
+      generate_url_hash: { Args: { url: string }; Returns: string }
+      get_jobs_needing_revalidation: {
+        Args: { limit_count?: number }
+        Returns: {
+          apply_url: string
+          id: string
+        }[]
+      }
       is_admin: { Args: never; Returns: boolean }
       job_needs_refresh: { Args: { job_id: string }; Returns: boolean }
       log_admin_action: {
@@ -1142,6 +1554,11 @@ export type Database = {
         Args: { p_endpoint: string; p_user_id: string }
         Returns: undefined
       }
+      mark_stale_jobs_inactive: {
+        Args: { days_threshold?: number }
+        Returns: number
+      }
+      normalize_hospital_name: { Args: { name: string }; Returns: string }
       provision_user_alias: {
         Args: {
           p_domain?: string

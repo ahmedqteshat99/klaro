@@ -2,80 +2,45 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
-const BATCH_SIZE = 20; // concurrent HEAD requests (4x faster)
-const REQUEST_TIMEOUT_MS = 10_000;
+// ─── Configuration ──────────────────────────────────────────────
+const SCRAPER_SERVICE_URL = Deno.env.get("SCRAPER_SERVICE_URL") || "";
+const SCRAPER_SECRET_KEY = Deno.env.get("SCRAPER_SECRET") || "";
+const MAX_JOBS_PER_RUN = 200;
+const AUTO_DEACTIVATE_THRESHOLD = 3; // Consecutive failures before auto-unpublish
 
-interface CheckResult {
-    jobId: string;
+interface LinkCheckResult {
+    id: string;
     url: string;
     status: "active" | "stale" | "error" | "unknown";
-    httpStatus?: number;
-    errorMsg?: string;
+    http_status?: number;
+    reason?: string;
 }
 
-/** Check if a URL is still reachable. */
-async function checkUrl(url: string): Promise<{ status: "active" | "stale" | "error" | "unknown"; httpStatus?: number; errorMsg?: string }> {
-    try {
-        const response = await fetch(url, {
-            method: "HEAD",
-            headers: {
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "text/html,application/xhtml+xml",
-            },
-            redirect: "follow",
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-        });
-
-        const code = response.status;
-
-        // Some servers don't support HEAD, try GET as fallback for 405
-        if (code === 405) {
-            const getResp = await fetch(url, {
-                method: "GET",
-                headers: {
-                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                    "Accept": "text/html",
-                },
-                redirect: "follow",
-                signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-            });
-            const getCode = getResp.status;
-            // Consume body to prevent leak
-            await getResp.text().catch(() => { });
-
-            if (getCode >= 200 && getCode < 400) return { status: "active", httpStatus: getCode };
-            if (getCode === 404 || getCode === 410) return { status: "stale", httpStatus: getCode };
-            if (getCode >= 500) return { status: "error", httpStatus: getCode };
-            return { status: "unknown", httpStatus: getCode };
-        }
-
-        if (code >= 200 && code < 400) return { status: "active", httpStatus: code };
-        if (code === 404 || code === 410) return { status: "stale", httpStatus: code };
-        if (code >= 500) return { status: "error", httpStatus: code };
-        return { status: "unknown", httpStatus: code };
-    } catch (err) {
-        const msg = err instanceof Error ? err.message : "Unknown error";
-        if (msg.includes("timeout") || msg.includes("abort")) {
-            return { status: "unknown", errorMsg: "Timeout" };
-        }
-        return { status: "error", errorMsg: msg };
+/** Check links via the Scrapling microservice (content-aware detection). */
+async function checkLinksViaService(
+    urls: Array<{ id: string; url: string; source: string }>
+): Promise<LinkCheckResult[]> {
+    if (!SCRAPER_SERVICE_URL) {
+        throw new Error("SCRAPER_SERVICE_URL not configured");
     }
-}
 
-/** Process a batch of URLs in parallel. */
-async function processBatch(
-    jobs: Array<{ id: string; apply_url: string }>,
-): Promise<CheckResult[]> {
-    return Promise.all(
-        jobs.map(async (job) => {
-            const result = await checkUrl(job.apply_url);
-            return {
-                jobId: job.id,
-                url: job.apply_url,
-                ...result,
-            };
-        })
-    );
+    const response = await fetch(`${SCRAPER_SERVICE_URL}/scrape/check-links`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-Scraper-Secret": SCRAPER_SECRET_KEY,
+        },
+        body: JSON.stringify({ urls }),
+        signal: AbortSignal.timeout(120_000),
+    });
+
+    if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Scraper service returned ${response.status}: ${text}`);
+    }
+
+    const data = await response.json();
+    return data.results || [];
 }
 
 serve(async (req) => {
@@ -84,7 +49,7 @@ serve(async (req) => {
     }
 
     try {
-        // ── Auth: admin only ──
+        // ── Auth: admin only or CRON_SECRET ──
         const authHeader = req.headers.get("Authorization");
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -132,12 +97,12 @@ serve(async (req) => {
 
         const { data: jobs, error: fetchErr } = await db
             .from("jobs")
-            .select("id, apply_url, title")
+            .select("id, apply_url, title, rss_feed_source, link_failure_count, is_published")
             .eq("is_published", true)
             .not("apply_url", "is", null)
             .neq("apply_url", "")
-            .order("link_checked_at", { ascending: true, nullsFirst: true }) // Oldest first
-            .limit(200); // Only 200 jobs per run
+            .order("link_checked_at", { ascending: true, nullsFirst: true })
+            .limit(MAX_JOBS_PER_RUN);
 
         if (fetchErr) throw fetchErr;
         if (!jobs || jobs.length === 0) {
@@ -147,46 +112,94 @@ serve(async (req) => {
             );
         }
 
-        console.log(`Checking ${jobs.length} job URLs...`);
+        console.log(`Checking ${jobs.length} job URLs via Scrapling service...`);
 
-        // ── Process in batches ──
-        const allResults: CheckResult[] = [];
-        const validJobs = jobs.filter((j) => j.apply_url);
+        // ── Send batch to Scrapling service ──
+        const urlsToCheck = jobs.map((j: any) => ({
+            id: j.id,
+            url: j.apply_url,
+            source: j.rss_feed_source || "",
+        }));
 
-        for (let i = 0; i < validJobs.length; i += BATCH_SIZE) {
-            const batch = validJobs.slice(i, i + BATCH_SIZE);
-            const results = await processBatch(batch as Array<{ id: string; apply_url: string }>);
-            allResults.push(...results);
+        const results = await checkLinksViaService(urlsToCheck);
 
-            // Brief delay between batches to be polite
-            if (i + BATCH_SIZE < validJobs.length) {
-                await new Promise((r) => setTimeout(r, 500));
-            }
-        }
+        // Index results by ID for fast lookup
+        const resultById = new Map(results.map((r) => [r.id, r]));
 
         // ── Update job statuses in DB ──
         const now = new Date().toISOString();
-        for (const result of allResults) {
-            await db
-                .from("jobs")
-                .update({
-                    link_status: result.status,
-                    link_checked_at: now,
-                })
-                .eq("id", result.jobId);
+        let autoDeactivated = 0;
+
+        for (const job of jobs) {
+            const result = resultById.get(job.id);
+            if (!result) continue;
+
+            const currentFailCount = (job as any).link_failure_count || 0;
+
+            if (result.status === "active") {
+                // Link is healthy — reset failure counter
+                await db
+                    .from("jobs")
+                    .update({
+                        link_status: "active",
+                        link_checked_at: now,
+                        link_failure_count: 0,
+                    })
+                    .eq("id", job.id);
+            } else if (result.status === "stale" || result.status === "error") {
+                const newFailCount = currentFailCount + 1;
+
+                if (newFailCount >= AUTO_DEACTIVATE_THRESHOLD && (job as any).is_published) {
+                    // Auto-deactivate after consecutive failures
+                    await db
+                        .from("jobs")
+                        .update({
+                            link_status: result.status,
+                            link_checked_at: now,
+                            link_failure_count: newFailCount,
+                            is_published: false,
+                            published_at: null,
+                        })
+                        .eq("id", job.id);
+                    autoDeactivated++;
+                    console.log(
+                        `Auto-deactivated "${(job as any).title}" after ${newFailCount} failures ` +
+                        `(reason: ${result.reason || result.status})`
+                    );
+                } else {
+                    await db
+                        .from("jobs")
+                        .update({
+                            link_status: result.status,
+                            link_checked_at: now,
+                            link_failure_count: newFailCount,
+                        })
+                        .eq("id", job.id);
+                }
+            } else {
+                // unknown — update status but don't increment failure counter
+                await db
+                    .from("jobs")
+                    .update({
+                        link_status: result.status,
+                        link_checked_at: now,
+                    })
+                    .eq("id", job.id);
+            }
         }
 
         // ── Summary ──
         const summary = {
             success: true,
-            checked: allResults.length,
-            active: allResults.filter((r) => r.status === "active").length,
-            stale: allResults.filter((r) => r.status === "stale").length,
-            errors: allResults.filter((r) => r.status === "error").length,
-            unknown: allResults.filter((r) => r.status === "unknown").length,
-            staleJobs: allResults
+            checked: results.length,
+            active: results.filter((r) => r.status === "active").length,
+            stale: results.filter((r) => r.status === "stale").length,
+            errors: results.filter((r) => r.status === "error").length,
+            unknown: results.filter((r) => r.status === "unknown").length,
+            autoDeactivated,
+            staleJobs: results
                 .filter((r) => r.status === "stale")
-                .map((r) => ({ id: r.jobId, url: r.url, httpStatus: r.httpStatus })),
+                .map((r) => ({ id: r.id, url: r.url, httpStatus: r.http_status, reason: r.reason })),
         };
 
         console.log(`Check complete: ${JSON.stringify(summary)}`);

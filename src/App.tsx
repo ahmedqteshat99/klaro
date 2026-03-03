@@ -35,6 +35,7 @@ const AdminJobsPage = lazy(() => import("./pages/admin/AdminJobsPage"));
 const AdminUsersPage = lazy(() => import("./pages/admin/AdminUsersPage"));
 const AdminUserDetailPage = lazy(() => import("./pages/admin/AdminUserDetailPage"));
 const AdminDataSubjectPage = lazy(() => import("./pages/admin/AdminDataSubjectPage"));
+const AdminBerlinJobsPage = lazy(() => import("./pages/admin/AdminBerlinJobsPage"));
 const VerifyEmailPage = lazy(() => import("./pages/VerifyEmailPage"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const NewLandingPage = lazy(() => import("./pages/NewLandingPage"));
@@ -106,6 +107,7 @@ const App = () => {
                 <Route path="users" element={<AdminUsersPage />} />
                 <Route path="users/:id" element={<AdminUserDetailPage />} />
                 <Route path="data-subjects" element={<AdminDataSubjectPage />} />
+                <Route path="berlin-jobs" element={<AdminBerlinJobsPage />} />
               </Route>
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
