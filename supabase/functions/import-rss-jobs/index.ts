@@ -380,17 +380,25 @@ serve(async (req) => {
             return scrapeViaService(source, maxPages, runId);
         }
 
-        const [
-            stellenmarktJobs,
-            aerzteblattJobs,
-            praktischArztJobs,
-            ethimedisJobs,
-        ] = await Promise.all([
+        // Use Promise.allSettled so one source failure doesn't kill all imports
+        const scrapeResults = await Promise.allSettled([
             scrapeSource(STELLENMARKT_SOURCE),
             scrapeSource(AERZTEBLATT_SOURCE),
             scrapeSource(PRAKTISCHARZT_SOURCE),
             scrapeSource(ETHIMEDIS_SOURCE),
         ]);
+
+        const extractJobs = (result: PromiseSettledResult<ScrapedJob[]>, sourceName: string): ScrapedJob[] => {
+            if (result.status === "fulfilled") return result.value;
+            console.error(`[${runId}] Source ${sourceName} failed: ${result.reason}`);
+            results.errorMessages.push(`${sourceName}: ${result.reason}`);
+            return [];
+        };
+
+        const stellenmarktJobs = extractJobs(scrapeResults[0], STELLENMARKT_SOURCE);
+        const aerzteblattJobs = extractJobs(scrapeResults[1], AERZTEBLATT_SOURCE);
+        const praktischArztJobs = extractJobs(scrapeResults[2], PRAKTISCHARZT_SOURCE);
+        const ethimedisJobs = extractJobs(scrapeResults[3], ETHIMEDIS_SOURCE);
 
         console.log(
             `[${runId}] Scraped totals: ` +

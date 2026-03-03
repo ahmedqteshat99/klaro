@@ -92,10 +92,15 @@ class EthimedisScraper:
             location = ""
 
             # Try CSS selector first (fast)
+            # Multiple .look_text spans exist per block (e.g. "Klinik", "Hamburg")
+            # Iterate all and take the first valid city (skip medical/generic terms)
             loc_spans = block.css(".look_text")
-            if loc_spans:
-                raw_location = clean_text(str(loc_spans[0].text))
-                location = extract_city_from_location(raw_location)
+            for span in loc_spans:
+                raw_location = clean_text(str(span.text))
+                candidate = extract_city_from_location(raw_location)
+                if candidate:
+                    location = candidate
+                    break
 
             # 🤖 AI FALLBACK: If CSS selector failed or returned empty
             if not location and self.enable_ai_fallback:
