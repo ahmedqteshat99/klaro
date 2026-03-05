@@ -24,33 +24,30 @@ class PraktischArztScraper(BaseScraper):
     def _extract_location_from_listing(self, block) -> str:
         """Extract location from listings page (after .svg-location span)."""
         try:
-            # Location appears after <span class="svg-location">
-            # Example: <span class="svg-location">...</span>Kassel
+            # Location appears after <span class="svg-location">...</span>
+            # Example HTML: <span class="svg-location">...</span>Kassel</div>
+            # Text content: "05.03.2026Kassel" (date and location concatenated)
+
             employer_address_divs = block.css('.employer-address')
             if not employer_address_divs:
                 return ""
 
-            # Get text content and find location after svg-location marker
-            address_text = employer_address_divs[0].text
+            address_text = clean_text(str(employer_address_divs[0].text))
             if not address_text:
                 return ""
 
-            # Split by svg-location span and take the part after it
-            # The text typically looks like: "05.03.2026Kassel" or "date icon locationname"
-            text_parts = str(address_text).split('\n')
-            for part in text_parts:
-                part = part.strip()
-                # Skip date patterns (digits and dots/slashes)
-                if re.match(r'^[\d./\-]+$', part):
-                    continue
-                # Skip empty or very short strings
-                if len(part) < 3:
-                    continue
-                # Extract city using location utility
-                location = extract_city_from_location(part)
-                if location:
-                    logger.debug(f"[PraktischArzt] Extracted location from listing: {location}")
-                    return location
+            # Remove date pattern (DD.MM.YYYY or similar) from the text
+            # This leaves us with just the location name
+            text_without_date = re.sub(r'\d{2}[\./]\d{2}[\./]\d{4}', '', address_text).strip()
+
+            if not text_without_date or len(text_without_date) < 3:
+                return ""
+
+            # Extract city using location utility
+            location = extract_city_from_location(text_without_date)
+            if location:
+                logger.debug(f"[PraktischArzt] Extracted location: {location} from {address_text}")
+                return location
 
             return ""
 
