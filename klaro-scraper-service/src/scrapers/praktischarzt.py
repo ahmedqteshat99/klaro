@@ -1,4 +1,3 @@
-import json
 import logging
 import re
 
@@ -22,43 +21,41 @@ class PraktischArztScraper(BaseScraper):
             return self.base_url
         return f"{self.base_url}{page}/"
 
-    def _extract_location_from_job_page(self, job_url: str) -> str:
-        """Fetch individual job page and extract location from JSON-LD."""
+    def _extract_location_from_listing(self, block) -> str:
+        """Extract location from listings page (after .svg-location span)."""
         try:
-            # Fetch the job detail page
-            response = self.fetcher.fetch(job_url)
-            if not response or not response.text:
+            # Location appears after <span class="svg-location">
+            # Example: <span class="svg-location">...</span>Kassel
+            employer_address_divs = block.css('.employer-address')
+            if not employer_address_divs:
                 return ""
 
-            html = response.text
+            # Get text content and find location after svg-location marker
+            address_text = employer_address_divs[0].text
+            if not address_text:
+                return ""
 
-            # Look for JSON-LD with JobPosting schema
-            json_ld_pattern = r'<script type="application/ld\+json">(.*?)</script>'
-            matches = re.findall(json_ld_pattern, html, re.DOTALL)
-
-            for match in matches:
-                try:
-                    data = json.loads(match)
-                    # Check if it's a JobPosting
-                    if data.get('@type') == 'JobPosting':
-                        # Extract location from jobLocation.address.addressLocality
-                        job_location = data.get('jobLocation', {})
-                        if isinstance(job_location, dict):
-                            address = job_location.get('address', {})
-                            if isinstance(address, dict):
-                                locality = address.get('addressLocality', '').strip()
-                                if locality:
-                                    logger.debug(f"[PraktischArzt] Extracted location from JSON-LD: {locality}")
-                                    return locality
-                except (json.JSONDecodeError, AttributeError) as e:
-                    logger.debug(f"[PraktischArzt] Failed to parse JSON-LD: {e}")
+            # Split by svg-location span and take the part after it
+            # The text typically looks like: "05.03.2026Kassel" or "date icon locationname"
+            text_parts = str(address_text).split('\n')
+            for part in text_parts:
+                part = part.strip()
+                # Skip date patterns (digits and dots/slashes)
+                if re.match(r'^[\d./\-]+$', part):
                     continue
+                # Skip empty or very short strings
+                if len(part) < 3:
+                    continue
+                # Extract city using location utility
+                location = extract_city_from_location(part)
+                if location:
+                    logger.debug(f"[PraktischArzt] Extracted location from listing: {location}")
+                    return location
 
-            logger.debug(f"[PraktischArzt] No location found in JSON-LD for {job_url}")
             return ""
 
         except Exception as e:
-            logger.warning(f"[PraktischArzt] Failed to fetch job page {job_url}: {e}")
+            logger.warning(f"[PraktischArzt] Failed to extract location from listing: {e}")
             return ""
 
     def parse_page(self, page) -> list[ScrapedJob]:
@@ -93,17 +90,23 @@ class PraktischArztScraper(BaseScraper):
 
             seen_links.add(link)
 
-            # Company: Extract from logo alt attribute (HTML structure changed)
+            # Company: Extract from logo alt attribute or employer-name div
             company = ""
             logo_imgs = block.css('img[id="company_logo_thumb"]')
             if logo_imgs:
                 company = logo_imgs[0].attrib.get("alt", "").strip()
-                if company:
-                    logger.debug(f"[PraktischArzt] Extracted company from logo: {company}")
 
-            # Location: Must be fetched from individual job page (not on listings page)
-            # This will slow down scraping but ensures complete data
-            location = self._extract_location_from_job_page(link)
+            # Fallback: try .employer-name if logo alt is empty
+            if not company:
+                employer_divs = block.css('.employer-name a')
+                if employer_divs:
+                    company = clean_text(str(employer_divs[0].text))
+
+            if company:
+                logger.debug(f"[PraktischArzt] Extracted company: {company}")
+
+            # Location: Extract from listings page (fast, no additional requests)
+            location = self._extract_location_from_listing(block)
 
             jobs.append(
                 ScrapedJob(
