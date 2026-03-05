@@ -1,4 +1,6 @@
+import json
 import logging
+import re
 
 from ..models import ScrapedJob
 from ..utils.location import extract_city_from_location
@@ -19,6 +21,45 @@ class PraktischArztScraper(BaseScraper):
         if page == 1:
             return self.base_url
         return f"{self.base_url}{page}/"
+
+    def _extract_location_from_job_page(self, job_url: str) -> str:
+        """Fetch individual job page and extract location from JSON-LD."""
+        try:
+            # Fetch the job detail page
+            response = self.fetcher.fetch(job_url)
+            if not response or not response.text:
+                return ""
+
+            html = response.text
+
+            # Look for JSON-LD with JobPosting schema
+            json_ld_pattern = r'<script type="application/ld\+json">(.*?)</script>'
+            matches = re.findall(json_ld_pattern, html, re.DOTALL)
+
+            for match in matches:
+                try:
+                    data = json.loads(match)
+                    # Check if it's a JobPosting
+                    if data.get('@type') == 'JobPosting':
+                        # Extract location from jobLocation.address.addressLocality
+                        job_location = data.get('jobLocation', {})
+                        if isinstance(job_location, dict):
+                            address = job_location.get('address', {})
+                            if isinstance(address, dict):
+                                locality = address.get('addressLocality', '').strip()
+                                if locality:
+                                    logger.debug(f"[PraktischArzt] Extracted location from JSON-LD: {locality}")
+                                    return locality
+                except (json.JSONDecodeError, AttributeError) as e:
+                    logger.debug(f"[PraktischArzt] Failed to parse JSON-LD: {e}")
+                    continue
+
+            logger.debug(f"[PraktischArzt] No location found in JSON-LD for {job_url}")
+            return ""
+
+        except Exception as e:
+            logger.warning(f"[PraktischArzt] Failed to fetch job page {job_url}: {e}")
+            return ""
 
     def parse_page(self, page) -> list[ScrapedJob]:
         jobs: list[ScrapedJob] = []
@@ -52,20 +93,17 @@ class PraktischArztScraper(BaseScraper):
 
             seen_links.add(link)
 
-            # Company: <div class="employer-name"> contains <a>
+            # Company: Extract from logo alt attribute (HTML structure changed)
             company = ""
-            company_els = block.css(".employer-name a")
-            if company_els:
-                company = clean_text(str(company_els[0].text))
+            logo_imgs = block.css('img[id="company_logo_thumb"]')
+            if logo_imgs:
+                company = logo_imgs[0].attrib.get("alt", "").strip()
+                if company:
+                    logger.debug(f"[PraktischArzt] Extracted company from logo: {company}")
 
-            # Location: after <span class="svg-location">
-            location = ""
-            loc_spans = block.css(".svg-location")
-            if loc_spans and loc_spans[0].parent:
-                parent_text = loc_spans[0].parent.text
-                raw_location = clean_text(str(parent_text))
-                # Extract city, filtering out medical department names
-                location = extract_city_from_location(raw_location)
+            # Location: Must be fetched from individual job page (not on listings page)
+            # This will slow down scraping but ensures complete data
+            location = self._extract_location_from_job_page(link)
 
             jobs.append(
                 ScrapedJob(
