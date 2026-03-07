@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { enrichLocationWithState } from "../_shared/enrich-location.ts";
+import { isLikelyInvalidLocation, normalizeJobLocation } from "../_shared/location-normalization.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -73,99 +73,67 @@ serve(async (req) => {
 
     const db = createClient(supabaseUrl, serviceRoleKey);
 
-    // Get all jobs with missing location
-    const { data: jobs, error: fetchErr } = await db
+    // Get jobs with missing location plus RSS jobs that may still contain invalid location strings.
+    const { data: missingJobs, error: missingErr } = await db
       .from("jobs")
-      .select("id, title, hospital_name, description, apply_url, location")
+      .select("id, title, hospital_name, description, apply_url, location, rss_feed_source")
       .or("location.is.null,location.eq.");
 
-    if (fetchErr) throw fetchErr;
-    if (!jobs || jobs.length === 0) {
+    if (missingErr) throw missingErr;
+
+    const { data: rssJobs, error: rssErr } = await db
+      .from("jobs")
+      .select("id, title, hospital_name, description, apply_url, location, rss_feed_source")
+      .not("rss_feed_source", "is", null);
+
+    if (rssErr) throw rssErr;
+
+    const jobs = new Map<string, {
+      id: string;
+      title: string | null;
+      hospital_name: string | null;
+      description: string | null;
+      apply_url: string | null;
+      location: string | null;
+      rss_feed_source?: string | null;
+    }>();
+
+    for (const job of missingJobs ?? []) {
+      jobs.set(job.id, job);
+    }
+
+    for (const job of rssJobs ?? []) {
+      if (isLikelyInvalidLocation(job.location)) {
+        jobs.set(job.id, job);
+      }
+    }
+
+    const jobsToProcess = Array.from(jobs.values());
+
+    if (jobsToProcess.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, message: "No jobs missing location", total: 0, updated: 0, failed: 0 }),
+        JSON.stringify({ success: true, message: "No jobs need location repair", total: 0, updated: 0, failed: 0 }),
         { headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Found ${jobs.length} jobs with missing location`);
+    console.log(`Found ${jobsToProcess.length} jobs that need location repair`);
 
     let updated = 0;
     let failed = 0;
     const failures: string[] = [];
 
-    // Medical terms that must never be treated as city names
-    const MEDICAL_TERMS = new Set([
-        "radiologie", "kardiologie", "chirurgie", "anästhesie", "anasthesie",
-        "neurologie", "gynäkologie", "gynakologie", "pädiatrie", "padiatrie",
-        "psychiatrie", "orthopädie", "orthopadie", "urologie", "dermatologie",
-        "onkologie", "pneumologie", "nephrologie", "gastroenterologie",
-        "innere", "intensivmedizin", "notaufnahme", "allgemeinmedizin",
-        "nuklearmedizin", "pathologie", "hämatologie", "hamatologie",
-        "endokrinologie", "rheumatologie", "geriatrie", "neonatologie",
-        "weiterbildung", "facharzt", "oberarzt", "assistenzarzt",
-        "gefäßchirurgie", "unfallchirurgie", "viszeralchirurgie",
-        "herzchirurgie", "thoraxchirurgie", "kinderchirurgie",
-        "hals-nasen-ohrenheilkunde", "augenheilkunde", "palliativmedizin",
-        "arbeitsmedizin", "rechtsmedizin", "mikrobiologie", "virologie",
-        "transfusionsmedizin", "strahlentherapie", "laboratoriumsmedizin",
-    ]);
-
-    for (const job of jobs) {
+    for (const job of jobsToProcess) {
       try {
-        let newLocation: string | null = null;
-
-        // Strategy 1: Extract from hospital_name
-        if (job.hospital_name) {
-          const enriched = enrichLocationWithState(job.hospital_name);
-          if (enriched.includes(',')) {
-            newLocation = enriched;
-            console.log(`Job ${job.id}: Extracted from hospital name "${job.hospital_name}" → "${enriched}"`);
-          }
-        }
-
-        // Strategy 2: Extract PLZ+Stadt from title or description
-        if (!newLocation) {
-          const textToSearch = `${job.title || ''} ${job.description || ''}`;
-          const plzMatch = textToSearch.match(/\b(\d{5})\s+([A-Za-zäöüÄÖÜß][A-Za-zäöüÄÖÜß\s\-]+)/);
-          if (plzMatch) {
-            const locationCandidate = `${plzMatch[1]} ${plzMatch[2].trim()}`;
-            const enriched = enrichLocationWithState(locationCandidate);
-            newLocation = enriched;
-            console.log(`Job ${job.id}: Extracted PLZ from text "${locationCandidate}" → "${enriched}"`);
-          }
-        }
-
-        // Strategy 3: Extract city name from description with common patterns
-        if (!newLocation && job.description) {
-          const cityPattern = /(?:in|Standort:|Location:|Ort:)\s+([A-ZÄÖÜ][a-zäöüß]+(?:\s+[a-zäöü]+)?)/;
-          const cityMatch = job.description.match(cityPattern);
-          if (cityMatch) {
-            const candidate = cityMatch[1].trim();
-            // Reject medical department names masquerading as cities
-            if (!MEDICAL_TERMS.has(candidate.toLowerCase())) {
-              const enriched = enrichLocationWithState(candidate);
-              if (enriched.includes(',')) {
-                newLocation = enriched;
-                console.log(`Job ${job.id}: Extracted city pattern "${candidate}" → "${enriched}"`);
-              }
-            }
-          }
-        }
-
-        // Strategy 4: Try just the first word of hospital name (e.g., "Berlin" from "Berlin Charité")
-        if (!newLocation && job.hospital_name) {
-          const firstWord = job.hospital_name.split(/[\s,]+/)[0];
-          if (firstWord && firstWord.length >= 3) {
-            const enriched = enrichLocationWithState(firstWord);
-            if (enriched.includes(',')) {
-              newLocation = enriched;
-              console.log(`Job ${job.id}: Extracted first word "${firstWord}" → "${enriched}"`);
-            }
-          }
-        }
+        const newLocation = normalizeJobLocation({
+          rawLocation: job.location,
+          hospitalName: job.hospital_name,
+          title: job.title,
+          description: job.description,
+        });
 
         // Update if location was found
-        if (newLocation) {
+        if (newLocation && newLocation !== job.location) {
           const { error: updateErr } = await db
             .from("jobs")
             .update({ location: newLocation })
@@ -179,6 +147,8 @@ serve(async (req) => {
             console.log(`✓ Updated job ${job.id}: "${newLocation}"`);
             updated++;
           }
+        } else if (newLocation) {
+          console.log(`• Location already normalized for job ${job.id}: "${newLocation}"`);
         } else {
           console.log(`✗ Could not extract location for job ${job.id}: ${job.title}`);
           failed++;
@@ -193,7 +163,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        total: jobs.length,
+        total: jobsToProcess.length,
         updated,
         failed,
         failures: failures.slice(0, 10), // Return first 10 failures

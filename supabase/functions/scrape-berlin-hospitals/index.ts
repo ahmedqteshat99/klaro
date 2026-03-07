@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
 // ─── Configuration ───────────────────────────────────────────────
-const HOSPITALS_PER_RUN = 5;
+const HOSPITALS_PER_CRON_RUN = 5;
 const MAX_EXECUTION_MS = 140_000;
 const MISS_THRESHOLD = 2;
 
@@ -25,17 +25,80 @@ interface ExtractedJob {
     department: string | null;
 }
 
+// ─── Strict job relevance filter ─────────────────────────────────
+// ONLY Assistenzarzt / Weiterbildungsassistent positions
+// EXCLUDE senior roles: Oberarzt, Chefarzt, Facharzt, leitender Arzt
+
+function isJobRelevant(title: string, department?: string | null, extra?: string | null): boolean {
+    const combined = `${title} ${department || ""} ${extra || ""}`.toLowerCase();
+
+    // MUST match at least one of these (positive filter)
+    const INCLUDE_PATTERNS = [
+        "assistenzarzt",
+        "assistenzärztin",
+        "weiterbildungsassistent",
+        "weiterbildungsassistentin",
+        "arzt in weiterbildung",
+        "ärztin in weiterbildung",
+        "arzt/ärztin in weiterbildung",
+        "weiterbildungsstelle",
+    ];
+
+    const hasInclude = INCLUDE_PATTERNS.some((p) => combined.includes(p));
+    if (!hasInclude) return false;
+
+    // MUST NOT match any of these (negative filter — senior roles)
+    const EXCLUDE_PATTERNS = [
+        "oberarzt",
+        "oberärztin",
+        "chefarzt",
+        "chefärztin",
+        "facharzt",
+        "fachärztin",
+        "leitender arzt",
+        "leitende ärztin",
+        "sektionsleiter",
+        "sektionsleiterin",
+        "abteilungsleiter",
+        "abteilungsleiterin",
+    ];
+
+    // Only exclude if the title ITSELF contains the senior role
+    // (department may say "Facharztweiterbildung" which is OK)
+    const titleLower = title.toLowerCase();
+    const hasExclude = EXCLUDE_PATTERNS.some((p) => titleLower.includes(p));
+    if (hasExclude) return false;
+
+    return true;
+}
+
 // ─── Strategy 1: __NEXT_DATA__ extraction (Next.js career sites) ──
 
-function extractFromNextData(html: string, careerUrl: string): ExtractedJob[] {
+function extractFromNextData(html: string, careerUrl: string, hospitalName: string): ExtractedJob[] {
     const match = html.match(/<script\s+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
     if (!match?.[1]) return [];
+
+    // Build keywords from hospital name for matching OrganizationName
+    // e.g. "Vivantes Klinikum Kaulsdorf" → ["kaulsdorf"]
+    // e.g. "Charité Campus Benjamin Franklin" → ["benjamin", "franklin"]
+    const hospitalWords = hospitalName.toLowerCase()
+        .replace(/^(vivantes|charité|charite|helios|sana|drk|immanuel|alexianer)\s*/i, "")
+        .replace(/^(klinikum|krankenhaus|campus)\s*/i, "")
+        .split(/\s+/)
+        .filter((w) => w.length > 3);
+
+    const matchesHospital = (orgName: string | null | undefined): boolean => {
+        if (!orgName) return true; // if no org name, accept the job
+        if (hospitalWords.length === 0) return true; // can't filter
+        const orgLower = orgName.toLowerCase();
+        // At least one distinguished word from hospital name must match
+        return hospitalWords.some((w) => orgLower.includes(w));
+    };
 
     try {
         const nextData = JSON.parse(match[1]);
         const jobs: ExtractedJob[] = [];
 
-        // Recursively search the data structure for job-like objects
         const searchForJobs = (obj: any, depth = 0) => {
             if (depth > 15 || !obj) return;
 
@@ -48,30 +111,16 @@ function extractFromNextData(html: string, careerUrl: string): ExtractedJob[] {
                 // Vivantes-style: has PositionTitle, PositionURI, Department
                 if (obj.PositionTitle || obj.PositionName) {
                     const title = obj.PositionTitle || obj.PositionName || "";
-                    const dept = obj.Department || obj.ParentDepartment || obj.OrganizationName || null;
+                    const dept = obj.Department || obj.ParentDepartment || null;
+                    const orgName = obj.OrganizationName || null;
                     const url = obj.PositionURI || obj.ApplyURI || obj.Link || null;
 
-                    // Filter for Assistenzarzt / Innere Medizin keywords
-                    const combined = `${title} ${dept || ""} ${obj.JobTitle || ""}`.toLowerCase();
-                    const isRelevant =
-                        combined.includes("assistenzarzt") ||
-                        combined.includes("assistenzärztin") ||
-                        combined.includes("arzt in weiterbildung") ||
-                        combined.includes("ärztin in weiterbildung") ||
-                        (combined.includes("innere medizin") && (combined.includes("arzt") || combined.includes("ärztin"))) ||
-                        (combined.includes("ärztlicher bereich") && (
-                            combined.includes("innere") || combined.includes("kardiologie") ||
-                            combined.includes("gastroenterologie") || combined.includes("nephrologie") ||
-                            combined.includes("pneumologie") || combined.includes("onkologie") ||
-                            combined.includes("geriatrie") || combined.includes("endokrinologie") ||
-                            combined.includes("rheumatologie") || combined.includes("hämatologie")
-                        ));
-
-                    if (isRelevant && title) {
+                    // Only include if job belongs to THIS hospital
+                    if (title && isJobRelevant(title, dept, obj.JobTitle) && matchesHospital(orgName)) {
                         jobs.push({
                             title: title.trim(),
                             url: url ? (url.startsWith("http") ? url : new URL(url, careerUrl).href) : null,
-                            department: dept?.trim() || null,
+                            department: (orgName || dept)?.trim() || null,
                         });
                     }
                 }
@@ -79,14 +128,7 @@ function extractFromNextData(html: string, careerUrl: string): ExtractedJob[] {
                 // Generic: has title/name + href/url/link
                 if ((obj.title || obj.name) && (obj.href || obj.url || obj.link)) {
                     const title = obj.title || obj.name || "";
-                    const combined = title.toLowerCase();
-                    const isRelevant =
-                        combined.includes("assistenzarzt") ||
-                        combined.includes("assistenzärztin") ||
-                        combined.includes("innere medizin") ||
-                        combined.includes("arzt in weiterbildung");
-
-                    if (isRelevant) {
+                    if (isJobRelevant(title)) {
                         const link = obj.href || obj.url || obj.link;
                         jobs.push({
                             title: title.trim(),
@@ -131,13 +173,7 @@ function extractFromHtmlLinks(html: string, careerUrl: string): ExtractedJob[] {
         const text = m[2].replace(/<[^>]+>/g, "").trim();
         if (!text || text.length < 10 || text.length > 300) continue;
 
-        const lower = text.toLowerCase();
-        const isRelevant =
-            lower.includes("assistenzarzt") ||
-            lower.includes("assistenzärztin") ||
-            lower.includes("arzt in weiterbildung") ||
-            lower.includes("ärztin in weiterbildung") ||
-            (lower.includes("innere medizin") && (lower.includes("arzt") || lower.includes("ärztin")));
+        const isRelevant = isJobRelevant(text);
 
         if (isRelevant) {
             let url: string;
@@ -164,8 +200,7 @@ function extractFromHtmlLinks(html: string, careerUrl: string): ExtractedJob[] {
             for (const item of items) {
                 if (item["@type"] === "JobPosting") {
                     const title = item.title || item.name || "";
-                    const lower = title.toLowerCase();
-                    if (lower.includes("assistenzarzt") || lower.includes("innere medizin") || lower.includes("weiterbildung")) {
+                    if (isJobRelevant(title, item.occupationalCategory || item.department)) {
                         jobs.push({
                             title: title.trim(),
                             url: item.url || item.sameAs || null,
@@ -214,12 +249,19 @@ async function extractWithAi(
                     role: "user",
                     content: `Analysiere diese Karriereseite von "${hospitalName}" (${careerUrl}).
 
-Extrahiere alle Stellenangebote für:
-- Assistenzarzt/Assistenzärztin
-- Arzt/Ärztin in Weiterbildung
-- Positionen in Innere Medizin und Subdisziplinen (Kardiologie, Gastroenterologie, Nephrologie, Pneumologie, Hämatologie/Onkologie, Endokrinologie, Rheumatologie, Geriatrie)
+Extrahiere NUR Stellenangebote die EXPLIZIT diese Begriffe im Titel enthalten:
+- "Assistenzarzt" oder "Assistenzärztin"
+- "Weiterbildungsassistent" oder "Weiterbildungsassistentin"
+- "Arzt/Ärztin in Weiterbildung"
 
-Antworte NUR mit JSON: [{"title": "...", "url": "absolute URL oder null", "department": "... oder null"}]
+SCHLIESSE EXPLIZIT AUS (NICHT hinzufügen):
+- Oberarzt/Oberärztin
+- Chefarzt/Chefärztin
+- Facharzt/Fachärztin
+- Leitende Ärzte
+- Pflegekräfte, Therapeuten, Verwaltung
+
+Antworte NUR mit JSON: [{"title": "Exakter Stellentitel", "url": "absolute URL oder null", "department": "Fachbereich oder null"}]
 Wenn keine relevanten Stellen gefunden: []
 
 HTML:
@@ -238,7 +280,7 @@ ${truncated}`,
         if (!Array.isArray(parsed)) return [];
 
         return parsed
-            .filter((j: any) => j.title && typeof j.title === "string")
+            .filter((j: any) => j.title && typeof j.title === "string" && isJobRelevant(j.title, j.department))
             .map((j: any) => ({
                 title: j.title.trim(),
                 url: typeof j.url === "string" ? j.url.trim() : null,
@@ -248,6 +290,103 @@ ${truncated}`,
         console.error(`AI extraction error for ${hospitalName}:`, err);
         return [];
     }
+}
+
+// ─── Strategy 4: Follow detail links from listing pages ──────────
+// For JS-rendered listing pages where individual job pages ARE server-rendered
+
+async function extractByFollowingLinks(html: string, careerUrl: string): Promise<ExtractedJob[]> {
+    const jobs: ExtractedJob[] = [];
+    const baseUrl = new URL(careerUrl).origin;
+
+    // Find all links that look like individual job detail pages
+    const linkPatterns = [
+        /href="([^"]*(?:detail|stelle|job|position|vacancy|vacancies|posting)[^"]*)"/gi,
+        /href="([^"]*\/\d{3,}[^"]*)"/gi, // numeric IDs like /stellenangebote/1234
+    ];
+
+    const detailUrls = new Set<string>();
+    for (const pattern of linkPatterns) {
+        let m;
+        while ((m = pattern.exec(html)) !== null) {
+            let href = m[1];
+            // Skip anchors, mailto, tel, javascript, css, images
+            if (href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:") ||
+                href.startsWith("javascript:") || href.match(/\.(css|js|png|jpg|jpeg|gif|svg|pdf|ico)/i)) continue;
+            // Make absolute
+            try {
+                href = href.startsWith("http") ? href : new URL(href, careerUrl).href;
+            } catch { continue; }
+            detailUrls.add(href);
+        }
+    }
+
+    if (detailUrls.size === 0) return [];
+
+    // Limit to 40 detail pages max to avoid timeouts
+    const urlsToCheck = Array.from(detailUrls).slice(0, 40);
+    console.log(`  Following ${urlsToCheck.length} detail links...`);
+
+    // Fetch detail pages in batches of 5
+    for (let i = 0; i < urlsToCheck.length; i += 5) {
+        const batch = urlsToCheck.slice(i, i + 5);
+        const results = await Promise.allSettled(
+            batch.map(async (url) => {
+                try {
+                    const resp = await fetch(url, {
+                        headers: FETCH_HEADERS,
+                        redirect: "follow",
+                        signal: AbortSignal.timeout(8_000),
+                    });
+                    if (!resp.ok) return null;
+                    const detailHtml = await resp.text();
+
+                    // Extract title from <title> tag
+                    const titleMatch = detailHtml.match(/<title>([^<]+)<\/title>/i);
+                    let title = titleMatch?.[1]?.trim() || "";
+
+                    // Also try <h1>
+                    if (!title || title.length < 5) {
+                        const h1Match = detailHtml.match(/<h1[^>]*>([^<]+)<\/h1>/i);
+                        title = h1Match?.[1]?.trim() || title;
+                    }
+
+                    // Clean up title (remove site name suffix)
+                    title = title.replace(/\s*[:|–\-]\s*(Charité|Vivantes|Sana|Helios|DRK|Alexianer|Immanuel|Bethel).*$/i, "").trim();
+
+                    if (!title || !isJobRelevant(title)) return null;
+
+                    // Try to extract department from meta or the page
+                    let dept: string | null = null;
+                    const metaDept = detailHtml.match(/(?:Klinik|Abteilung|Bereich|Department)[:\s]+([^<\n]{5,80})/i);
+                    if (metaDept) dept = metaDept[1].trim();
+
+                    return {
+                        title,
+                        url: resp.url || url,
+                        department: dept,
+                    } as ExtractedJob;
+                } catch {
+                    return null;
+                }
+            })
+        );
+
+        for (const r of results) {
+            if (r.status === "fulfilled" && r.value) {
+                jobs.push(r.value);
+            }
+        }
+    }
+
+    // Deduplicate
+    const seen = new Set<string>();
+    return jobs.filter((j) => {
+        const key = j.title.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
 }
 
 // ─── Multi-page fetcher (follows links to subpages) ──────────────
@@ -356,12 +495,19 @@ serve(async (req) => {
         const db = createClient(supabaseUrl, serviceRoleKey);
 
         // ── Load hospitals ──
-        const { data: hospitals, error: fetchErr } = await db
+        // Manual admin scan: process ALL hospitals
+        // Cron job: process 5 at a time to avoid timeouts
+        let query = db
             .from("berlin_hospitals")
             .select("*")
             .eq("is_active", true)
-            .order("last_scraped_at", { ascending: true, nullsFirst: true })
-            .limit(HOSPITALS_PER_RUN);
+            .order("last_scraped_at", { ascending: true, nullsFirst: true });
+
+        if (isCron) {
+            query = query.limit(HOSPITALS_PER_CRON_RUN);
+        }
+
+        const { data: hospitals, error: fetchErr } = await query;
 
         if (fetchErr) throw fetchErr;
         if (!hospitals?.length) {
@@ -409,7 +555,7 @@ serve(async (req) => {
                 for (const page of pages) {
                     // Strategy 1: __NEXT_DATA__ (structured JSON, most reliable for Next.js sites)
                     if (page.html.includes("__NEXT_DATA__")) {
-                        const nextJobs = extractFromNextData(page.html, page.url);
+                        const nextJobs = extractFromNextData(page.html, page.url, hospital.name);
                         if (nextJobs.length > 0) {
                             extractedJobs = nextJobs;
                             strategyUsed = `next_data(${page.url})`;
@@ -435,6 +581,20 @@ serve(async (req) => {
                     extractedJobs = await extractWithAi(biggestPage.html, hospital.name, biggestPage.url, anthropicKey);
                     strategyUsed = `ai(${biggestPage.url})`;
                     console.log(`[${runId}] Strategy: AI → ${extractedJobs.length} jobs`);
+                }
+
+                // Strategy 4: Follow detail links (for JS-rendered listing pages)
+                if (extractedJobs.length === 0) {
+                    for (const page of pages) {
+                        console.log(`[${runId}] Trying follow-links on ${page.url}...`);
+                        const linkJobs = await extractByFollowingLinks(page.html, page.url);
+                        if (linkJobs.length > 0) {
+                            extractedJobs = linkJobs;
+                            strategyUsed = `follow_links(${page.url})`;
+                            console.log(`[${runId}] Strategy: follow-links → ${linkJobs.length} jobs`);
+                            break;
+                        }
+                    }
                 }
 
                 results.strategies[hospital.name] = strategyUsed;
@@ -463,31 +623,72 @@ serve(async (req) => {
                     continue;
                 }
 
+                // ── Deduplicate extracted jobs by title ──
+                const seenTitles = new Set<string>();
+                const uniqueJobs = extractedJobs.filter((j) => {
+                    const key = j.title.toLowerCase().trim();
+                    if (seenTitles.has(key)) return false;
+                    seenTitles.add(key);
+                    return true;
+                });
+
                 // ── Upsert jobs ──
                 const now = new Date().toISOString();
                 const seenUrls = new Set<string>();
 
-                for (const job of extractedJobs) {
+                for (const job of uniqueJobs) {
                     const applyUrl = job.url || `${careerUrl}#${encodeURIComponent(job.title)}`;
                     seenUrls.add(applyUrl);
 
-                    const { data: existing } = await db
+                    // Match by hospital + title (primary dedup key)
+                    const { data: existingByTitle } = await db
                         .from("berlin_hospital_jobs")
-                        .select("id, status")
+                        .select("id, status, apply_url")
+                        .eq("hospital_id", hospital.id)
+                        .eq("title", job.title)
+                        .limit(1)
+                        .maybeSingle();
+
+                    // Also check by URL as fallback
+                    const { data: existingByUrl } = !existingByTitle ? await db
+                        .from("berlin_hospital_jobs")
+                        .select("id, status, apply_url")
                         .eq("hospital_id", hospital.id)
                         .eq("apply_url", applyUrl)
-                        .single();
+                        .limit(1)
+                        .maybeSingle() : { data: null };
+
+                    const existing = existingByTitle || existingByUrl;
+
+                    // Also check globally by URL to prevent cross-hospital duplicates
+                    const { data: existingGlobal } = !existing ? await db
+                        .from("berlin_hospital_jobs")
+                        .select("id")
+                        .eq("apply_url", applyUrl)
+                        .limit(1)
+                        .maybeSingle() : { data: null };
+
+                    if (existingGlobal) {
+                        console.log(`[${runId}] Skipped (exists in another hospital): ${job.title}`);
+                        continue;
+                    }
 
                     if (existing) {
+                        // Also add old URL to seenUrls to prevent miss-tracking
+                        if (existing.apply_url) seenUrls.add(existing.apply_url);
+
                         await db.from("berlin_hospital_jobs").update({
                             last_seen_at: now, consecutive_misses: 0,
                             status: existing.status === "gone" ? "active" : existing.status,
-                            title: job.title, department: job.department || undefined,
+                            title: job.title,
+                            department: job.department || undefined,
+                            apply_url: applyUrl, // update URL in case it changed
                             updated_at: now,
                         }).eq("id", existing.id);
                         results.jobsUpdated++;
                     } else {
-                        await db.from("berlin_hospital_jobs").insert({
+                        // Insert — catch constraint violation as safety net
+                        const { error: insertErr } = await db.from("berlin_hospital_jobs").insert({
                             hospital_id: hospital.id,
                             title: job.title,
                             department: job.department || null,
@@ -495,7 +696,15 @@ serve(async (req) => {
                             first_seen_at: now, last_seen_at: now,
                             status: "active", is_new: true,
                         });
-                        results.jobsInserted++;
+                        if (insertErr) {
+                            if (insertErr.message.includes("duplicate") || insertErr.message.includes("unique")) {
+                                console.log(`[${runId}] Skipped duplicate: ${job.title}`);
+                            } else {
+                                console.error(`[${runId}] Insert error: ${insertErr.message}`);
+                            }
+                        } else {
+                            results.jobsInserted++;
+                        }
                     }
                 }
 

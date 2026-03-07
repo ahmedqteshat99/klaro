@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Building2, Plus, Pencil, Trash2 } from "lucide-react";
+import EmptyState from "@/components/profile/EmptyState";
 import { format } from "date-fns";
 import MonthYearPicker from "@/components/ui/MonthYearPicker";
 import { toLocalDateString } from "@/lib/date-utils";
@@ -166,9 +167,11 @@ const WorkExperienceForm = ({ workExperiences, onAdd, onUpdate, onDelete }: Work
       </CardHeader>
       <CardContent>
         {workExperiences.length === 0 ? (
-          <p className="text-muted-foreground text-center py-8">
-            Noch keine Berufserfahrung hinzugefügt.
-          </p>
+          <EmptyState
+            icon={<Building2 className="h-6 w-6" />}
+            title="Noch keine Berufserfahrung"
+            description="Fügen Sie Ihre Stellen in Kliniken und Praxen hinzu, um einen vollständigen Lebenslauf zu erstellen."
+          />
         ) : (
           <div className="space-y-4">
             {workExperiences.map((exp) => (

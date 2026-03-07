@@ -7,7 +7,7 @@ from scrapling import Selector
 
 from ..config import PAGE_DELAY, USER_AGENT, REQUEST_TIMEOUT
 from ..models import ScrapedJob
-from ..utils.location import extract_city_from_location
+from ..utils.location import extract_city_from_location, is_valid_location
 from ..utils.text import clean_text, is_junior_position
 from ..utils.ai_extraction import extract_location_with_ai
 
@@ -118,7 +118,7 @@ class EthimedisScraper:
                         html_snippet=""
                     )
 
-                    if ai_location:
+                    if ai_location and is_valid_location(ai_location):
                         location = ai_location
                         self.ai_usage_stats["successful_fallbacks"] += 1
                         logger.info(f"[Ethimedis] ✓ AI extracted location for {job_id}: {location}")

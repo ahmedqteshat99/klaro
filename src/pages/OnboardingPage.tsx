@@ -112,6 +112,8 @@ const OnboardingPage = () => {
         position: string | null;
         ansprechpartner: string | null;
         anforderungen: string | null;
+        description?: string | null;
+        tags?: string[] | null;
     } | null>(null);
     const [jobUrl, setJobUrl] = useState("");
     const [jobSelectionMode, setJobSelectionMode] = useState<"list" | "manual">("list");
@@ -402,7 +404,9 @@ const OnboardingPage = () => {
             fachabteilung: job.department,
             position: job.title,
             ansprechpartner: job.contact_name,
-            anforderungen: job.requirements
+            anforderungen: job.requirements,
+            description: job.description,
+            tags: job.tags,
         };
 
         setJobData(populatedJobData);

@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { enrichLocationWithState } from "../_shared/enrich-location.ts";
+import { isLikelyInvalidLocation, normalizeJobLocation } from "../_shared/location-normalization.ts";
 
 // ─── Configuration ───────────────────────────────────────────────
 // Source identifiers
@@ -16,6 +16,9 @@ const MAX_PAGES_AERZTEBLATT = 30;
 const MAX_PAGES_PRAKTISCHARZT = 30;
 const MAX_PAGES_ETHIMEDIS = 20;
 const MAX_JOBS_PER_RUN = 300; // Safe for single source imports (with timeout safety)
+
+// Feature flag: Disable RSS-based expiration (now using link validation)
+const ENABLE_RSS_EXPIRATION = false;
 
 // ─── Scrapling Service ──────────────────────────────────────────
 const SCRAPER_SERVICE_URL = Deno.env.get("SCRAPER_SERVICE_URL") || "";
@@ -118,23 +121,6 @@ interface ScrapedJob {
     employerUrl?: string; // Direct employer application URL (resolved from detail page)
     nodeId?: string; // Ärzteblatt node ID for efficient URL resolution
 }
-
-// Medical department terms — used to detect bad locations and prevent false positives
-const MEDICAL_TERMS = new Set([
-    "radiologie", "kardiologie", "chirurgie", "anästhesie", "anasthesie",
-    "neurologie", "gynäkologie", "gynakologie", "pädiatrie", "padiatrie",
-    "psychiatrie", "orthopädie", "orthopadie", "urologie", "dermatologie",
-    "onkologie", "pneumologie", "nephrologie", "gastroenterologie",
-    "innere medizin", "intensivmedizin", "notaufnahme", "allgemeinmedizin",
-    "nuklearmedizin", "pathologie", "hämatologie", "hamatologie",
-    "endokrinologie", "rheumatologie", "geriatrie", "neonatologie",
-    "weiterbildung", "facharzt", "oberarzt", "assistenzarzt",
-    "gefäßchirurgie", "unfallchirurgie", "viszeralchirurgie",
-    "herzchirurgie", "thoraxchirurgie", "kinderchirurgie",
-    "hals-nasen-ohrenheilkunde", "augenheilkunde", "palliativmedizin",
-    "arbeitsmedizin", "rechtsmedizin", "mikrobiologie", "virologie",
-    "transfusionsmedizin", "strahlentherapie", "laboratoriumsmedizin",
-]);
 
 interface AiJobEnrichment {
     description: string;
@@ -514,30 +500,31 @@ serve(async (req) => {
                     }
 
                     if (existing.rss_content_hash === contentHash) {
-
-                        // Backfill location: fix missing/wrong locations (e.g. medical terms stored as cities)
                         const dbLocation = (existing as any).location as string | null;
-                        const dbLocationBad = !dbLocation || dbLocation.length < 3 ||
-                            MEDICAL_TERMS.has((dbLocation || "").toLowerCase().trim());
+                        const normalizedImportedLocation = normalizeJobLocation({
+                            rawLocation: job.location,
+                            hospitalName: job.company,
+                            title: job.title,
+                        });
+                        const normalizedStoredLocation = normalizeJobLocation({
+                            rawLocation: dbLocation,
+                            hospitalName: job.company,
+                            title: job.title,
+                        });
+                        const dbLocationBad = isLikelyInvalidLocation(dbLocation);
 
-                        if (dbLocationBad && job.location) {
-                            // Fresh scrape has a valid location — overwrite the bad one
-                            const enrichedLoc = enrichLocationWithState(job.location);
+                        if (dbLocationBad && normalizedImportedLocation) {
                             await db
                                 .from("jobs")
-                                .update({ location: enrichedLoc })
+                                .update({ location: normalizedImportedLocation })
                                 .eq("id", (existing as any).id);
-                            console.log(`[${runId}] Fixed location for "${job.title}": ${enrichedLoc}`);
-                        } else if (dbLocation) {
-                            // Existing location is OK — just try to enrich with Bundesland
-                            const enrichedLoc = enrichLocationWithState(dbLocation);
-                            if (enrichedLoc !== dbLocation) {
-                                await db
-                                    .from("jobs")
-                                    .update({ location: enrichedLoc })
-                                    .eq("id", (existing as any).id);
-                                console.log(`[${runId}] Backfilled state for "${job.title}": ${enrichedLoc}`);
-                            }
+                            console.log(`[${runId}] Fixed location for "${job.title}": ${normalizedImportedLocation}`);
+                        } else if (!dbLocationBad && normalizedStoredLocation && normalizedStoredLocation !== dbLocation) {
+                            await db
+                                .from("jobs")
+                                .update({ location: normalizedStoredLocation })
+                                .eq("id", (existing as any).id);
+                            console.log(`[${runId}] Normalized stored location for "${job.title}": ${normalizedStoredLocation}`);
                         }
 
                         results.skipped++;
@@ -558,7 +545,12 @@ serve(async (req) => {
 
                     const enrichment = await generateAiSummary(job, anthropicKey);
                     const updateApplyUrl = updatedEmployerUrl || job.link;
-                    const enrichedLocation = enrichLocationWithState(job.location);
+                    const normalizedLocation = normalizeJobLocation({
+                        rawLocation: job.location,
+                        hospitalName: job.company,
+                        title: job.title,
+                        description: enrichment.description,
+                    });
                     await db
                         .from("jobs")
                         .update({
@@ -566,7 +558,7 @@ serve(async (req) => {
                             department: enrichment.department,
                             tags: enrichment.tags.length > 0 ? enrichment.tags : null,
                             hospital_name: job.company || null,
-                            location: enrichedLocation || null,
+                            location: normalizedLocation,
                             apply_url: updateApplyUrl,
                             source_url: updateApplyUrl,
                             rss_content_hash: contentHash,
@@ -608,7 +600,12 @@ serve(async (req) => {
                     }
 
                     const enrichment = await generateAiSummary(job, anthropicKey);
-                    const enrichedLocation = enrichLocationWithState(job.location);
+                    const normalizedLocation = normalizeJobLocation({
+                        rawLocation: job.location,
+                        hospitalName: job.company,
+                        title: job.title,
+                        description: enrichment.description,
+                    });
 
                     const { data: inserted, error: insertErr } = await db
                         .from("jobs")
@@ -618,7 +615,7 @@ serve(async (req) => {
                             department: enrichment.department,
                             tags: enrichment.tags.length > 0 ? enrichment.tags : null,
                             hospital_name: job.company || null,
-                            location: enrichedLocation || null,
+                            location: normalizedLocation,
                             apply_url: applyUrl,
                             source_url: applyUrl,
                             source_name: sourceName,
@@ -671,69 +668,96 @@ serve(async (req) => {
             }
         }
 
-        // ── 4. Track consecutive misses and expire stale jobs ──
-        // Consecutive miss thresholds (at 4h cron interval):
-        //   pending_review: 3 misses ≈ 12h absent from feed
-        //   published:      5 misses ≈ 20h absent from feed (more conservative)
-        const MISS_THRESHOLD_PENDING = 3;
-        const MISS_THRESHOLD_PUBLISHED = 5;
+        // ── 4. Track consecutive misses (expiration disabled - now using link validation) ──
+        // NOTE: consecutive_misses still tracked for analytics only
+        if (ENABLE_RSS_EXPIRATION) {
+            // Consecutive miss thresholds (at 4h cron interval):
+            //   pending_review: 3 misses ≈ 12h absent from feed
+            //   published:      5 misses ≈ 20h absent from feed (more conservative)
+            const MISS_THRESHOLD_PENDING = 3;
+            const MISS_THRESHOLD_PUBLISHED = 5;
 
-        for (const source of sourcesToScrape) {
-            const seenGuidsForSource = new Set(
-                allScrapedJobs
-                    .filter((j) => j.feedSource === source)
-                    .map((j) => j.guid)
-            );
+            for (const source of sourcesToScrape) {
+                const seenGuidsForSource = new Set(
+                    allScrapedJobs
+                        .filter((j) => j.feedSource === source)
+                        .map((j) => j.guid)
+                );
 
-            for (const [guid, existing] of existingByGuid) {
-                const ex = existing as any;
-                if (ex.rss_feed_source !== source) continue;
-                if (seenGuidsForSource.has(guid)) continue; // Still in feed — already reset above
+                for (const [guid, existing] of existingByGuid) {
+                    const ex = existing as any;
+                    if (ex.rss_feed_source !== source) continue;
+                    if (seenGuidsForSource.has(guid)) continue; // Still in feed — already reset above
 
-                const currentMisses = ex.consecutive_misses || 0;
-                const newMissCount = currentMisses + 1;
+                    const currentMisses = ex.consecutive_misses || 0;
+                    const newMissCount = currentMisses + 1;
 
-                // Increment consecutive miss counter
-                await db
-                    .from("jobs")
-                    .update({ consecutive_misses: newMissCount })
-                    .eq("id", ex.id);
-
-                // Expire pending_review jobs after threshold
-                if (ex.import_status === "pending_review" && newMissCount >= MISS_THRESHOLD_PENDING) {
+                    // Increment consecutive miss counter
                     await db
                         .from("jobs")
-                        .update({ import_status: "expired" })
+                        .update({ consecutive_misses: newMissCount })
                         .eq("id", ex.id);
 
-                    results.expired++;
-                    await db.from("job_import_logs").insert({
-                        run_id: runId,
-                        action: "expired",
-                        rss_guid: guid,
-                        job_id: ex.id,
-                        details: { consecutive_misses: newMissCount, source, status: "pending_review" },
-                    });
-                    console.log(`[${runId}] Expired pending job after ${newMissCount} misses: ${guid}`);
+                    // Expire pending_review jobs after threshold
+                    if (ex.import_status === "pending_review" && newMissCount >= MISS_THRESHOLD_PENDING) {
+                        await db
+                            .from("jobs")
+                            .update({ import_status: "expired" })
+                            .eq("id", ex.id);
+
+                        results.expired++;
+                        await db.from("job_import_logs").insert({
+                            run_id: runId,
+                            action: "expired",
+                            rss_guid: guid,
+                            job_id: ex.id,
+                            details: { consecutive_misses: newMissCount, source, status: "pending_review" },
+                        });
+                        console.log(`[${runId}] Expired pending job after ${newMissCount} misses: ${guid}`);
+                    }
+
+                    // Expire published RSS jobs after higher threshold
+                    // Manual jobs (no rss_feed_source) are never auto-expired
+                    if (ex.import_status === "published" && ex.rss_feed_source && newMissCount >= MISS_THRESHOLD_PUBLISHED) {
+                        await db
+                            .from("jobs")
+                            .update({ import_status: "expired", is_published: false, published_at: null })
+                            .eq("id", ex.id);
+
+                        results.expired++;
+                        await db.from("job_import_logs").insert({
+                            run_id: runId,
+                            action: "expired",
+                            rss_guid: guid,
+                            job_id: ex.id,
+                            details: { consecutive_misses: newMissCount, source, status: "published" },
+                        });
+                        console.log(`[${runId}] Expired published job after ${newMissCount} misses: ${guid}`);
+                    }
                 }
+            }
+        } else {
+            // Still track consecutive_misses for analytics, but don't expire
+            for (const source of sourcesToScrape) {
+                const seenGuidsForSource = new Set(
+                    allScrapedJobs
+                        .filter((j) => j.feedSource === source)
+                        .map((j) => j.guid)
+                );
 
-                // Expire published RSS jobs after higher threshold
-                // Manual jobs (no rss_feed_source) are never auto-expired
-                if (ex.import_status === "published" && ex.rss_feed_source && newMissCount >= MISS_THRESHOLD_PUBLISHED) {
+                for (const [guid, existing] of existingByGuid) {
+                    const ex = existing as any;
+                    if (ex.rss_feed_source !== source) continue;
+                    if (seenGuidsForSource.has(guid)) continue;
+
+                    const currentMisses = ex.consecutive_misses || 0;
+                    const newMissCount = currentMisses + 1;
+
+                    // Update counter for analytics only (no expiration)
                     await db
                         .from("jobs")
-                        .update({ import_status: "expired", is_published: false, published_at: null })
+                        .update({ consecutive_misses: newMissCount })
                         .eq("id", ex.id);
-
-                    results.expired++;
-                    await db.from("job_import_logs").insert({
-                        run_id: runId,
-                        action: "expired",
-                        rss_guid: guid,
-                        job_id: ex.id,
-                        details: { consecutive_misses: newMissCount, source, status: "published" },
-                    });
-                    console.log(`[${runId}] Expired published job after ${newMissCount} misses: ${guid}`);
                 }
             }
         }

@@ -2,10 +2,12 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Briefcase, Save } from "lucide-react";
+import { Briefcase } from "lucide-react";
+import { useAutoSave } from "@/hooks/useAutoSave";
+import AutoSaveIndicator from "@/components/profile/AutoSaveIndicator";
+import HelpTooltip from "@/components/profile/HelpTooltip";
 import type { Profile } from "@/hooks/useProfile";
 
 interface ProfessionalProfileFormProps {
@@ -83,7 +85,6 @@ const ProfessionalProfileForm = ({ profile, onSave, isLoading }: ProfessionalPro
     berufserfahrung_monate: 0,
     cv_text: ""
   });
-  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -98,19 +99,22 @@ const ProfessionalProfileForm = ({ profile, onSave, isLoading }: ProfessionalPro
     }
   }, [profile]);
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    await onSave(formData);
-    setIsSaving(false);
-  };
+  const { saveStatus } = useAutoSave({
+    data: formData,
+    onSave,
+    enabled: !isLoading && !!profile,
+  });
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Briefcase className="h-5 w-5" />
-          Berufliches Profil
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Briefcase className="h-5 w-5" />
+            Berufliches Profil
+          </CardTitle>
+          <AutoSaveIndicator status={saveStatus} />
+        </div>
         <CardDescription>
           Ihre medizinische Qualifikation und Spezialisierung
         </CardDescription>
@@ -118,7 +122,10 @@ const ProfessionalProfileForm = ({ profile, onSave, isLoading }: ProfessionalPro
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label>Fachrichtung</Label>
+            <Label className="flex items-center gap-1">
+              Fachrichtung
+              <HelpTooltip text="Wählen Sie die Fachrichtung, in der Sie Ihre Weiterbildung absolvieren oder planen." />
+            </Label>
             <Select
               value={formData.fachrichtung}
               onValueChange={(value) => setFormData({ ...formData, fachrichtung: value })}
@@ -136,7 +143,10 @@ const ProfessionalProfileForm = ({ profile, onSave, isLoading }: ProfessionalPro
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>Approbationsstatus</Label>
+            <Label className="flex items-center gap-1">
+              Approbationsstatus
+              <HelpTooltip text="Geben Sie an, ob Sie bereits eine ärztliche Approbation oder eine Berufserlaubnis besitzen." />
+            </Label>
             <Select
               value={formData.approbationsstatus}
               onValueChange={(value) => setFormData({ ...formData, approbationsstatus: value })}
@@ -156,7 +166,10 @@ const ProfessionalProfileForm = ({ profile, onSave, isLoading }: ProfessionalPro
         </div>
 
         <div className="space-y-2">
-          <Label>Deutschniveau</Label>
+          <Label className="flex items-center gap-1">
+            Deutschniveau
+            <HelpTooltip text="Ihr aktuelles Sprachniveau nach dem Gemeinsamen Europäischen Referenzrahmen (GER). Für die ärztliche Tätigkeit in Deutschland wird i.d.R. mindestens B2/C1 gefordert." />
+          </Label>
           <Select
             value={formData.deutschniveau}
             onValueChange={(value) => setFormData({ ...formData, deutschniveau: value })}
@@ -211,13 +224,6 @@ const ProfessionalProfileForm = ({ profile, onSave, isLoading }: ProfessionalPro
             placeholder="Falls Sie bereits einen Lebenslauf haben, können Sie den Text hier einfügen..."
             rows={4}
           />
-        </div>
-
-        <div className="flex justify-end pt-4">
-          <Button onClick={handleSave} disabled={isSaving || isLoading} className="w-full sm:w-auto">
-            <Save className="mr-2 h-4 w-4" />
-            {isSaving ? "Speichern..." : "Speichern"}
-          </Button>
         </div>
       </CardContent>
     </Card>

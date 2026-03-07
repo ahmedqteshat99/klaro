@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Stethoscope, Plus, Pencil, Trash2 } from "lucide-react";
+import EmptyState from "@/components/profile/EmptyState";
 import { format } from "date-fns";
 import MonthYearPicker from "@/components/ui/MonthYearPicker";
 import { toLocalDateString } from "@/lib/date-utils";
@@ -197,9 +198,11 @@ const PracticalExperienceForm = ({ practicalExperiences, onAdd, onUpdate, onDele
       </CardHeader>
       <CardContent>
         {practicalExperiences.length === 0 ? (
-          <p className="text-muted-foreground text-center py-8">
-            Noch keine praktische Erfahrung hinzugefügt.
-          </p>
+          <EmptyState
+            icon={<Stethoscope className="h-6 w-6" />}
+            title="Noch keine praktische Erfahrung"
+            description="Famulaturen, PJ-Tertiale und Hospitationen hier eintragen."
+          />
         ) : (
           <div className="space-y-4">
             {practicalExperiences.map((exp) => (

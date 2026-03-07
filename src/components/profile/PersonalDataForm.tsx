@@ -1,11 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/DatePicker";
-import { Copy, Save, User } from "lucide-react";
+import { Copy, User } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useAutoSave } from "@/hooks/useAutoSave";
+import AutoSaveIndicator from "@/components/profile/AutoSaveIndicator";
+import HelpTooltip from "@/components/profile/HelpTooltip";
 import type { Profile } from "@/hooks/useProfile";
 
 interface PersonalDataFormProps {
@@ -47,7 +50,8 @@ const PersonalDataForm = ({ profile, onSave, isLoading }: PersonalDataFormProps)
     email: "",
     telefon: ""
   });
-  const [isSaving, setIsSaving] = useState(false);
+
+  const [errors, setErrors] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (profile) {
@@ -64,24 +68,38 @@ const PersonalDataForm = ({ profile, onSave, isLoading }: PersonalDataFormProps)
     }
   }, [profile]);
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    await onSave({
-      ...formData,
-      geburtsdatum: formData.geburtsdatum ? toLocalDateString(formData.geburtsdatum) : null
-    });
-    setIsSaving(false);
+  // Data to auto-save (serialize dates for comparison)
+  const savePayload = useMemo(() => ({
+    ...formData,
+    geburtsdatum: formData.geburtsdatum ? toLocalDateString(formData.geburtsdatum) : null
+  }), [formData]);
+
+  const { saveStatus } = useAutoSave({
+    data: savePayload,
+    onSave,
+    enabled: !isLoading && !!profile,
+  });
+
+  const handleBlur = (field: string, value: string) => {
+    if ((field === "vorname" || field === "nachname") && !value.trim()) {
+      setErrors((e) => ({ ...e, [field]: true }));
+    } else {
+      setErrors((e) => ({ ...e, [field]: false }));
+    }
   };
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-            <User className="h-5 w-5 text-primary" />
-          </div>
-          Persönliche Daten
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+              <User className="h-5 w-5 text-primary" />
+            </div>
+            Persönliche Daten
+          </CardTitle>
+          <AutoSaveIndicator status={saveStatus} />
+        </div>
         <CardDescription>
           Grundlegende Informationen für Ihren Lebenslauf
         </CardDescription>
@@ -89,22 +107,37 @@ const PersonalDataForm = ({ profile, onSave, isLoading }: PersonalDataFormProps)
       <CardContent className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div className="space-y-2">
-            <Label htmlFor="vorname">Vorname *</Label>
+            <Label htmlFor="vorname" className="flex items-center gap-1">
+              Vorname *
+              <HelpTooltip text="Ihr offizieller Vorname wie im Personalausweis." />
+            </Label>
             <Input
               id="vorname"
               value={formData.vorname}
               onChange={(e) => setFormData({ ...formData, vorname: e.target.value })}
+              onBlur={(e) => handleBlur("vorname", e.target.value)}
               placeholder="Max"
+              className={errors.vorname ? "border-destructive" : ""}
             />
+            {errors.vorname && (
+              <p className="text-xs text-destructive">Pflichtfeld</p>
+            )}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="nachname">Nachname *</Label>
+            <Label htmlFor="nachname" className="flex items-center gap-1">
+              Nachname *
+            </Label>
             <Input
               id="nachname"
               value={formData.nachname}
               onChange={(e) => setFormData({ ...formData, nachname: e.target.value })}
+              onBlur={(e) => handleBlur("nachname", e.target.value)}
               placeholder="Mustermann"
+              className={errors.nachname ? "border-destructive" : ""}
             />
+            {errors.nachname && (
+              <p className="text-xs text-destructive">Pflichtfeld</p>
+            )}
           </div>
         </div>
 
@@ -208,13 +241,6 @@ const PersonalDataForm = ({ profile, onSave, isLoading }: PersonalDataFormProps)
             </p>
           </div>
         ) : null}
-
-        <div className="flex justify-end pt-2">
-          <Button onClick={handleSave} disabled={isSaving || isLoading} className="w-full sm:w-auto">
-            <Save className="mr-2 h-4 w-4" />
-            {isSaving ? "Speichern..." : "Speichern"}
-          </Button>
-        </div>
       </CardContent>
     </Card>
   );

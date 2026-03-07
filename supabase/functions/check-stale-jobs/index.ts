@@ -6,7 +6,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 const SCRAPER_SERVICE_URL = Deno.env.get("SCRAPER_SERVICE_URL") || "";
 const SCRAPER_SECRET_KEY = Deno.env.get("SCRAPER_SECRET") || "";
 const MAX_JOBS_PER_RUN = 200;
-const AUTO_DEACTIVATE_THRESHOLD = 3; // Consecutive failures before auto-unpublish
+const AUTO_EXPIRE_THRESHOLD = 3; // Consecutive failures before marking as expired
 
 interface LinkCheckResult {
     id: string;
@@ -97,7 +97,7 @@ serve(async (req) => {
 
         const { data: jobs, error: fetchErr } = await db
             .from("jobs")
-            .select("id, apply_url, title, rss_feed_source, link_failure_count, is_published")
+            .select("id, apply_url, title, rss_feed_source, rss_guid, link_failure_count, is_published")
             .eq("is_published", true)
             .not("apply_url", "is", null)
             .neq("apply_url", "")
@@ -128,7 +128,7 @@ serve(async (req) => {
 
         // ── Update job statuses in DB ──
         const now = new Date().toISOString();
-        let autoDeactivated = 0;
+        let autoExpired = 0;
 
         for (const job of jobs) {
             const result = resultById.get(job.id);
@@ -149,21 +149,39 @@ serve(async (req) => {
             } else if (result.status === "stale" || result.status === "error") {
                 const newFailCount = currentFailCount + 1;
 
-                if (newFailCount >= AUTO_DEACTIVATE_THRESHOLD && (job as any).is_published) {
-                    // Auto-deactivate after consecutive failures
+                if (newFailCount >= AUTO_EXPIRE_THRESHOLD && (job as any).is_published) {
+                    // Auto-expire after consecutive failures
                     await db
                         .from("jobs")
                         .update({
                             link_status: result.status,
                             link_checked_at: now,
                             link_failure_count: newFailCount,
+                            import_status: 'expired',
                             is_published: false,
                             published_at: null,
                         })
                         .eq("id", job.id);
-                    autoDeactivated++;
+
+                    // Log expiration event
+                    await db.from("job_import_logs").insert({
+                        run_id: `link-check-${now}`,
+                        action: "expired",
+                        rss_guid: (job as any).rss_guid || null,
+                        job_id: job.id,
+                        job_title: (job as any).title,
+                        details: {
+                            reason: "link_validation_failed",
+                            link_status: result.status,
+                            failure_count: newFailCount,
+                            http_status: result.http_status,
+                            error_reason: result.reason
+                        },
+                    });
+
+                    autoExpired++;
                     console.log(
-                        `Auto-deactivated "${(job as any).title}" after ${newFailCount} failures ` +
+                        `Auto-expired "${(job as any).title}" after ${newFailCount} link failures ` +
                         `(reason: ${result.reason || result.status})`
                     );
                 } else {
@@ -196,7 +214,7 @@ serve(async (req) => {
             stale: results.filter((r) => r.status === "stale").length,
             errors: results.filter((r) => r.status === "error").length,
             unknown: results.filter((r) => r.status === "unknown").length,
-            autoDeactivated,
+            autoExpired,
             staleJobs: results
                 .filter((r) => r.status === "stale")
                 .map((r) => ({ id: r.id, url: r.url, httpStatus: r.http_status, reason: r.reason })),

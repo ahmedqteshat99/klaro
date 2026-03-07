@@ -1,11 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Brain, Save, X, Plus } from "lucide-react";
+import { Brain, X, Plus } from "lucide-react";
+import { useAutoSave } from "@/hooks/useAutoSave";
+import AutoSaveIndicator from "@/components/profile/AutoSaveIndicator";
 import type { Profile } from "@/hooks/useProfile";
 
 interface SkillsFormProps {
@@ -29,7 +31,6 @@ const SkillsForm = ({ profile, onSave, isLoading }: SkillsFormProps) => {
   const [interessen, setInteressen] = useState("");
   const [newMed, setNewMed] = useState("");
   const [newEdv, setNewEdv] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -39,15 +40,17 @@ const SkillsForm = ({ profile, onSave, isLoading }: SkillsFormProps) => {
     }
   }, [profile]);
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    await onSave({
-      medizinische_kenntnisse: medizinische,
-      edv_kenntnisse: edv,
-      interessen: interessen || null
-    });
-    setIsSaving(false);
-  };
+  const savePayload = useMemo(() => ({
+    medizinische_kenntnisse: medizinische,
+    edv_kenntnisse: edv,
+    interessen: interessen || null
+  }), [medizinische, edv, interessen]);
+
+  const { saveStatus } = useAutoSave({
+    data: savePayload,
+    onSave,
+    enabled: !isLoading && !!profile,
+  });
 
   const addItem = (list: string[], setList: React.Dispatch<React.SetStateAction<string[]>>, item: string, setInput: React.Dispatch<React.SetStateAction<string>>) => {
     if (item.trim() && !list.includes(item.trim())) {
@@ -63,10 +66,13 @@ const SkillsForm = ({ profile, onSave, isLoading }: SkillsFormProps) => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Brain className="h-5 w-5" />
-          Kenntnisse & Fähigkeiten
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Brain className="h-5 w-5" />
+            Kenntnisse & Fähigkeiten
+          </CardTitle>
+          <AutoSaveIndicator status={saveStatus} />
+        </div>
         <CardDescription>
           Ihre medizinischen und technischen Kompetenzen
         </CardDescription>
@@ -160,13 +166,6 @@ const SkillsForm = ({ profile, onSave, isLoading }: SkillsFormProps) => {
             placeholder="z.B. Medizinische Forschung, Sport, Reisen..."
             rows={2}
           />
-        </div>
-
-        <div className="flex justify-end pt-4">
-          <Button onClick={handleSave} disabled={isSaving || isLoading} className="w-full sm:w-auto">
-            <Save className="mr-2 h-4 w-4" />
-            {isSaving ? "Speichern..." : "Speichern"}
-          </Button>
         </div>
       </CardContent>
     </Card>

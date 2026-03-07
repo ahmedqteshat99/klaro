@@ -128,40 +128,91 @@ serve(async (req) => {
 - Deutschniveau: ${profile.deutschniveau || 'nicht angegeben'}
 - Berufserfahrung: ${erfahrungText}
 - Medizinische Kenntnisse: ${(profile.medizinische_kenntnisse || []).join(', ') || 'keine'}
-- Interessen: ${profile.interessen || 'keine'}`);
+- Interessen: ${profile.interessen || 'keine'}
+- Sprachkenntnisse: ${(profile.sprachkenntnisse || []).join(', ') || 'nicht angegeben'}`);
     }
 
     if (workExperiences && workExperiences.length > 0) {
-      const expList = workExperiences.slice(0, 3).map((w: any) =>
-        `- ${w.klinik}: ${w.station || ''} (${w.taetigkeiten || ''})`
-      ).join('\n');
+      const expList = workExperiences.slice(0, 3).map((w: any) => {
+        const zeitraum = w.zeitraum_von
+          ? `${w.zeitraum_von}${w.zeitraum_bis ? ' – ' + w.zeitraum_bis : ' – heute'}`
+          : '';
+        const station = w.station ? `, ${w.station}` : '';
+        const taet = w.taetigkeiten ? ` (${w.taetigkeiten})` : '';
+        return `- ${w.klinik}${station}${taet}${zeitraum ? ' | ' + zeitraum : ''}`;
+      }).join('\n');
       applicantInfo.push(`RELEVANTE BERUFSERFAHRUNG:\n${expList}`);
     }
 
     if (educationEntries && educationEntries.length > 0) {
-      const eduList = educationEntries.slice(0, 2).map((e: any) =>
-        `- ${e.universitaet}: ${e.abschluss || ''}`
-      ).join('\n');
+      const eduList = educationEntries.slice(0, 2).map((e: any) => {
+        const zeitraum = e.zeitraum_von
+          ? `${e.zeitraum_von}${e.zeitraum_bis ? ' – ' + e.zeitraum_bis : ' – heute'}`
+          : '';
+        const abschluss = e.abschluss ? `: ${e.abschluss}` : '';
+        return `- ${e.universitaet}${abschluss}${zeitraum ? ' | ' + zeitraum : ''}`;
+      }).join('\n');
       applicantInfo.push(`AUSBILDUNG:\n${eduList}`);
     }
 
     if (practicalExperiences && practicalExperiences.length > 0) {
-      const pracList = practicalExperiences.slice(0, 3).map((p: any) =>
-        `- ${p.typ || 'Praktikum'} bei ${p.einrichtung} (${p.fachbereich || ''})`
-      ).join('\n');
+      const pracList = practicalExperiences.slice(0, 3).map((p: any) => {
+        const zeitraum = p.zeitraum_von
+          ? `${p.zeitraum_von}${p.zeitraum_bis ? ' – ' + p.zeitraum_bis : ' – heute'}`
+          : '';
+        const fach = p.fachbereich ? `, ${p.fachbereich}` : '';
+        return `- ${p.typ || 'Praktikum'} bei ${p.einrichtung}${fach}${zeitraum ? ' | ' + zeitraum : ''}`;
+      }).join('\n');
       applicantInfo.push(`PRAKTISCHE ERFAHRUNG:\n${pracList}`);
+    }
+
+    if (certifications && certifications.length > 0) {
+      const certList = certifications.slice(0, 4).map((c: any) => {
+        const parts = [c.name];
+        if (c.aussteller) parts.push(`(${c.aussteller})`);
+        if (c.datum) parts.push(`– ${c.datum}`);
+        return `- ${parts.join(' ')}`;
+      }).join('\n');
+      applicantInfo.push(`ZERTIFIKATE & WEITERBILDUNGEN:\n${certList}`);
+    }
+
+    if (publications && publications.length > 0) {
+      const pubList = publications.slice(0, 3).map((p: any) => {
+        const parts = [p.titel];
+        if (p.typ) parts.push(`[${p.typ}]`);
+        if (p.journal_ort) parts.push(`in ${p.journal_ort}`);
+        if (p.datum) parts.push(`(${p.datum})`);
+        return `- ${parts.join(' ')}`;
+      }).join('\n');
+      applicantInfo.push(`PUBLIKATIONEN:\n${pubList}`);
     }
 
     const applicantContext = applicantInfo.join('\n\n');
 
     // Build job context
+    const descriptionText = jobData.description
+      ? (jobData.description.length > 500
+          ? jobData.description.substring(0, 500) + '...'
+          : jobData.description)
+      : null;
+
+    const tagsText = (() => {
+      if (!jobData.tags) return null;
+      const arr = Array.isArray(jobData.tags) ? jobData.tags : [jobData.tags];
+      return arr.filter(Boolean).join(', ');
+    })();
+
     const jobContext = `STELLENANGEBOT:
 - Krankenhaus: ${jobData.krankenhaus || 'nicht angegeben'}
 - Standort: ${jobData.standort || 'nicht angegeben'}
 - Fachabteilung: ${jobData.fachabteilung || 'nicht angegeben'}
 - Position: ${jobData.position || 'Assistenzarzt'}
 - Ansprechpartner: ${jobData.ansprechpartner || 'nicht angegeben'}
-- Anforderungen: ${jobData.anforderungen || 'nicht angegeben'}`;
+- Anforderungen: ${jobData.anforderungen || 'nicht angegeben'}${
+  descriptionText ? `\n- Stellenbeschreibung: ${descriptionText}` : ''
+}${
+  tagsText ? `\n- Schwerpunkte/Tags: ${tagsText}` : ''
+}`;
 
     // Build user preferences section if provided
     let userPreferencesText = '';
@@ -175,21 +226,46 @@ ${userPreferences.map((pref, index) => `${index + 1}. ${pref}`).join('\n')}
 Diese Präferenzen müssen bei der Erstellung berücksichtigt werden.`;
     }
 
-    const systemPrompt = `Du bist ein professioneller deutscher Bewerbungsschreiben-Generator für Ärzte.
+    const systemPrompt = `Du bist ein professioneller deutscher Bewerbungsschreiben-Generator für Ärzte. Du schreibst Anschreiben, die von Personalverantwortlichen und Chefärzten an großen deutschen Kliniken (z.B. Charité, Unikliniken) positiv bewertet werden.
 
 REGELN:
 1. Formaler deutscher Krankenhausstil
 2. Personalisiert auf Krankenhaus und Abteilung
 3. Verwende die echte Erfahrung des Bewerbers
 4. Beziehe dich auf die Stellenanforderungen
-5. Erfinde KEINE Fakten
+5. Erfinde KEINE Fakten – verwende ausschließlich die bereitgestellten Informationen
 6. Wenn Ansprechpartner fehlt → "Sehr geehrte Damen und Herren"
 7. Wenn Ansprechpartner vorhanden → "Sehr geehrte(r) Herr/Frau [Name]" oder bei Prof. → "Sehr geehrter Herr Professor [Name]"
 8. Ausgabe als sauberer HTML-Body OHNE Markdown, keine Code-Fences, kein <html>, <head>, <style>
 9. Erlaubte Tags: p, strong, br, div
-10. Struktur: Briefkopf (zweispaltig), Betreff (fett), Anrede, Einleitung, Hauptteil (Motivation, Qualifikationen), Schluss, Grußformel
-11. Länge: ca. 250-350 Wörter
-12. Verwende als Absender-E-Mail die persönliche E-Mail-Adresse des Bewerbers (falls vorhanden), NICHT die Klaro-E-Mail.${userPreferencesText}
+10. Struktur: Briefkopf (zweispaltig), Betreff (fett), Anrede, Einleitung, Hauptteil (Motivation, Qualifikationen, Weiterbildungsziel), Schluss, Grußformel
+11. Länge: ca. 250–400 Wörter (kürzer bei wenig Profildaten, länger bei umfangreichem Profil). Maximal eine DIN-A4-Seite.
+12. Verwende als Absender-E-Mail die persönliche E-Mail-Adresse des Bewerbers (falls vorhanden), NICHT die Klaro-E-Mail.
+
+QUALITÄTSANWEISUNGEN (was Personalverantwortliche und Chefärzte tatsächlich bewerten):
+
+- EINSTIEG: NIEMALS mit "Hiermit bewerbe ich mich..." beginnen. Starte mit einem überzeugenden Aufhänger – z.B. konkreter Bezug zur Klinik, einer klinischen Erfahrung, oder was den Bewerber an der Stelle begeistert. Der erste Satz muss Interesse wecken.
+
+- KLINIKBEZUG: Zeige, warum DIESE Klinik und DIESE Abteilung. Nutze Informationen aus der Stellenbeschreibung (Schwerpunkte, Ausstattung, Forschung, Lehre). Vermeide austauschbare Floskeln, die auf jede Klinik passen könnten.
+
+- MATCHING: Verknüpfe gezielt die Qualifikationen des Bewerbers mit den Stellenanforderungen. Nenne konkrete Übereinstimmungen mit Zahlen und Fakten, wenn möglich (z.B. "Während meiner zweijährigen Tätigkeit in der Kardiologie am Klinikum X habe ich Erfahrung in der interventionellen Diagnostik gesammelt").
+
+- WEITERBILDUNG: Erkläre, wie die Stelle in den Facharzt-Werdegang des Bewerbers passt. Welche Weiterbildung wird angestrebt? Wie passt diese Klinik dazu? Dies zeigt langfristiges Engagement.
+
+- ZERTIFIKATE & PUBLIKATIONEN: Falls vorhanden, erwähne nur die 1-2 relevantesten Zertifikate oder Publikationen, die zur Stelle passen. Nicht alles auflisten. Bei Universitätskliniken: Forschungserfahrung betonen.
+
+- SPRACHKENNTNISSE & APPROBATION: Bei internationalen Bewerbern: Erwähne das Deutsch-Niveau mit Zertifikatstyp und den Approbations-/Berufserlaubnisstatus klar und frühzeitig im Anschreiben. Dies ist für Personaler entscheidend.
+
+- TON: Passe den Ton an den Kliniktyp an:
+  • Universitätskliniken → akademischer, forschungsorientierter, Bezug zu Lehre und Wissenschaft
+  • Kommunale Häuser → praxisorientierter, patientenzentriert, Teamarbeit betonen
+  • Private Kliniken → effizient, professionell, Qualitätsbewusstsein
+
+- SPARSAME PROFILE: Wenn wenig Daten vorliegen, fokussiere auf Motivation, Lernbereitschaft und den Wunsch, sich in der Abteilung weiterzuentwickeln. Halte das Schreiben dann kürzer (~250 Wörter). Keine künstlich aufgeblähten Qualifikationen.
+
+- SCHWERPUNKTE/TAGS: Falls Schwerpunkte oder Tags der Stelle bekannt sind, nutze diese, um die Motivation und den Bezug zur Stelle zu verstärken.
+
+- SCHLUSS: Ende mit einem konkreten nächsten Schritt – z.B. Interesse an einem Hospitationstag oder persönlichen Gespräch. Das macht einen arbeitswilligen Eindruck.${userPreferencesText}
 
 LAYOUT-ANWEISUNGEN:
 - Briefkopf als zweispaltiges Layout mit Flexbox:
@@ -213,7 +289,7 @@ Beginne DIREKT mit dem HTML-Output.`;
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1200,
+        max_tokens: 1600,
         system: systemPrompt,
         messages: [
           {

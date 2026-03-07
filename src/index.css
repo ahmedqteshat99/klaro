@@ -848,6 +848,7 @@ table.cv-languages td:nth-child(3) {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
@@ -1121,6 +1122,7 @@ table.cv-languages td:nth-child(3) {
   }
 
   @keyframes cook-wobble {
+
     0%,
     100% {
       transform: translateY(0) rotate(-8deg) scale(1);
@@ -1242,6 +1244,7 @@ table.cv-languages td:nth-child(3) {
     0% {
       opacity: 0.65;
     }
+
     100% {
       opacity: 1;
     }
@@ -1292,6 +1295,7 @@ table.cv-languages td:nth-child(3) {
   0% {
     transform: translateY(0);
   }
+
   100% {
     transform: translateY(-50%);
   }
@@ -1311,4 +1315,80 @@ table.cv-languages td:nth-child(3) {
   .scroll-container {
     animation: none;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   COLLAPSIBLE SECTIONS - Smooth accordion animation
+   ═══════════════════════════════════════════════════════════════════ */
+
+.collapsible-body {
+  transition: grid-template-rows 0.3s ease-in-out;
+}
+
+.collapsible-section {
+  animation: section-fade-in 0.3s ease-out;
+}
+
+@keyframes section-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Section nav scrollbar */
+.section-nav::-webkit-scrollbar {
+  width: 3px;
+}
+
+.section-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.section-nav::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 3px;
+}
+
+/* Profile completeness bar shimmer for 100% */
+.profile-completeness .h-full[style*="100%"] {
+  background-size: 200% 100%;
+  animation: completeness-shimmer 2s ease-in-out infinite;
+}
+
+@keyframes completeness-shimmer {
+
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .collapsible-section {
+    animation: none;
+  }
+
+  .collapsible-body {
+    transition: none;
+  }
+}
+
+/* Hide scrollbar for mobile nav */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

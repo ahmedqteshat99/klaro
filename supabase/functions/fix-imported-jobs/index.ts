@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { enrichLocationWithState } from "../_shared/enrich-location.ts";
+import { isLikelyInvalidLocation, normalizeJobLocation } from "../_shared/location-normalization.ts";
 
 // ─── Configuration ──────────────────────────────────────────────
 const SCRAPER_SERVICE_URL = Deno.env.get("SCRAPER_SERVICE_URL") || "";
@@ -38,71 +38,6 @@ function hasAggregatorUrl(url: string | null): boolean {
     if (!url) return false;
     const aggregatorDomains = ["stellenmarkt.de", "aerzteblatt.de", "praktischarzt.de", "ethimedis.de"];
     return aggregatorDomains.some(d => url.includes(d));
-}
-
-/** Extract location from job fields. */
-async function extractLocationFromJob(job: any): Promise<string | null> {
-    const MEDICAL_TERMS = new Set([
-        "radiologie", "kardiologie", "chirurgie", "anästhesie", "anasthesie",
-        "neurologie", "gynäkologie", "gynakologie", "pädiatrie", "padiatrie",
-        "psychiatrie", "orthopädie", "orthopadie", "urologie", "dermatologie",
-        "onkologie", "pneumologie", "nephrologie", "gastroenterologie",
-        "innere", "intensivmedizin", "notaufnahme", "allgemeinmedizin",
-        "nuklearmedizin", "pathologie", "hämatologie", "hamatologie",
-        "endokrinologie", "rheumatologie", "geriatrie", "neonatologie",
-        "weiterbildung", "facharzt", "oberarzt", "assistenzarzt",
-        "gefäßchirurgie", "unfallchirurgie", "viszeralchirurgie",
-        "herzchirurgie", "thoraxchirurgie", "kinderchirurgie",
-        "hals-nasen-ohrenheilkunde", "augenheilkunde", "palliativmedizin",
-        "arbeitsmedizin", "rechtsmedizin", "mikrobiologie", "virologie",
-        "transfusionsmedizin", "strahlentherapie", "laboratoriumsmedizin",
-        "klinik", "klinikum", "krankenhaus", "hospital", "praxis",
-    ]);
-
-    // Strategy 1: Extract from hospital_name
-    if (job.hospital_name) {
-        const enriched = enrichLocationWithState(job.hospital_name);
-        if (enriched.includes(',')) {
-            return enriched;
-        }
-    }
-
-    // Strategy 2: Extract PLZ+Stadt from title or description
-    const textToSearch = `${job.title || ''} ${job.description || ''}`;
-    const plzMatch = textToSearch.match(/\b(\d{5})\s+([A-Za-zäöüÄÖÜß][A-Za-zäöüÄÖÜß\s\-]+)/);
-    if (plzMatch) {
-        const locationCandidate = `${plzMatch[1]} ${plzMatch[2].trim()}`;
-        const enriched = enrichLocationWithState(locationCandidate);
-        return enriched;
-    }
-
-    // Strategy 3: Extract city name from description with common patterns
-    if (job.description) {
-        const cityPattern = /(?:in|Standort:|Location:|Ort:)\s+([A-ZÄÖÜ][a-zäöüß]+(?:\s+[a-zäöü]+)?)/;
-        const cityMatch = job.description.match(cityPattern);
-        if (cityMatch) {
-            const candidate = cityMatch[1].trim();
-            if (!MEDICAL_TERMS.has(candidate.toLowerCase())) {
-                const enriched = enrichLocationWithState(candidate);
-                if (enriched.includes(',')) {
-                    return enriched;
-                }
-            }
-        }
-    }
-
-    // Strategy 4: Try just the first word of hospital name
-    if (job.hospital_name) {
-        const firstWord = job.hospital_name.split(/[\s,]+/)[0];
-        if (firstWord && firstWord.length >= 3) {
-            const enriched = enrichLocationWithState(firstWord);
-            if (enriched.includes(',')) {
-                return enriched;
-            }
-        }
-    }
-
-    return null;
 }
 
 serve(async (req) => {
@@ -190,7 +125,7 @@ serve(async (req) => {
 
         // Filter jobs that need fixing
         const jobsNeedingUrlFix = jobs.filter(j => hasAggregatorUrl(j.apply_url));
-        const jobsNeedingLocationFix = jobs.filter(j => !j.location || j.location.length < 3);
+        const jobsNeedingLocationFix = jobs.filter(j => isLikelyInvalidLocation(j.location));
 
         console.log(`[fix-imported-jobs] ${jobsNeedingUrlFix.length} jobs need URL fix`);
         console.log(`[fix-imported-jobs] ${jobsNeedingLocationFix.length} jobs need location fix`);
@@ -230,7 +165,12 @@ serve(async (req) => {
         // Fix locations
         for (const job of jobsNeedingLocationFix) {
             try {
-                const location = await extractLocationFromJob(job);
+                const location = normalizeJobLocation({
+                    rawLocation: job.location,
+                    hospitalName: job.hospital_name,
+                    title: job.title,
+                    description: job.description,
+                });
                 if (location) {
                     await db.from("jobs").update({ location }).eq("id", job.id);
                     console.log(`[fix-imported-jobs] ✓ Location fixed for job ${job.id}: ${location}`);

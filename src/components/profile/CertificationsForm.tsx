@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Award, Plus, Pencil, Trash2 } from "lucide-react";
+import EmptyState from "@/components/profile/EmptyState";
 import { format } from "date-fns";
 import MonthYearPicker from "@/components/ui/MonthYearPicker";
 import { toLocalDateString } from "@/lib/date-utils";
@@ -140,9 +141,11 @@ const CertificationsForm = ({ certifications, onAdd, onUpdate, onDelete }: Certi
       </CardHeader>
       <CardContent>
         {certifications.length === 0 ? (
-          <p className="text-muted-foreground text-center py-8">
-            Noch keine Zertifikate hinzugefügt.
-          </p>
+          <EmptyState
+            icon={<Award className="h-6 w-6" />}
+            title="Noch keine Zertifikate"
+            description="Fortbildungen, Fachkurs-Zertifikate und andere Qualifikationen hinzufügen."
+          />
         ) : (
           <div className="space-y-3">
             {certifications.map((cert) => (

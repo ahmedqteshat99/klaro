@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { GraduationCap, Plus, Pencil, Trash2 } from "lucide-react";
+import EmptyState from "@/components/profile/EmptyState";
 import { format } from "date-fns";
 import MonthYearPicker from "@/components/ui/MonthYearPicker";
 import { toLocalDateString } from "@/lib/date-utils";
@@ -164,9 +165,11 @@ const EducationForm = ({ educationEntries, onAdd, onUpdate, onDelete }: Educatio
       </CardHeader>
       <CardContent>
         {educationEntries.length === 0 ? (
-          <p className="text-muted-foreground text-center py-8">
-            Noch keine Ausbildung hinzugefügt.
-          </p>
+          <EmptyState
+            icon={<GraduationCap className="h-6 w-6" />}
+            title="Noch keine Ausbildung"
+            description="Fügen Sie Ihren akademischen Werdegang hinzu — Studium, Facharztweiterbildung etc."
+          />
         ) : (
           <div className="space-y-4">
             {educationEntries.map((entry) => (

@@ -588,6 +588,8 @@ const JobDetailPage = () => {
           position: job.title,
           ansprechpartner: job.contact_name,
           anforderungen: job.requirements,
+          description: job.description,
+          tags: job.tags,
         },
       });
 

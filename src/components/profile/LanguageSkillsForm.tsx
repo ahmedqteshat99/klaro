@@ -1,10 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Languages, Plus, Trash2, Save } from "lucide-react";
+import { Languages, Plus, Trash2 } from "lucide-react";
+import { useAutoSave } from "@/hooks/useAutoSave";
+import AutoSaveIndicator from "@/components/profile/AutoSaveIndicator";
 import type { Profile } from "@/hooks/useProfile";
 
 interface LanguageSkillsFormProps {
@@ -19,7 +21,7 @@ interface LanguageEntry {
 }
 
 const LANGUAGE_SUGGESTIONS = [
-  "Deutsch", "Englisch", "Französisch", "Spanisch", "Italienisch", 
+  "Deutsch", "Englisch", "Französisch", "Spanisch", "Italienisch",
   "Portugiesisch", "Russisch", "Polnisch", "Türkisch", "Arabisch",
   "Chinesisch", "Japanisch", "Koreanisch", "Hindi", "Persisch",
   "Griechisch", "Rumänisch", "Niederländisch", "Schwedisch", "Tschechisch"
@@ -38,7 +40,7 @@ const LANGUAGE_LEVELS = [
 // Parse existing sprachkenntnisse from "Deutsch (C1)" format
 const parseLanguages = (sprachkenntnisse: string[] | null): LanguageEntry[] => {
   if (!sprachkenntnisse || sprachkenntnisse.length === 0) return [];
-  
+
   return sprachkenntnisse.map((lang) => {
     const match = lang.match(/^(.+?)\s*\((.+?)\)$/);
     if (match) {
@@ -58,7 +60,6 @@ const serializeLanguages = (languages: LanguageEntry[]): string[] => {
 
 const LanguageSkillsForm = ({ profile, onSave, isLoading }: LanguageSkillsFormProps) => {
   const [languages, setLanguages] = useState<LanguageEntry[]>([]);
-  const [isSaving, setIsSaving] = useState(false);
   const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([]);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
 
@@ -69,13 +70,15 @@ const LanguageSkillsForm = ({ profile, onSave, isLoading }: LanguageSkillsFormPr
     }
   }, [profile]);
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    await onSave({
-      sprachkenntnisse: serializeLanguages(languages)
-    });
-    setIsSaving(false);
-  };
+  const savePayload = useMemo(() => ({
+    sprachkenntnisse: serializeLanguages(languages)
+  }), [languages]);
+
+  const { saveStatus } = useAutoSave({
+    data: savePayload,
+    onSave,
+    enabled: !isLoading && !!profile,
+  });
 
   const addLanguage = () => {
     setLanguages([...languages, { name: "", level: "" }]);
@@ -92,8 +95,8 @@ const LanguageSkillsForm = ({ profile, onSave, isLoading }: LanguageSkillsFormPr
 
     if (field === "name") {
       const filtered = LANGUAGE_SUGGESTIONS.filter(
-        (s) => s.toLowerCase().includes(value.toLowerCase()) && 
-        !languages.some((l, i) => i !== index && l.name.toLowerCase() === s.toLowerCase())
+        (s) => s.toLowerCase().includes(value.toLowerCase()) &&
+          !languages.some((l, i) => i !== index && l.name.toLowerCase() === s.toLowerCase())
       );
       setFilteredSuggestions(filtered);
     }
@@ -108,10 +111,13 @@ const LanguageSkillsForm = ({ profile, onSave, isLoading }: LanguageSkillsFormPr
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Languages className="h-5 w-5" />
-          Sprachkenntnisse
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Languages className="h-5 w-5" />
+            Sprachkenntnisse
+          </CardTitle>
+          <AutoSaveIndicator status={saveStatus} />
+        </div>
         <CardDescription>
           Ihre Sprachkenntnisse mit Niveau-Angabe
         </CardDescription>
@@ -180,13 +186,6 @@ const LanguageSkillsForm = ({ profile, onSave, isLoading }: LanguageSkillsFormPr
           <Plus className="mr-2 h-4 w-4" />
           Weitere Sprache hinzufügen
         </Button>
-
-        <div className="flex justify-end pt-4">
-          <Button onClick={handleSave} disabled={isSaving || isLoading} className="w-full sm:w-auto">
-            <Save className="mr-2 h-4 w-4" />
-            {isSaving ? "Speichern..." : "Speichern"}
-          </Button>
-        </div>
       </CardContent>
     </Card>
   );

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useProfile } from "@/hooks/useProfile";
@@ -13,7 +13,26 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowLeft, Download, FileText, Loader2, PenTool, User } from "lucide-react";
+import {
+  ArrowLeft,
+  Download,
+  FileText,
+  Loader2,
+  PenTool,
+  User,
+  Stethoscope,
+  Building2,
+  GraduationCap,
+  Microscope,
+  Brain,
+  Languages,
+  Award,
+  BookOpen,
+  Camera,
+  Bell,
+  HardDrive,
+  Trash2,
+} from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 import { useToast } from "@/hooks/use-toast";
 
@@ -34,6 +53,28 @@ import EmailNotificationPreferences from "@/components/profile/EmailNotification
 import UserDataExport from "@/components/profile/UserDataExport";
 import DeleteAccountCard from "@/components/profile/DeleteAccountCard";
 import CVTemplate from "@/components/cv/CVTemplate";
+import ProfileCompleteness from "@/components/profile/ProfileCompleteness";
+import CollapsibleSection from "@/components/profile/CollapsibleSection";
+import SectionNav, { type NavSection } from "@/components/profile/SectionNav";
+import MobileNavBar from "@/components/profile/MobileNavBar";
+
+/* ── Accent colours per section ────────────────────────────────── */
+const ACCENT = {
+  personal: "#3b82f6",     // blue
+  photo: "#8b5cf6",        // violet
+  signature: "#6366f1",    // indigo
+  professional: "#0ea5e9", // sky
+  work: "#f59e0b",         // amber
+  education: "#10b981",    // emerald
+  practical: "#14b8a6",    // teal
+  skills: "#ec4899",       // pink
+  languages: "#6366f1",    // indigo
+  certs: "#f97316",        // orange
+  publications: "#8b5cf6", // violet
+  notifications: "#64748b",// slate
+  export: "#64748b",       // slate
+  delete: "#ef4444",       // red
+};
 
 const ProfilPage = () => {
   const navigate = useNavigate();
@@ -99,6 +140,7 @@ const ProfilPage = () => {
   const { url: fotoUrl } = useUserFileUrl(profile?.foto_url);
   const { url: signaturUrl } = useUserFileUrl(profile?.signatur_url);
 
+  /* ── Auth guard ───────────────────────────────────────────────── */
   useEffect(() => {
     const {
       data: { subscription },
@@ -153,6 +195,7 @@ const ProfilPage = () => {
     }
   }, [focus, isAuthLoading, isLoading]);
 
+  /* ── CV generation / export ──────────────────────────────────── */
   const handleGenerateCV = async () => {
     if (!profile?.vorname || !profile?.nachname) {
       toast({
@@ -243,6 +286,52 @@ const ProfilPage = () => {
     }
   };
 
+  /* ── Nav sections for sidebar ────────────────────────────────── */
+  const navSections = useMemo<NavSection[]>(() => {
+    const p = profile;
+    return [
+      { id: "sec-personal", label: "Persönliche Daten", icon: <User className="h-4 w-4" />, group: "cv", filled: !!(p?.vorname && p?.nachname && p?.email) },
+      { id: "sec-photo", label: "Foto & Unterschrift", icon: <Camera className="h-4 w-4" />, group: "cv", filled: !!p?.foto_url },
+      { id: "sec-professional", label: "Berufliches Profil", icon: <Stethoscope className="h-4 w-4" />, group: "cv", filled: !!(p?.fachrichtung) },
+      { id: "sec-work", label: "Berufserfahrung", icon: <Building2 className="h-4 w-4" />, group: "cv", filled: workExperiences.length > 0 },
+      { id: "sec-education", label: "Ausbildung", icon: <GraduationCap className="h-4 w-4" />, group: "cv", filled: educationEntries.length > 0 },
+      { id: "sec-practical", label: "Praktische Erfahrung", icon: <Microscope className="h-4 w-4" />, group: "cv", filled: practicalExperiences.length > 0 },
+      { id: "sec-skills", label: "Kenntnisse", icon: <Brain className="h-4 w-4" />, group: "cv", filled: !!(p?.medizinische_kenntnisse && (p.medizinische_kenntnisse as string[]).length > 0) },
+      { id: "sec-languages", label: "Sprachen", icon: <Languages className="h-4 w-4" />, group: "cv", filled: !!(p?.sprachkenntnisse && (p.sprachkenntnisse as string[]).length > 0) },
+      { id: "sec-certs", label: "Zertifikate", icon: <Award className="h-4 w-4" />, group: "cv", filled: certifications.length > 0 },
+      { id: "sec-publications", label: "Publikationen", icon: <BookOpen className="h-4 w-4" />, group: "cv", filled: publications.length > 0 },
+      { id: "sec-notifications", label: "Benachrichtigungen", icon: <Bell className="h-4 w-4" />, group: "account" },
+      { id: "sec-export", label: "Datenexport", icon: <HardDrive className="h-4 w-4" />, group: "account" },
+      { id: "sec-delete", label: "Konto löschen", icon: <Trash2 className="h-4 w-4" />, group: "account" },
+    ];
+  }, [profile, workExperiences, educationEntries, practicalExperiences, certifications, publications]);
+
+  /* ── Section summaries for collapsed state ──────────────────── */
+  const summaryPersonal = profile?.vorname
+    ? `${profile.vorname} ${profile.nachname || ""}`.trim()
+    : "Noch nicht ausgefüllt";
+
+  const summaryWork = workExperiences.length > 0
+    ? `${workExperiences.length} Einträge`
+    : "Noch keine Einträge";
+
+  const summaryEdu = educationEntries.length > 0
+    ? `${educationEntries.length} Einträge`
+    : "Noch keine Einträge";
+
+  const summaryPractical = practicalExperiences.length > 0
+    ? `${practicalExperiences.length} Einträge`
+    : "Noch keine Einträge";
+
+  const summaryCerts = certifications.length > 0
+    ? `${certifications.length} Einträge`
+    : "Noch keine Einträge";
+
+  const summaryPubs = publications.length > 0
+    ? `${publications.length} Einträge`
+    : "Noch keine Einträge";
+
+  /* ── Loading state ───────────────────────────────────────────── */
   if (isAuthLoading || isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -271,6 +360,7 @@ const ProfilPage = () => {
       </nav>
 
       <div className="container mx-auto px-4 sm:px-6 pt-20 sm:pt-24 pb-8">
+        {/* Page header */}
         <div className="mb-6 space-y-2">
           <h1 className="text-3xl font-semibold text-foreground tracking-tight">CV & Profile</h1>
         </div>
@@ -287,6 +377,7 @@ const ProfilPage = () => {
           </Button>
         </div>
 
+        {/* CV Studio card — stays as-is at the top */}
         <div
           id="cv-studio"
           ref={cvStudioRef}
@@ -381,6 +472,7 @@ const ProfilPage = () => {
           </Card>
         </div>
 
+        {/* CV Import */}
         <div className="mb-6">
           <CvImportCard
             profile={profile}
@@ -402,76 +494,250 @@ const ProfilPage = () => {
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-8">
-          <div className="lg:col-span-1 space-y-6 order-1 lg:order-1">
-            <PhotoUpload profile={profile} userId={userId} onSave={saveProfile} />
-            <SignatureCanvas profile={profile} userId={userId} onSave={saveProfile} />
-          </div>
+        {/* Completeness bar */}
+        <div className="mb-6">
+          <ProfileCompleteness
+            profile={profile}
+            workExperiences={workExperiences}
+            educationEntries={educationEntries}
+            practicalExperiences={practicalExperiences}
+            certifications={certifications}
+            publications={publications}
+          />
+        </div>
 
-          <div className="lg:col-span-2 space-y-6 order-2 lg:order-2">
-            <PersonalDataForm profile={profile} onSave={saveProfile} isLoading={isLoading} />
+        {/* ── Main content: Sidebar + collapsible sections ────── */}
+        <div className="lg:grid lg:grid-cols-[220px_1fr] lg:gap-8 pb-20 lg:pb-8">
+          {/* Sidebar navigator */}
+          <SectionNav sections={navSections} />
 
-            <ProfessionalProfileForm profile={profile} onSave={saveProfile} isLoading={isLoading} />
-            <WorkExperienceForm
-              workExperiences={workExperiences}
-              onAdd={addWorkExperience}
-              onUpdate={updateWorkExperience}
-              onDelete={deleteWorkExperience}
-            />
+          {/* Stacked collapsible sections */}
+          <div className="space-y-4">
+            {/* Persönliche Daten */}
+            <CollapsibleSection
+              id="sec-personal"
+              icon={<User className="h-5 w-5" />}
+              title="Persönliche Daten"
+              subtitle="Grundlegende Informationen für Ihren Lebenslauf"
+              summary={summaryPersonal}
+              accentColor={ACCENT.personal}
+              defaultOpen
+            >
+              <PersonalDataForm profile={profile} onSave={saveProfile} isLoading={isLoading} />
+            </CollapsibleSection>
 
-            <EducationForm
-              educationEntries={educationEntries}
-              onAdd={addEducation}
-              onUpdate={updateEducation}
-              onDelete={deleteEducation}
-            />
+            {/* Foto & Unterschrift */}
+            <CollapsibleSection
+              id="sec-photo"
+              icon={<Camera className="h-5 w-5" />}
+              title="Foto & Unterschrift"
+              subtitle="Profilfoto und Signatur für Ihren Lebenslauf"
+              summary={profile?.foto_url ? "Foto vorhanden" : "Kein Foto hochgeladen"}
+              accentColor={ACCENT.photo}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <PhotoUpload profile={profile} userId={userId} onSave={saveProfile} />
+                <SignatureCanvas profile={profile} userId={userId} onSave={saveProfile} />
+              </div>
+            </CollapsibleSection>
 
-            <PracticalExperienceForm
-              practicalExperiences={practicalExperiences}
-              onAdd={addPracticalExperience}
-              onUpdate={updatePracticalExperience}
-              onDelete={deletePracticalExperience}
-            />
+            {/* Berufliches Profil */}
+            <CollapsibleSection
+              id="sec-professional"
+              icon={<Stethoscope className="h-5 w-5" />}
+              title="Berufliches Profil"
+              subtitle="Fachrichtung, Approbation und weitere berufliche Details"
+              summary={profile?.fachrichtung || "Noch nicht ausgefüllt"}
+              accentColor={ACCENT.professional}
+            >
+              <ProfessionalProfileForm profile={profile} onSave={saveProfile} isLoading={isLoading} />
+            </CollapsibleSection>
 
-            <SkillsForm profile={profile} onSave={saveProfile} isLoading={isLoading} />
-
-            <LanguageSkillsForm profile={profile} onSave={saveProfile} isLoading={isLoading} />
-
-            <CertificationsForm
-              certifications={certifications}
-              onAdd={addCertification}
-              onUpdate={updateCertification}
-              onDelete={deleteCertification}
-            />
-
-            <PublicationsForm
-              publications={publications}
-              onAdd={addPublication}
-              onUpdate={updatePublication}
-              onDelete={deletePublication}
-            />
-
-            <EmailNotificationPreferences />
-
-            <UserDataExport />
-
-            <DeleteAccountCard />
-
-            {customSections.map((section) => (
-              <CustomSectionForm
-                key={section.id}
-                section={section}
-                entries={getEntriesForSection(section.id)}
-                onUpdateSection={updateCustomSection}
-                onDeleteSection={deleteCustomSection}
-                onAddEntry={addCustomSectionEntry}
-                onUpdateEntry={updateCustomSectionEntry}
-                onDeleteEntry={deleteCustomSectionEntry}
+            {/* Berufserfahrung */}
+            <CollapsibleSection
+              id="sec-work"
+              icon={<Building2 className="h-5 w-5" />}
+              title="Berufserfahrung"
+              subtitle="Ihre bisherigen Stellen in Kliniken und Praxen"
+              summary={summaryWork}
+              accentColor={ACCENT.work}
+            >
+              <WorkExperienceForm
+                workExperiences={workExperiences}
+                onAdd={addWorkExperience}
+                onUpdate={updateWorkExperience}
+                onDelete={deleteWorkExperience}
               />
+            </CollapsibleSection>
+
+            {/* Ausbildung & Studium */}
+            <CollapsibleSection
+              id="sec-education"
+              icon={<GraduationCap className="h-5 w-5" />}
+              title="Ausbildung & Studium"
+              subtitle="Ihr akademischer Werdegang"
+              summary={summaryEdu}
+              accentColor={ACCENT.education}
+            >
+              <EducationForm
+                educationEntries={educationEntries}
+                onAdd={addEducation}
+                onUpdate={updateEducation}
+                onDelete={deleteEducation}
+              />
+            </CollapsibleSection>
+
+            {/* Praktische Erfahrung */}
+            <CollapsibleSection
+              id="sec-practical"
+              icon={<Microscope className="h-5 w-5" />}
+              title="Praktische Erfahrung"
+              subtitle="Famulaturen, PJ-Stationen und Hospitationen"
+              summary={summaryPractical}
+              accentColor={ACCENT.practical}
+            >
+              <PracticalExperienceForm
+                practicalExperiences={practicalExperiences}
+                onAdd={addPracticalExperience}
+                onUpdate={updatePracticalExperience}
+                onDelete={deletePracticalExperience}
+              />
+            </CollapsibleSection>
+
+            {/* Kenntnisse & Fähigkeiten */}
+            <CollapsibleSection
+              id="sec-skills"
+              icon={<Brain className="h-5 w-5" />}
+              title="Kenntnisse & Fähigkeiten"
+              subtitle="Ihre medizinischen und technischen Kompetenzen"
+              summary={
+                profile?.medizinische_kenntnisse && (profile.medizinische_kenntnisse as string[]).length > 0
+                  ? `${(profile.medizinische_kenntnisse as string[]).length} Kenntnisse`
+                  : "Noch keine Kenntnisse"
+              }
+              accentColor={ACCENT.skills}
+            >
+              <SkillsForm profile={profile} onSave={saveProfile} isLoading={isLoading} />
+            </CollapsibleSection>
+
+            {/* Sprachkenntnisse */}
+            <CollapsibleSection
+              id="sec-languages"
+              icon={<Languages className="h-5 w-5" />}
+              title="Sprachkenntnisse"
+              subtitle="Ihre Sprachkenntnisse mit Niveau-Angabe"
+              summary={
+                profile?.sprachkenntnisse && (profile.sprachkenntnisse as string[]).length > 0
+                  ? `${(profile.sprachkenntnisse as string[]).length} Sprachen`
+                  : "Noch keine Sprachen"
+              }
+              accentColor={ACCENT.languages}
+            >
+              <LanguageSkillsForm profile={profile} onSave={saveProfile} isLoading={isLoading} />
+            </CollapsibleSection>
+
+            {/* Fortbildungen & Zertifikate */}
+            <CollapsibleSection
+              id="sec-certs"
+              icon={<Award className="h-5 w-5" />}
+              title="Fortbildungen & Zertifikate"
+              subtitle="ACLS, ATLS, Ultraschallkurse und weitere Qualifikationen"
+              summary={summaryCerts}
+              accentColor={ACCENT.certs}
+            >
+              <CertificationsForm
+                certifications={certifications}
+                onAdd={addCertification}
+                onUpdate={updateCertification}
+                onDelete={deleteCertification}
+              />
+            </CollapsibleSection>
+
+            {/* Wissenschaft & Publikationen */}
+            <CollapsibleSection
+              id="sec-publications"
+              icon={<BookOpen className="h-5 w-5" />}
+              title="Wissenschaft & Publikationen"
+              subtitle="Veröffentlichungen, Kongresse, Vorträge und Doktorarbeit"
+              summary={summaryPubs}
+              accentColor={ACCENT.publications}
+            >
+              <PublicationsForm
+                publications={publications}
+                onAdd={addPublication}
+                onUpdate={updatePublication}
+                onDelete={deletePublication}
+              />
+            </CollapsibleSection>
+
+            {/* Custom Sections */}
+            {customSections.map((section) => (
+              <CollapsibleSection
+                key={section.id}
+                id={`sec-custom-${section.id}`}
+                icon={<FileText className="h-5 w-5" />}
+                title={section.section_name}
+                subtitle=""
+                summary={`${getEntriesForSection(section.id).length} Einträge`}
+                accentColor={ACCENT.professional}
+              >
+                <CustomSectionForm
+                  section={section}
+                  entries={getEntriesForSection(section.id)}
+                  onUpdateSection={updateCustomSection}
+                  onDeleteSection={deleteCustomSection}
+                  onAddEntry={addCustomSectionEntry}
+                  onUpdateEntry={updateCustomSectionEntry}
+                  onDeleteEntry={deleteCustomSectionEntry}
+                />
+              </CollapsibleSection>
             ))}
+
+            {/* ── Account sections ─────────────────────────────── */}
+            <div className="pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3 lg:hidden">
+                Konto
+              </p>
+            </div>
+
+            <CollapsibleSection
+              id="sec-notifications"
+              icon={<Bell className="h-5 w-5" />}
+              title="Benachrichtigungen"
+              subtitle="E-Mail-Benachrichtigungen und Job-Alerts"
+              summary="Einstellungen verwalten"
+              accentColor={ACCENT.notifications}
+            >
+              <EmailNotificationPreferences />
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              id="sec-export"
+              icon={<HardDrive className="h-5 w-5" />}
+              title="Datenexport"
+              subtitle="Laden Sie alle Ihre persönlichen Daten herunter"
+              summary="DSGVO Art. 20"
+              accentColor={ACCENT.export}
+            >
+              <UserDataExport />
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              id="sec-delete"
+              icon={<Trash2 className="h-5 w-5" />}
+              title="Konto löschen"
+              subtitle="Konto und alle Daten unwiderruflich löschen"
+              summary=""
+              accentColor={ACCENT.delete}
+            >
+              <DeleteAccountCard />
+            </CollapsibleSection>
           </div>
         </div>
       </div>
+
+      {/* Mobile bottom navigation bar */}
+      <MobileNavBar sections={navSections} />
     </div>
   );
 };
